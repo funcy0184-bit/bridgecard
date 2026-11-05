@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    沒有 Unity 也能先抓教學版腳本的編譯錯誤：dotnet build tools/HoneymoonBridgeTutorial/TutorialCompileCheck
+    Stubs/ 是假的 Unity API（只有簽名），從 tools/UnityCompileCheck 複製來再補教學版用到的部分。
+    同時編譯原版全部腳本（只讀）+ 教學版全部腳本，確認新版只靠原版的公開介面就能接起來。
+    限制：抓不到真正 Unity 套件改名的 API，最後還是以 Unity Console 為準。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <OutputType>Library</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+    <NoWarn>$(NoWarn);CS0067;CS0414;CS0169;CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Stubs/**/*.cs" />
+    <Compile Include="../../../Assets/HoneymoonBridge/Scripts/**/*.cs" />
+    <Compile Include="../../../Assets/HoneymoonBridgeTutorial/Scripts/**/*.cs" />
+  </ItemGroup>
+</Project>

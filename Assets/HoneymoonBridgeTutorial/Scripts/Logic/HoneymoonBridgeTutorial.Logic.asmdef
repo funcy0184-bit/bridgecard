@@ -1,0 +1,16 @@
+{
+    "name": "HoneymoonBridgeTutorial.Logic",
+    "rootNamespace": "HoneymoonBridge.Tutorial",
+    "references": [
+        "HoneymoonBridge.Logic"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

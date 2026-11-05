@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    教學版的規則測試，不用開 Unity 就能跑：dotnet test tools/HoneymoonBridgeTutorial/TutorialTests
+    編譯原版的 Logic（只讀，不改）+ 教學版的 Logic 和測試；跟 Unity Test Runner 跑的是同一份程式碼。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>HoneymoonBridge.Tutorial.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../Assets/HoneymoonBridge/Scripts/Logic/**/*.cs" />
+    <Compile Include="../../../Assets/HoneymoonBridgeTutorial/Scripts/Logic/**/*.cs" />
+    <Compile Include="../../../Assets/HoneymoonBridgeTutorial/Tests/EditMode/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+  </ItemGroup>
+</Project>
