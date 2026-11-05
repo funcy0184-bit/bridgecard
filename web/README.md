@@ -25,6 +25,25 @@
 - 第一次按「跟電腦打一局」或「開房」會先問一次要不要跟阿禾學（只問一次）
 - 連線版的規則、房間伺服器沒有改
 
+### 美術與手感（Game Feel）
+
+美術照確認過的設計稿：深色木桌、撕紙拼貼的復古紙張、黑金細框、蠟封、阿禾郵票（燕尾服貓咪）、綠絨布牌桌、酒紅牌背。素材都是原創向量圖（`public/art/`）。
+
+| 系統 | 檔案 | 做什麼 |
+|---|---|---|
+| MotionTokens／CardMotion | `src/client/fx.ts` | 統一時長、彈簧曲線（CSS `linear()`）、動畫強度；飛牌（微轉、影子變化）、落桌壓扁回彈、翻牌、輕擺拒絕、局部震動 |
+| SoundManager | `src/client/sound.ts` | Web Audio 當場合成的原創音效＋八音盒背景音樂；音效／音樂分開調、一鍵靜音、同時發聲上限、連贏音高微升、手機第一次點擊解鎖 |
+| ParticleEffects | `src/client/particles.ts` | 金粉、星芒、紙屑、小花色、印章墨跡；一張 canvas、沒粒子就停、低階手機減半 |
+| FeedbackManager／ScoreAnimator | `src/client/feedback.ts` | 依真實事件分三級（一般贏墩／王吃・關鍵一墩／合約達成・擊破・整場勝利）、Hitstop、數字越跑越快的滾動 |
+| 設定面板 | `src/client/settings-ui.ts` | 動畫強度（關閉／低／標準／強）、快速動畫、畫面震動、粒子、音效音量、背景音樂、手機震動 |
+
+- 手牌：扇形排列、滑鼠移上去升起放大、右邊的牌讓位；點一下選牌（彈一下、轉 ±3°），再點一次或按「出牌」；手機可以把牌往上拖出去
+- 出牌：抽出 → 飛到桌面 → 落桌壓扁回彈＋拍桌聲；對手的牌半路翻面
+- 叫牌：先選階數再選花色；每一次叫牌像蓋章、叫牌紀錄逐張蓋上去
+- 結算：合約 → 目標 → 實得 → 蓋章判定 → 得分 → 明細 → 總分，點一下跳過直接看最終結果
+- 所有分數、勝負都來自原本的計分程式；連線版等雲端確認後才演出贏墩和得分
+- 手機開了「減少動態效果」會自動用低強度、不震動
+
 ### 阿禾的四幕故事
 
 | 幕 | 你做什麼 | 學到 |
@@ -137,7 +156,8 @@ node test/e2e/story-walk.mjs http://127.0.0.1:8787 test-results
 | `src/client/` | 手機畫面：`main.ts` 牌桌與流程、`fx.ts` 動畫與回饋（含牌桌顏色）、`net.ts` 連線與自動重連、`solo.ts` 單機（電腦在手機上跑，對牌桌來說跟雲端連線長得一樣） |
 | `src/story/` | 阿禾的故事：`script.ts` 四幕牌局與台詞（不碰畫面，測試直接跑）、`main.ts` 故事頁的牌桌、動畫、進度 |
 | `public/` | `index.html`、`style.css`；`app.js` 由 `npm run build` 產生（部署時自動跑） |
-| `public/story/` | 故事頁 `index.html`、`story.css`、阿禾頭像 `ahe.svg`、茶杯 `teacup.svg`（取自故事素材包）；`story.js` 由 build 產生 |
+| `public/story/` | 故事頁 `index.html`、`story.css`、茶杯 `teacup.svg`（取自故事素材包）；`story.js` 由 build 產生 |
+| `public/art/` | 原創向量素材：阿禾郵票 `stamp-ahe.svg`、蠟封 `seal.svg`、迴紋針 `clip.svg`、金框角飾 `corner.svg` |
 | `test/` | 規則測試、兩支手機的端對端測試 |
 
 ### 動畫與回饋（對應 Unity 版的手感）

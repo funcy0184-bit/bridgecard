@@ -3,61 +3,101 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111A2B">
+<meta name="theme-color" content="#24170F">
 <meta name="description" content="來打橋牌：兩個人的蜜月橋牌。先跟巷口牌店的阿禾玩四幕小故事學規則，再跟電腦或朋友用手機一起打。">
 <title>來打橋牌</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F2D49'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
-<script>try{var t=JSON.parse(localStorage.getItem("hb-web-settings")||"{}").theme;if(t==="wine"||t==="green")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237A2732'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23E2B860'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<script>try{var s=JSON.parse(localStorage.getItem("hb-web-settings")||"{}");if(s.intensity!==undefined)document.documentElement.dataset.motion=s.intensity}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;500;700&display=swap">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <div id="app">
+  <div class="frameline" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
-  <!-- ============ 首頁：先學（阿禾的故事）／跟電腦打／開房跟朋友打 ============ -->
+  <!-- ============ 01 首頁與主選單 ============ -->
   <section id="home" class="screen">
-    <div class="hero">
-      <div class="suits" aria-hidden="true">♠<span class="r">♥</span><span class="r">♦</span>♣</div>
-      <h1>來打橋牌</h1>
-      <p class="en">LET'S PLAY BRIDGE</p>
-      <p class="sub">兩個人的蜜月橋牌 · 手機就能打</p>
+    <header class="titlecard" id="titleCard">
+      <div class="tc-ace card" aria-hidden="true"><span class="ix"><b>A</b><i>♠</i></span><span class="pip">♠</span></div>
+      <div class="tc-under" aria-hidden="true"></div>
+      <div class="tc-paper">
+        <div class="orn-moon" aria-hidden="true"><svg viewBox="0 0 120 24"><path d="M2 12 H44 M76 12 H118" stroke="currentColor" stroke-width=".8"/><circle cx="40" cy="12" r="1.4" fill="currentColor"/><circle cx="80" cy="12" r="1.4" fill="currentColor"/><path d="M55 6 a8 8 0 1 0 10 12 a6.5 6.5 0 1 1 -10 -12z" fill="currentColor"/><path d="M60 0 v3 M51 3 l2 2 M69 3 l-2 2" stroke="currentColor" stroke-width=".8"/></svg></div>
+        <h1>來打橋牌</h1>
+        <p class="en">PLAY BRIDGE</p>
+        <div class="orn-line" aria-hidden="true"><svg viewBox="0 0 120 12"><path d="M2 6 H50 M70 6 H118" stroke="currentColor" stroke-width=".8"/><path d="M60 1 L65 6 L60 11 L55 6 Z" fill="currentColor"/></svg></div>
+      </div>
+      <img class="seal" src="/art/seal.svg" alt="" width="64" height="64">
+      <img class="stamp" src="/art/stamp-ahe.svg" alt="阿禾" width="56" height="67">
+      <img class="clip" src="/art/clip.svg" alt="" width="18" height="50">
+    </header>
+    <nav class="menu" aria-label="主選單">
+      <button id="solo" class="strip lead" type="button">
+        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><rect x="5" y="6" width="15" height="21" rx="2" transform="rotate(-14 12 16)" fill="none" stroke="currentColor"/><rect x="15" y="4" width="15" height="21" rx="2" fill="#F4E8CF" stroke="currentColor"/><path d="M22.5 10 c-3 3 -4 5 -1.5 6 c1 .3 1.2 -.4 1.5 -.9 c.3 .5 .5 1.2 1.5 .9 c2.5 -1 1.5 -3 -1.5 -6z M22.5 15.5 l-1 3 h2z" fill="currentColor"/><path d="M33 8 l3 -2 M34 13 h3 M3 9 l-2 -2" stroke="currentColor" stroke-width=".8"/></svg>
+        <span class="st"><b>開始對戰</b><small id="soloSub">跟阿禾（電腦）打一場</small></span>
+      </button>
+      <button id="goOnline" class="strip" type="button">
+        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><circle cx="14" cy="12" r="4.5" fill="none" stroke="currentColor"/><circle cx="26" cy="12" r="4.5" fill="none" stroke="currentColor"/><path d="M5 26 c1 -6 5 -8 9 -8 s8 2 9 8 M17 26 c1 -6 5 -8 9 -8 s8 2 9 8" fill="none" stroke="currentColor"/><path d="M20 2 v3 M14 3 l1 2 M26 3 l-1 2" stroke="currentColor" stroke-width=".8"/></svg>
+        <span class="st"><b>朋友連線</b><small>開房、輸入房號，各用自己的手機</small></span>
+      </button>
+      <a id="storyCard" class="strip" href="/story/">
+        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 8 c5 -2 10 -1 15 2 v17 c-5 -3 -10 -4 -15 -2z M19 10 c5 -3 10 -4 15 -2 v17 c-5 -2 -10 -1 -15 2" fill="none" stroke="currentColor"/><path d="M36 2 c-6 4 -10 10 -11 16 l2 1 c2 -6 6 -11 9 -17z" fill="currentColor"/></svg>
+        <span class="st"><b id="storyCardTitle">故事教學</b><small id="storyCardSub">第一次玩？跟阿禾邊玩邊學，約 5 分鐘</small></span>
+      </a>
+      <button id="goRules" class="strip" type="button">
+        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 7 c4 -2 8 -1 12 1 v17 c-4 -2 -8 -3 -12 -1z M16 8 c3 -2 6 -2 9 -1" fill="none" stroke="currentColor"/><circle cx="25" cy="17" r="6" fill="none" stroke="currentColor"/><path d="M29.5 21.5 l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="st"><b>規則速查</b><small>搶牌、叫牌、出牌、計分</small></span>
+      </button>
+      <button id="goSettings" class="strip" type="button">
+        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><circle cx="20" cy="16" r="5" fill="none" stroke="currentColor"/><path d="M20 4 v4 M20 24 v4 M8 16 h4 M28 16 h4 M11.5 7.5 l2.8 2.8 M25.7 21.7 l2.8 2.8 M11.5 24.5 l2.8 -2.8 M25.7 10.3 l2.8 -2.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span class="st"><b>設定</b><small>動畫、音效、震動</small></span>
+      </button>
+    </nav>
+    <div class="orn-foot" aria-hidden="true">· · ☾ ✦ ☽ · ·</div>
+  </section>
+
+  <!-- ============ 06 朋友連線 ============ -->
+  <section id="online" class="screen" hidden>
+    <header class="subhead">
+      <button id="onlineBack" class="back" type="button" aria-label="回主選單">‹ 主選單</button>
+      <h2>朋友連線</h2>
+      <img src="/art/stamp-ahe.svg" alt="" width="34" height="41" class="mini-stamp">
+    </header>
+    <div class="paper sheetpaper">
+      <label class="field"><span>你的暱稱</span>
+        <input id="name" maxlength="10" placeholder="例如：阿明" autocomplete="nickname" enterkeyhint="done">
+      </label>
+      <button id="resume" class="btn paper" hidden></button>
+      <button id="create" class="btn wine big" type="button">開房</button>
+      <div class="or"><span>或輸入朋友給的房號</span></div>
+      <div class="join">
+        <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="房號" aria-label="朋友給的房號" enterkeyhint="go">
+        <button id="join" class="btn paper" type="button">加入</button>
+      </div>
+      <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
+      <p class="foot">朋友不用註冊，打開這個網址、輸入房號就能一起打。</p>
     </div>
-    <a id="storyCard" class="modecard" href="/story/">
-      <img src="/story/ahe.svg" alt="" width="46" height="46">
-      <span class="mc-text"><b id="storyCardTitle">第一次玩？先跟阿禾學</b><small id="storyCardSub">四幕小故事，邊玩邊學 · 約 5 分鐘</small></span>
-      <i aria-hidden="true">›</i>
-    </a>
-    <button id="solo" class="btn ghost">跟電腦打一局</button>
-    <div class="or"><span>跟朋友連線</span></div>
-    <label class="field"><span>你的暱稱</span>
-      <input id="name" maxlength="10" placeholder="例如：阿明" autocomplete="nickname" enterkeyhint="done">
-    </label>
-    <button id="resume" class="btn ghost" hidden></button>
-    <button id="create" class="btn gold big">開房</button>
-    <div class="join">
-      <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="房號" aria-label="朋友給的房號" enterkeyhint="go">
-      <button id="join" class="btn">加入</button>
-    </div>
-    <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
-    <p class="foot">朋友不用註冊，打開這個網址、輸入房號就能一起打。</p>
   </section>
 
   <!-- ============ 等朋友 ============ -->
   <section id="wait" class="screen" hidden>
     <p class="label">房號</p>
     <div id="bigCode" class="bigcode" aria-live="polite"></div>
+    <div class="plates">
+      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b></span><em class="ok">已入座</em></div>
+      <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">等待中…</b></span><em class="ok">已入座</em></div>
+    </div>
     <p class="sub">把房號傳給朋友，他打開這個網址輸入就能加入</p>
     <div class="row">
-      <button id="share" class="btn gold">分享邀請</button>
-      <button id="copy" class="btn">複製連結</button>
+      <button id="share" class="btn wine" type="button">分享邀請</button>
+      <button id="copy" class="btn paper" type="button">複製連結</button>
     </div>
     <p class="waiting">等朋友加入<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
-    <button id="cancelWait" class="btn ghost small">取消</button>
+    <button id="cancelWait" class="btn ghost small" type="button">取消</button>
   </section>
 
-  <!-- ============ 牌桌 ============ -->
+  <!-- ============ 02～04 牌桌：搶牌／叫牌／出牌 ============ -->
   <section id="table" class="screen" hidden>
     <header class="topbar">
       <span class="chip" id="roomChip"></span>
@@ -68,20 +108,34 @@
         <span><span id="oppNameTop"></span> <b id="oppScore">0</b></span>
         <small>／<span id="target">100</span></small>
       </div>
-      <button id="menuBtn" class="icon" aria-label="選單">⋯</button>
+      <button id="muteBtn" class="icon" type="button" aria-label="靜音"></button>
+      <button id="menuBtn" class="icon" type="button" aria-label="選單">⋯</button>
     </header>
 
+    <div class="phasebar">
+      <span class="pchip" id="phaseChip"><svg viewBox="0 0 24 18" aria-hidden="true"><rect x="2" y="3" width="9" height="13" rx="1.5" transform="rotate(-12 6 9)" fill="none" stroke="currentColor"/><rect x="9" y="2" width="9" height="13" rx="1.5" fill="none" stroke="currentColor"/></svg><span id="phaseText"></span></span>
+      <span class="pchip small" id="trickChip"></span>
+    </div>
+    <div class="infostrip" id="infoStrip" hidden></div>
+
     <div class="opp" id="oppArea">
-      <div class="who"><span class="dot" id="oppDot"></span><b id="oppName"></b><span id="oppCount" class="cnt"></span></div>
+      <div class="who"><img src="/art/stamp-ahe.svg" alt="" class="oppstamp" id="oppStamp"><b id="oppName"></b><span class="dot" id="oppDot"></span><span id="oppCount" class="cnt"></span></div>
       <div class="fan" id="oppFan"></div>
       <div class="memo" id="memo" title="對手抽牌階段拿走的明牌"></div>
     </div>
 
-    <div class="status"><span id="statusText"></span><button id="auctionBtn" class="link" hidden>叫牌紀錄</button></div>
+    <div class="status"><span id="statusText"></span><button id="auctionBtn" class="link" type="button" hidden>叫牌紀錄</button></div>
 
     <div class="felt" id="felt">
+      <i class="fc tl"></i><i class="fc tr"></i><i class="fc bl"></i><i class="fc br"></i>
       <div class="stock" id="stock"></div>
-      <div class="contract" id="contractChip" hidden></div>
+      <div class="hidpile" id="hidPile" hidden><span class="lbl">暗牌</span><div class="pilestack"></div></div>
+      <div class="sidepanel left" id="trumpPanel" hidden><small>王牌</small><b id="trumpSuit"></b><img src="/art/seal.svg" alt=""></div>
+      <div class="sidepanel right" id="tallyPanel" hidden>
+        <small id="tallyLabel">目前墩數</small>
+        <div class="tally"><b id="tallyBig">0</b><span>/</span><span id="tallyNeed">8</span></div>
+        <small class="tline" id="tallyLine"></small>
+      </div>
       <div class="trick">
         <div class="slot" id="oppSlot"></div>
         <div class="anchor" id="centerAnchor"></div>
@@ -90,35 +144,66 @@
       <div class="anchor" id="oppAnchor"></div>
       <div class="anchor" id="myAnchor"></div>
       <div class="ticker" id="ticker" aria-live="polite"></div>
+      <div class="rulenote" id="ruleNote" hidden>贏墩拿明牌<i>｜</i>輸墩拿暗牌</div>
 
+      <!-- 03 叫牌 -->
       <div class="bidpanel" id="bidPanel" hidden>
-        <div class="bidtop">
-          <span class="bidhead" id="bidContract"></span>
-          <div class="auction" id="auctionStrip"></div>
+        <div class="bidvs">
+          <div class="bidcard opp" id="bidOppCard"><small id="bidOppName">阿禾</small><b>—</b></div>
+          <span class="vs">vs</span>
+          <div class="bidcard me" id="bidMeCard"><small>你</small><b>—</b></div>
         </div>
-        <div class="grid" id="bidGrid"></div>
+        <div class="bidhigh" id="bidHigh"><span class="bidhead" id="bidContract"></span><small id="bidHighSub"></small></div>
+        <div class="auction" id="auctionStrip"></div>
+        <div class="bidsel">
+          <small class="sellabel">叫牌階數（線數）</small>
+          <div class="levels" id="bidLevels"></div>
+          <small class="sellabel">叫牌花色</small>
+          <div class="strains" id="bidStrains"></div>
+        </div>
         <p class="preview" id="bidPreview"></p>
         <div class="bidbtns">
-          <button id="bidConfirm" class="btn gold">叫</button>
-          <button id="bidPass" class="btn">Pass</button>
-          <button id="bidDouble" class="btn dbl">加倍</button>
+          <button id="bidConfirm" class="btn wine" type="button">叫牌</button>
+          <button id="bidPass" class="btn paper" type="button">Pass</button>
+          <button id="bidDouble" class="btn paper dbl" type="button">加倍</button>
         </div>
+        <small class="bidnote">被加倍的一方可以再加倍</small>
       </div>
     </div>
 
     <div class="turn" id="turnLine"></div>
     <div class="hand" id="hand" aria-label="你的手牌"></div>
+    <div class="actions" id="actions">
+      <button id="hintBtn" class="btn paper" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3 a5 5 0 0 1 3 9 v2 h-6 v-2 a5 5 0 0 1 3 -9z M8 16 h4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 0 v1.5 M3 3 l1 1 M17 3 l-1 1 M0 9 h1.5 M18.5 9 h1.5" stroke="currentColor"/></svg>提示</button>
+      <button id="playBtn" class="btn wine" type="button" disabled>出牌</button>
+    </div>
   </section>
 
   <div id="banner" class="banner" hidden role="status"></div>
 
-  <!-- 局末結算 -->
+  <!-- ============ 05 結算與勝負 ============ -->
   <div id="result" class="modal" hidden>
-    <div class="sheet result">
+    <div class="sheet result" id="resSheet">
+      <div class="ribbon"><span id="resRibbon">本局結算</span></div>
       <h2 id="resTitle"></h2>
-      <div id="resBody" class="resbody"></div>
+      <div class="stats">
+        <div class="stat" id="rsC"><small>合約</small><b id="rsContract"></b></div>
+        <div class="stat" id="rsN"><small>目標墩數</small><b id="rsNeed"></b></div>
+        <div class="stat" id="rsT"><small>實際墩數</small><b id="rsTaken"></b></div>
+      </div>
+      <div class="verdict" id="resVerdict"></div>
+      <div class="pointsband" id="resBand"><span id="resPtsLabel">本局得分</span><b id="resPoints"></b></div>
+      <div class="breakdown" id="resBody"></div>
+      <div class="totals">
+        <div class="tot me" id="totMe"><small>你</small><b id="rtMe">0</b></div>
+        <div class="tot opp" id="totOpp"><small id="rtOppName">阿禾</small><b id="rtOpp">0</b></div>
+      </div>
       <div id="resTotal" class="restotal"></div>
-      <button id="nextBtn" class="btn gold big">下一局</button>
+      <div class="row">
+        <button id="nextBtn" class="btn wine big" type="button">下一局</button>
+        <button id="resHome" class="btn paper" type="button">回主選單</button>
+      </div>
+      <p class="skiphint" id="skipHint">點一下結算單可以跳過動畫</p>
     </div>
   </div>
 
@@ -127,44 +212,47 @@
     <div class="sheet">
       <h3>叫牌紀錄</h3>
       <ol id="auctionList" class="alist"></ol>
-      <button class="btn close" data-close>關閉</button>
+      <button class="btn paper close" data-close type="button">關閉</button>
     </div>
   </div>
 
-  <!-- 選單 -->
+  <!-- 08 設定（牌桌選單、首頁共用） -->
   <div id="menu" class="modal" hidden>
     <div class="sheet">
-      <h3>設定</h3>
-      <div class="setting"><span>牌桌顏色</span><div class="seg" id="themeSeg"></div></div>
-      <div class="setting"><span>動畫速度</span><div class="seg" id="speedSeg"></div></div>
-      <div class="setting"><span>畫面震動</span><button class="toggle" id="shakeToggle"></button></div>
-      <div class="setting"><span>手機震動</span><button class="toggle" id="buzzToggle"></button></div>
-      <details class="rules">
-        <summary>規則速查</summary>
-        <ul>
-          <li><a class="link" href="/story/">跟阿禾重看一次教學故事 ›</a></li>
-          <li><b>抽牌</b>：13 墩全程無王。贏墩拿明牌，輸的摸暗牌，這 13 墩不計分。</li>
-          <li><b>叫牌</b>：♣ → ♦ → ♥ → ♠ → 無王，然後下一線。叫 N 線要拿 N + 6 墩。雙方起手都 Pass 就重發；有人叫過，另一方 Pass 就定約。</li>
-          <li><b>加倍</b>：防守方可以加倍，被加倍的莊家可以再加倍；有人蓋叫就清掉。</li>
-          <li><b>打牌</b>：非莊家先出。有首引的花色一定要跟，缺門可以墊牌或出王。</li>
-          <li><b>計分</b>：打成得「線數 × 10 × 倍率」+ 每超 1 墩 2 分；倒約時防守方每墩得「10 × 倍率」。先到 100 分贏。</li>
-        </ul>
-      </details>
+      <h3 id="menuTitle">設定</h3>
+      <div id="settingsBox" class="settings"></div>
       <div class="row">
-        <button class="btn close" data-close>關閉</button>
-        <button class="btn ghost" id="leaveBtn">離開這桌</button>
+        <button class="btn paper close" data-close type="button">關閉</button>
+        <button class="btn ghost" id="leaveBtn" type="button">離開這桌</button>
       </div>
-      <button class="btn ghost small" id="restartSolo" hidden>重新發牌，開新的一場</button>
+      <button class="btn ghost small" id="restartSolo" type="button" hidden>重新發牌，開新的一場</button>
     </div>
   </div>
+
+  <!-- 規則速查 -->
+  <div id="rulesModal" class="modal" hidden>
+    <div class="sheet rules">
+      <h3>規則速查</h3>
+      <ul>
+        <li><b>前半場｜搶牌</b>：各 13 張，13 墩全程無王。贏墩拿明牌，輸墩摸暗牌；這 13 墩不計分。</li>
+        <li><b>叫牌</b>：♣ → ♦ → ♥ → ♠ → 無王，然後下一線。叫 N 線要拿 N + 6 墩。雙方起手都 Pass 就重發；有人叫過，另一方 Pass 就定約。</li>
+        <li><b>加倍</b>：防守方可以加倍，被加倍的莊家可以再加倍；有人蓋叫就清掉。</li>
+        <li><b>後半場｜出牌</b>：非莊家先出。有首引的花色一定要跟，缺門可以墊牌或出王。</li>
+        <li><b>計分</b>：打成得「線數 × 10 × 倍率」+ 每超 1 墩 2 分；倒約時防守方每墩得「10 × 倍率」。先到 100 分贏。</li>
+        <li><a class="link" href="/story/">跟阿禾重看一次教學故事 ›</a></li>
+      </ul>
+      <button class="btn paper close" data-close type="button">關閉</button>
+    </div>
+  </div>
+
   <!-- 第一次玩：先問要不要跟阿禾學 -->
   <div id="storyOffer" class="modal" hidden>
     <div class="sheet offer">
-      <img src="/story/ahe.svg" alt="" width="64" height="64">
+      <img src="/art/stamp-ahe.svg" alt="" width="64" height="77">
       <h3>第一次玩蜜月橋牌？</h3>
       <p>巷口牌店的阿禾可以陪你玩四幕小故事：搶牌、叫牌、王吃、打成，大約 5 分鐘。</p>
-      <a class="btn gold big" href="/story/">先跟阿禾學</a>
-      <button class="btn ghost" id="offerSkip">我會玩，直接開始</button>
+      <a class="btn wine big" href="/story/">先跟阿禾學</a>
+      <button class="btn paper" id="offerSkip" type="button">我會玩，直接開始</button>
     </div>
   </div>
 </div>

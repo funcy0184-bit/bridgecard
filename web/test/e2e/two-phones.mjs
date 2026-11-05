@@ -25,14 +25,16 @@ console.log(`房主：${DEV_A}　朋友：${DEV_B}`);
 const A = await phone(DEV_A, "房主");
 const B = await phone(DEV_B, "朋友");
 
-// --- 開房 ---
-await A.fill("#name", "阿明");
+// --- 開房：主選單 → 朋友連線 ---
 await shot(A, "01-home");
-await A.click("#create");
-// 第一次在這支手機按「開房」會先問要不要跟阿禾學：選「我會玩，直接開始」
+await A.click("#goOnline");
+// 第一次在這支手機按「朋友連線」會先問要不要跟阿禾學：選「我會玩，直接開始」
 await A.waitForSelector("#storyOffer:not([hidden])");
-console.log("✓ 第一次開房會先問要不要跟阿禾學");
+console.log("✓ 第一次按朋友連線會先問要不要跟阿禾學");
 await A.click("#offerSkip");
+await A.waitForSelector("#online:not([hidden])");
+await A.fill("#name", "阿明");
+await A.click("#create");
 await A.waitForSelector("#wait:not([hidden])");
 const code = (await A.textContent("#bigCode")).trim();
 console.log("✓ 房主開房，房號", code);
@@ -40,6 +42,10 @@ await sleep(600);
 await shot(A, "02-waiting");
 
 // --- 朋友輸入房號 ---
+await B.click("#goOnline");
+await B.waitForSelector("#storyOffer:not([hidden])");
+await B.click("#offerSkip");
+await B.waitForSelector("#online:not([hidden])");
 await B.fill("#name", "小美");
 await B.fill("#code", code.toLowerCase());     // 打小寫也要能進
 await B.click("#join");
@@ -55,7 +61,7 @@ async function step(page, me) {
   if (await page.isVisible("#result:not([hidden])")) return "done";
   const turn = (await page.textContent("#turnLine")) ?? "";
   if (await page.isVisible("#bidPanel:not([hidden])")) {
-    if (!turn.includes("輪到你叫牌")) return "wait";
+    if (!(await page.isVisible("#bidPanel.mine"))) return "wait";
     if (!seen.has("bid")) { seen.add("bid"); await shot(page, `05-bidding-${me}`); }
     // 叫牌面板的三顆按鈕一定要看得到、點得到（沒被切掉或蓋住）
     for (const sel of ["#bidConfirm", "#bidPass", "#bidDouble"]) {
@@ -68,8 +74,9 @@ async function step(page, me) {
     }
     const none = !((await page.textContent("#bidContract")) ?? "").includes("目前");
     if (none) {
-      const btn = page.locator("#bidGrid button:not([disabled])").nth(1);   // 1♦：先點選、看試算、再確定
-      await btn.click(); await sleep(250);
+      // 1♦：先點階數、再點花色、看試算、再確定
+      await page.locator("#bidLevels button:not([disabled])").first().click(); await sleep(120);
+      await page.locator("#bidStrains button:not([disabled])").nth(1).click(); await sleep(250);
       if (!seen.has("preview")) { seen.add("preview"); await shot(page, `06-bid-preview-${me}`); }
       await page.click("#bidConfirm");
     } else if (!doubled && await page.isEnabled("#bidDouble")) {

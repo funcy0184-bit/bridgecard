@@ -1,55 +1,102 @@
-// 回饋特效：飛牌、翻牌、發光、震畫面、逐字跳字、手機震動、彩帶。
-// 對應 Unity 版的 Tween / TextFX / FloatingText / FeedbackDirector，手感盡量一樣。
+// 動態回饋的共用零件（MotionTokens ＋ CardMotion 的底層）：設定、彈簧曲線、飛牌、翻牌、落桌、震動、跳字。
+// 所有動畫都看同一組設定：動畫強度（關閉／低／標準／強）、快速模式、畫面震動、粒子、手機震動、音量。
 import { cardText, isRedCard, rankOf, rankText, SUIT_SYMBOL, suitOf } from "../game/cards";
 
 // ---------------- 設定 ----------------
 
-export type ThemeId = "dusk" | "wine" | "green";
-export interface FxSettings { speed: 0 | 1 | 2; shake: boolean; vibrate: boolean; theme: ThemeId; }
-const SPEED_MULT = [1.35, 1, 0.7];   // 慢 / 標準 / 快：動畫時間倍率
-export const SPEED_LABELS = ["慢", "標準", "快"];
-// 牌桌顏色：暮色藍是「來打橋牌」主視覺的顏色；經典綠是第一版的牌桌綠
-export const THEMES: { id: ThemeId; label: string; bg: string }[] = [
-  { id: "dusk", label: "暮色藍", bg: "#111A2B" },
-  { id: "wine", label: "酒紅", bg: "#1F1016" },
-  { id: "green", label: "經典綠", bg: "#16302A" },
-];
+export type Intensity = 0 | 1 | 2 | 3;
+export interface FxSettings {
+  intensity: Intensity;   // 0 關閉 1 低 2 標準 3 強
+  fast: boolean;          // 快速動畫模式
+  shake: boolean;         // 畫面震動
+  particles: boolean;     // 粒子效果
+  vibrate: boolean;       // 手機震動
+  sfx: number;            // 音效音量 0..1
+  music: number;          // 背景音樂音量 0..1
+  muted: boolean;         // 一鍵靜音
+}
+export const INTENSITY_LABELS = ["關閉", "低", "標準", "強"];
 const KEY = "hb-web-settings";
-const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+export const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+type NavExtra = Navigator & { deviceMemory?: number; userActivation?: { hasBeenActive: boolean } };
+const nav = (typeof navigator !== "undefined" ? navigator : {}) as NavExtra;
+// 低階手機：粒子減半
+export const lowEnd = (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 2;
 
 export const settings: FxSettings = loadSettings();
 
 function loadSettings(): FxSettings {
-  const def: FxSettings = { speed: 1, shake: !reduced, vibrate: true, theme: "dusk" };
-  let s = def;
-  try { s = { ...def, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { /* 用預設值 */ }
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = "dusk";
+  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.3, muted: false };
+  let s: FxSettings = def;
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
+    s = { ...def, ...raw };
+    if (raw.speed === 2 && raw.fast === undefined) s.fast = true;   // 舊版「動畫速度：快」
+  } catch { /* 用預設值 */ }
+  if (![0, 1, 2, 3].includes(s.intensity)) s.intensity = def.intensity;
+  s.sfx = clamp01(Number(s.sfx)); s.music = clamp01(Number(s.music));
   return s;
 }
+function clamp01(n: number) { return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.5; }
+
+const listeners: (() => void)[] = [];
+export function onSettings(fn: () => void) { listeners.push(fn); }
 export function saveSettings() {
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* 無痕模式存不了就算了 */ }
-  applySpeed();
-  applyTheme();
+  applySettings();
+  for (const fn of listeners) fn();
 }
-export function applyTheme() {
-  const t = THEMES.find(x => x.id === settings.theme) ?? THEMES[0];
-  if (t.id === "dusk") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = t.id;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t.bg);
-}
-export function applySpeed() {
-  document.documentElement.style.setProperty("--spd", String(SPEED_MULT[settings.speed] * (reduced ? 0.6 : 1)));
-}
-export const ms = (base: number) => base * SPEED_MULT[settings.speed] * (reduced ? 0.6 : 1);
+
+// 強度倍率：關閉 0、低 0.5、標準 1、強 1.45
+export const amp = () => [0, 0.5, 1, 1.45][settings.intensity];
+export const motionOn = () => settings.intensity > 0;
+const speedMult = () => (settings.fast ? 0.6 : 1) * (reduced ? 0.75 : 1);
+export const ms = (base: number) => (motionOn() ? base * speedMult() : 1);
 export const wait = (t: number) => new Promise<void>(r => setTimeout(r, t));
+
+// ---------------- MotionTokens：時長、曲線 ----------------
+
+export const T = { tap: 120, quick: 180, base: 240, fly: 260, land: 170, slow: 360, hitstop: 55 };
+export const EASE = {
+  out: "cubic-bezier(.2,.8,.25,1)",
+  in: "cubic-bezier(.5,0,.8,.4)",
+  snap: "cubic-bezier(.3,1.6,.5,1)",
+  spring: "cubic-bezier(.2,1.35,.4,1)",   // 啟動時換成真的彈簧曲線（linear()）
+};
+
+// 用彈簧方程式算出一條 CSS linear() 曲線；舊瀏覽器退回帶回彈的 cubic-bezier
+function springEasing(stiffness = 230, damping = 17): string {
+  if (typeof CSS === "undefined" || !CSS.supports?.("transition-timing-function", "linear(0, 1)")) return EASE.spring;
+  let x = 0, v = 0;
+  const pts: string[] = [];
+  const steps = 48, dt = 0.55 / steps;
+  for (let i = 0; i <= steps; i++) {
+    pts.push(x.toFixed(3));
+    for (let k = 0; k < 4; k++) { const a = -stiffness * (x - 1) - damping * v; v += a * dt / 4; x += v * dt / 4; }
+  }
+  pts[pts.length - 1] = "1";
+  return `linear(${pts.join(", ")})`;
+}
+
+export function applySettings() {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.dataset.motion = String(settings.intensity);
+  root.style.setProperty("--spd", String(motionOn() ? speedMult() : 0.01));
+  root.style.setProperty("--amp", String(amp()));
+}
 
 // ---------------- 牌 ----------------
 
+const CROWN = `<svg class="crown" viewBox="0 0 24 16" aria-hidden="true"><path d="M2 14 L4 4 L9 9 L12 2 L15 9 L20 4 L22 14 Z" fill="currentColor" opacity=".85"/><path d="M2 15 H22" stroke="currentColor" stroke-width="1.4"/></svg>`;
+
 export function cardEl(id: number, cls = ""): HTMLElement {
   const e = document.createElement("div");
-  e.className = `card ${isRedCard(id) ? "red" : ""} ${cls}`;
+  const r = rankOf(id);
+  e.className = `card ${isRedCard(id) ? "red" : ""} ${r >= 11 && r <= 13 ? "face" : ""} ${cls}`;
   const s = SUIT_SYMBOL[suitOf(id)];
-  e.innerHTML = `<span class="ix"><b>${rankText(rankOf(id))}</b><i>${s}</i></span><span class="pip">${s}</span>`;
+  const ix = `<b>${rankText(r)}</b><i>${s}</i>`;
+  e.innerHTML = `<span class="ix">${ix}</span>${r >= 11 && r <= 13 ? CROWN : ""}<span class="pip">${s}</span><span class="ix rev">${ix}</span>`;
   e.dataset.id = String(id);
   e.setAttribute("aria-label", cardText(id));
   return e;
@@ -68,11 +115,14 @@ let shakeTarget: HTMLElement;
 export function initFx(fxLayer: HTMLElement, shakeRoot: HTMLElement) {
   layer = fxLayer;
   shakeTarget = shakeRoot;
-  applySpeed();
-  applyTheme();
+  EASE.spring = springEasing();
+  document.documentElement.style.setProperty("--spring", EASE.spring);
+  applySettings();
 }
+export const fxLayer = () => layer;
 
 export const center = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+export const rectAt = (x: number, y: number, w: number, h: number) => new DOMRect(x - w / 2, y - h / 2, w, h);
 
 // 把元素「釘」在畫面上某個位置（特效層、固定定位），之後再拿去飛
 export function pin(el: HTMLElement, at: DOMRect) {
@@ -82,93 +132,147 @@ export function pin(el: HTMLElement, at: DOMRect) {
   if (el.parentElement !== layer) layer.appendChild(el);
 }
 
-// 一個以 (x, y) 為中心、w × h 大小的矩形
-export const rectAt = (x: number, y: number, w: number, h: number) => new DOMRect(x - w / 2, y - h / 2, w, h);
-
-// 把一張牌（或牌背）從 from 飛到 to。回傳飛行中的元素，飛完由呼叫者決定要不要移除
+// 出牌飛行：途中微轉、放大、影子變深；可以在半路翻面
 export async function fly(el: HTMLElement, from: DOMRect, to: DOMRect,
-  opt: { dur?: number; flipAt?: () => void; fade?: boolean; spin?: number; easing?: string } = {}): Promise<HTMLElement> {
+  opt: { dur?: number; flipAt?: () => void; fade?: boolean; spin?: number; easing?: string; lift?: number } = {}): Promise<HTMLElement> {
   pin(el, from);
+  if (!motionOn()) { opt.flipAt?.(); return el; }
   const a = center(from), b = center(to);
   const sx = to.width / from.width, sy = to.height / from.height;
   const dx = b.x - a.x, dy = b.y - a.y;
-  const dur = ms(opt.dur ?? 300);
-  const spin = opt.spin ?? (Math.random() * 10 - 5);
+  const dur = ms(opt.dur ?? T.fly);
+  const spin = (opt.spin ?? (Math.random() * 12 - 6)) * Math.min(1.3, amp());
+  const peak = 1 + 0.08 * Math.min(1.4, amp());
+  const arc = (opt.lift ?? 26) * Math.min(1.3, amp());
   const frames: Keyframe[] = [
-    { transform: "translate(0,0) scale(1) rotate(0deg)", opacity: 1 },
-    { transform: `translate(${dx * 0.55}px,${dy * 0.55 - 24}px) scale(${(1 + sx) / 2 * 1.08},${(1 + sy) / 2 * 1.08}) rotate(${spin}deg)`, opacity: 1, offset: 0.55 },
-    { transform: `translate(${dx}px,${dy}px) scale(${sx},${sy}) rotate(0deg)`, opacity: opt.fade ? 0 : 1 },
+    { transform: "translate(0,0) scale(1) rotate(0deg)", opacity: 1, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.35))" },
+    { transform: `translate(${dx * 0.55}px,${dy * 0.55 - arc}px) scale(${(1 + sx) / 2 * peak},${(1 + sy) / 2 * peak}) rotate(${spin}deg)`, opacity: 1, offset: 0.55, filter: "drop-shadow(0 14px 14px rgba(0,0,0,.45))" },
+    { transform: `translate(${dx}px,${dy}px) scale(${sx},${sy}) rotate(0deg)`, opacity: opt.fade ? 0 : 1, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.35))" },
   ];
   if (opt.flipAt) setTimeout(opt.flipAt, dur * 0.45);
-  await el.animate(frames, { duration: dur, easing: opt.easing ?? "cubic-bezier(.2,.8,.25,1)", fill: "forwards" }).finished.catch(() => {});
+  await el.animate(frames, { duration: dur, easing: opt.easing ?? EASE.out, fill: "forwards" }).finished.catch(() => {});
   return el;
 }
 
-// 牌背翻成牌面（飛行途中換臉）
-// 用獨立的 scale 屬性做翻面，才不會蓋掉飛行用的 transform
+// 落桌：短暫壓扁再回彈（有重量的感覺）
+export function land(el: Element, power = 1) {
+  if (!motionOn()) return;
+  const k = 0.07 * power * Math.min(1.4, amp());
+  el.animate([
+    { scale: "1 1" }, { scale: `${1 + k} ${1 - k * 1.2}`, offset: 0.3 }, { scale: `${1 - k * 0.4} ${1 + k * 0.5}`, offset: 0.65 }, { scale: "1 1" },
+  ], { duration: ms(T.land + 40), easing: "ease-out" });
+}
+
+// 牌背翻成牌面（飛行途中換臉）；用獨立的 scale 屬性，才不會蓋掉飛行用的 transform
 export function flipTo(el: HTMLElement, id: number) {
-  el.animate([{ scale: "1 1" }, { scale: "0 1" }], { duration: ms(90), fill: "forwards" }).finished.then(() => {
+  const swap = () => {
     const face = cardEl(id);
     el.className = face.className + " flying";
     el.replaceChildren(...Array.from(face.childNodes));
+  };
+  if (!motionOn()) { swap(); return; }
+  el.animate([{ scale: "1 1" }, { scale: "0 1" }], { duration: ms(90), fill: "forwards" }).finished.then(() => {
+    swap();
     el.animate([{ scale: "0 1" }, { scale: "1 1" }], { duration: ms(110), fill: "forwards" });
   }).catch(() => {});
 }
 
 export function punch(el: Element, amount = 0.14, dur = 260) {
-  el.animate([{ scale: "1" }, { scale: String(1 + amount) }, { scale: String(1 - amount * 0.35) }, { scale: "1" }],
+  if (!motionOn()) return;
+  const a = amount * Math.min(1.4, amp());
+  el.animate([{ scale: "1" }, { scale: String(1 + a) }, { scale: String(1 - a * 0.35) }, { scale: "1" }],
     { duration: ms(dur), easing: "ease-out" });
 }
 
 export function glow(el: Element, dur = 520) {
   el.animate([
-    { boxShadow: "0 0 0 0 rgba(255,214,102,.0)", filter: "brightness(1)" },
-    { boxShadow: "0 0 0 4px rgba(255,214,102,.95), 0 0 26px 8px rgba(255,200,80,.75)", filter: "brightness(1.12)", offset: 0.35 },
-    { boxShadow: "0 0 0 2px rgba(255,214,102,.6), 0 0 12px 2px rgba(255,200,80,.3)", filter: "brightness(1)" },
+    { boxShadow: "0 0 0 0 rgba(232,190,100,0)", filter: "brightness(1)" },
+    { boxShadow: "0 0 0 3px rgba(240,200,110,.95), 0 0 26px 8px rgba(230,180,80,.7)", filter: "brightness(1.12)", offset: 0.35 },
+    { boxShadow: "0 0 0 2px rgba(240,200,110,.55), 0 0 12px 2px rgba(230,180,80,.25)", filter: "brightness(1)" },
   ], { duration: ms(dur), fill: "forwards" });
 }
 
+// 不能出：輕輕左右擺一下（不要太兇）
 export function deny(el: Element) {
+  const a = motionOn() ? Math.max(0.6, Math.min(1.2, amp())) : 0;
   el.animate([
-    { translate: "0 0" }, { translate: "-7px 0" }, { translate: "6px 0" }, { translate: "-4px 0" }, { translate: "3px 0" }, { translate: "0 0" },
-  ], { duration: ms(280) });
-  el.animate([{ filter: "none" }, { filter: "sepia(1) saturate(4) hue-rotate(-30deg)" }, { filter: "none" }], { duration: ms(380) });
+    { translate: "0 0", rotate: "0deg" }, { translate: `${-5 * a}px 0`, rotate: `${-2 * a}deg` }, { translate: `${4 * a}px 0`, rotate: `${1.5 * a}deg` },
+    { translate: `${-2 * a}px 0`, rotate: `${-0.7 * a}deg` }, { translate: "0 0", rotate: "0deg" },
+  ], { duration: ms(300), easing: "ease-out" });
 }
 
-export function shakeScreen(amp = 10, dur = 280) {
-  if (!settings.shake || !shakeTarget) return;
+// 選牌：彈一下
+export function bounce(el: Element) {
+  if (!motionOn()) return;
+  el.animate([{ scale: "1" }, { scale: String(1 + 0.08 * Math.min(1.3, amp())) }, { scale: "0.98" }, { scale: "1" }], { duration: ms(260), easing: "ease-out" });
+}
+
+// 局部震動（只震牌桌那一塊）
+export function shake(el: Element, ampPx = 8, dur = 260) {
+  if (!settings.shake || !motionOn()) return;
+  const a = ampPx * amp();
   const frames: Keyframe[] = [];
   const n = 8;
   for (let i = 0; i <= n; i++) {
     const k = 1 - i / n;
-    frames.push({ translate: i === n ? "0 0" : `${(Math.random() * 2 - 1) * amp * k}px ${(Math.random() * 2 - 1) * amp * k}px` });
+    frames.push({ translate: i === n ? "0 0" : `${(Math.random() * 2 - 1) * a * k}px ${(Math.random() * 2 - 1) * a * k}px` });
   }
-  shakeTarget.animate(frames, { duration: ms(dur), easing: "linear" });
+  el.animate(frames, { duration: ms(dur), easing: "linear" });
+}
+export function shakeScreen(ampPx = 10, dur = 280) { if (shakeTarget) shake(shakeTarget, ampPx, dur); }
+
+// 背景亮一下（只給 Level 3）
+export function flash(strength = 1) {
+  if (!motionOn() || !layer) return;
+  const f = document.createElement("div");
+  f.className = "flash";
+  layer.appendChild(f);
+  f.animate([{ opacity: 0 }, { opacity: 0.55 * strength * Math.min(1.2, amp()), offset: 0.25 }, { opacity: 0 }], { duration: ms(520), easing: "ease-out" })
+    .finished.then(() => f.remove()).catch(() => f.remove());
 }
 
 export function buzz(pattern: number | number[]) {
   if (!settings.vibrate) return;
   // 瀏覽器規定：使用者點過畫面之後才能震動（重新整理後還沒點就先不震）
-  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
-  if (ua && !ua.hasBeenActive) return;
+  if (nav.userActivation && !nav.userActivation.hasBeenActive) return;
   try { navigator.vibrate?.(pattern); } catch { /* iPhone 不支援 */ }
 }
 
 export function flipIn(el: Element) {
+  if (!motionOn()) return;
   el.animate([{ transform: "rotateY(90deg)", filter: "brightness(1.4)" }, { transform: "rotateY(0deg)", filter: "brightness(1)" }],
     { duration: ms(340), easing: "cubic-bezier(.2,1.4,.4,1)" });
 }
 
 export function popIn(el: Element, delay = 0) {
-  el.animate([{ scale: "0", opacity: 0 }, { scale: "1.12", opacity: 1, offset: 0.7 }, { scale: "1", opacity: 1 }],
+  if (!motionOn()) return;
+  el.animate([{ scale: "0", opacity: 0 }, { scale: "1.1", opacity: 1, offset: 0.7 }, { scale: "1", opacity: 1 }],
     { duration: ms(320), delay: ms(delay), easing: "ease-out", fill: "backwards" });
+}
+
+// 紙張滑入（畫面切換、對話框、結算單）
+export function slideIn(el: Element, from: "right" | "left" | "up" = "right", delay = 0) {
+  if (!motionOn()) return;
+  const t = from === "up" ? "0 28px" : from === "left" ? "-26px 0" : "26px 0";
+  const r = from === "up" ? "0deg" : from === "left" ? "-1.2deg" : "1.2deg";
+  el.animate([{ translate: t, rotate: r, opacity: 0 }, { translate: "0 0", rotate: "0deg", opacity: 1 }],
+    { duration: ms(T.slow), delay: ms(delay), easing: EASE.spring, fill: "backwards" });
+}
+
+// 蓋章：從大到小用力壓下去
+export function stampIn(el: Element, delay = 0) {
+  if (!motionOn()) return;
+  el.animate([
+    { scale: "1.9", rotate: "-14deg", opacity: 0 }, { scale: "0.92", rotate: "-4deg", opacity: 1, offset: 0.55 },
+    { scale: "1.04", rotate: "-5deg", offset: 0.8 }, { scale: "1", rotate: "-4deg", opacity: 1 },
+  ], { duration: ms(300), delay: ms(delay), easing: "ease-out", fill: "backwards" });
 }
 
 // 數字滾動（分數變化）
 export function countUp(el: HTMLElement, to: number) {
   const from = Number(el.dataset.v ?? to);
   el.dataset.v = String(to);
-  if (from === to) { el.textContent = String(to); return; }
+  if (from === to || !motionOn()) { el.textContent = String(to); return; }
   const t0 = performance.now(), dur = ms(700);
   const tick = (t: number) => {
     const k = Math.min(1, (t - t0) / dur);
@@ -193,7 +297,7 @@ export function popup(text: string, anchor: Element, opt: PopupOpt = {}) {
     const n = stacks.get(anchor) ?? 0;
     stacks.set(anchor, n + 1);
     const box = document.createElement("div");
-    box.className = "popup " + (opt.flags ?? ["pop"]).map(f => "fx-" + f).join(" ");
+    box.className = "popup " + (motionOn() ? (opt.flags ?? ["pop"]).map(f => "fx-" + f).join(" ") : "");
     box.style.left = `${r.left + r.width / 2}px`;
     box.style.top = `${r.top + r.height / 2 - n * (opt.size ?? 36) * 1.1}px`;
     box.style.fontSize = `${opt.size ?? 36}px`;
@@ -203,38 +307,19 @@ export function popup(text: string, anchor: Element, opt: PopupOpt = {}) {
       o.className = "ch";
       o.style.setProperty("--i", String(i));
       const inner = document.createElement("span");
-      inner.textContent = ch === " " ? " " : ch;
+      inner.textContent = ch === " " ? " " : ch;
       o.appendChild(inner);
       box.appendChild(o);
     });
     layer.appendChild(box);
-    const hold = ms(opt.hold ?? 750) + [...text].length * ms(30);
+    const hold = Math.max(ms(opt.hold ?? 750), 500) + [...text].length * ms(30);
     setTimeout(() => {
-      box.animate([{ translate: "-50% -50%", opacity: 1 }, { translate: `-50% calc(-50% - ${opt.rise ?? 48}px)`, opacity: 0 }],
-        { duration: ms(480), easing: "ease-in", fill: "forwards" }).finished.then(() => {
+      box.animate([{ translate: "-50% -50%", opacity: 1 }, { translate: `-50% calc(-50% - ${motionOn() ? opt.rise ?? 48 : 0}px)`, opacity: 0 }],
+        { duration: Math.max(ms(480), 200), easing: "ease-in", fill: "forwards" }).finished.then(() => {
         box.remove();
         stacks.set(anchor, Math.max(0, (stacks.get(anchor) ?? 1) - 1));
       }).catch(() => box.remove());
     }, hold);
   };
   if (opt.delay) setTimeout(run, ms(opt.delay)); else run();
-}
-
-// ---------------- 彩帶（贏得整場） ----------------
-
-export function confetti(count = 70) {
-  const colors = ["#D9A23A", "#F3D27A", "#E9F1EC", "#B8233A", "#5FB389"];
-  for (let i = 0; i < count; i++) {
-    const p = document.createElement("i");
-    p.className = "confetti";
-    p.style.background = colors[i % colors.length];
-    p.style.left = `${50 + (Math.random() * 30 - 15)}%`;
-    layer.appendChild(p);
-    const dx = (Math.random() * 2 - 1) * 220, up = 260 + Math.random() * 260;
-    p.animate([
-      { transform: "translate(0,0) rotate(0deg)", opacity: 1 },
-      { transform: `translate(${dx * 0.6}px,${-up}px) rotate(${Math.random() * 360}deg)`, opacity: 1, offset: 0.4 },
-      { transform: `translate(${dx}px,${120 + Math.random() * 200}px) rotate(${Math.random() * 720}deg)`, opacity: 0 },
-    ], { duration: 1600 + Math.random() * 900, easing: "cubic-bezier(.2,.7,.4,1)", fill: "forwards" }).finished.then(() => p.remove()).catch(() => p.remove());
-  }
 }

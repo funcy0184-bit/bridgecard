@@ -4,6 +4,10 @@
 import { SUIT_SYMBOL, bidText, cardText, isRedBid, suitOf, tricksNeeded, Suit } from "../game/cards";
 import { GameEvent, TableState } from "../game/game";
 import * as fx from "../client/fx";
+import { sfx } from "../client/sound";
+import { contractFeedback, trickFeedback } from "../client/feedback";
+import { burstAt, shower } from "../client/particles";
+import { renderSettings } from "../client/settings-ui";
 import {
   ACTS, AHE, CONTRACT, LINES, ME, Outcome, STEPS, StepId, StepRun,
   act, bidMeaning, firstStepOfAct, outcomeOf, replay, settle, start,
@@ -65,6 +69,7 @@ function goto(page: number, scroll = true) {
   busy = false; selBid = -1; retryLine = ""; triedIllegal = false; justFinished = false;
   fresh.clear();
   render();
+  fx.slideIn($("narrator"), "right");
   if (scroll) {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
     $("title").focus({ preventScroll: true });
@@ -274,14 +279,40 @@ function layoutHand(box: HTMLElement, n: number) {
   box.style.setProperty("--ov", `${cw - step}px`);
 }
 
-// ---------------- 阿禾說 ----------------
+// ---------------- 阿禾說：一個字一個字講（點一下就講完） ----------------
+
+let typing = 0, typedTarget = "";
+function speak(el: HTMLElement, text: string) {
+  if (typedTarget === text && el.dataset.full === text) return;   // 同一句話不重播
+  typedTarget = text;
+  el.dataset.full = text;
+  clearInterval(typing);
+  typing = 0;
+  if (!fx.motionOn()) { el.textContent = text; return; }
+  const chars = [...text];
+  let i = 0;
+  el.textContent = "";
+  fx.slideIn(el, "up");
+  typing = window.setInterval(() => {
+    i = Math.min(chars.length, i + 1);
+    el.textContent = chars.slice(0, i).join("");
+    if (i % 3 === 1) sfx.type();
+    if (i >= chars.length) { clearInterval(typing); typing = 0; }
+  }, fx.settings.fast ? 14 : 26);
+}
+function finishTyping() {
+  if (!typing) return;
+  clearInterval(typing);
+  typing = 0;
+  $("spoken").textContent = typedTarget;
+}
 
 function renderNarrator() {
   const st = step(), L = LINES[st.id];
   const o = outcomeOf(run);
   const spoken = $("spoken"), more = $("more"), fb = $("feedback");
   if (run.done && o) {
-    spoken.textContent = L.reply(o);
+    speak(spoken, L.reply(o));
     more.textContent = L.more?.(o) ?? "";
     more.className = "more";
     fb.className = "ok";
@@ -293,13 +324,13 @@ function renderNarrator() {
       fb.appendChild(t);
     }
   } else if (retryLine) {
-    spoken.textContent = retryLine;
+    speak(spoken, retryLine);
     more.textContent = "改出另一張試試。";
     more.className = "hint";
     fb.className = "retry";
     fb.textContent = `對方先出 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，你手上還有 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，這墩就要跟 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}。`;
   } else {
-    spoken.textContent = L.ask;
+    speak(spoken, L.ask);
     more.textContent = L.hint;
     more.className = "hint";
     if (st.kind === "bid" && selBid >= 0 && selBid !== CONTRACT && L.nudge) {
@@ -357,7 +388,7 @@ function renderContents() {
 
 function revealNarrator() {
   const r = $("spoken").getBoundingClientRect();
-  if (r.bottom > innerHeight - 40 || r.top < 0) $("spoken").scrollIntoView({ block: "center", behavior: fx.settings.speed === 2 ? "auto" : "smooth" });
+  if (r.bottom > innerHeight - 40 || r.top < 0) $("spoken").scrollIntoView({ block: "center", behavior: fx.settings.fast || !fx.motionOn() ? "auto" : "smooth" });
 }
 
 // ---------------- 出牌 ----------------
@@ -370,6 +401,7 @@ async function onCardTap(id: number, el: HTMLElement) {
   if (!r.ok) {
     if (r.events.some(e => e.type === "Illegal")) {
       fx.deny(el);
+      sfx.deny();
       fx.buzz(50);
       fx.popup(`要先跟 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}！`, $("aMe"), { size: 24, color: BAD, flags: ["pop", "shake"], hold: 500 });
       retryLine = LINES[step().id].illegal ?? "「這張現在不能出。」";
@@ -381,6 +413,8 @@ async function onCardTap(id: number, el: HTMLElement) {
   }
   busy = true;
   retryLine = "";
+  sfx.select();
+  fx.bounce(el);
   fx.buzz(10);
   renderNarrator();
   // 1. 從手上飛到「你出的牌」
@@ -388,15 +422,17 @@ async function onCardTap(id: number, el: HTMLElement) {
   const to = $("slotMe").getBoundingClientRect();
   el.style.visibility = "hidden";
   const flying = fx.cardEl(id);
-  await fx.fly(flying, from, to, { dur: 320 });
+  sfx.lift();
+  await fx.fly(flying, from, to, { dur: 260, lift: 20 });
+  sfx.land();
   renderTable();
   flying.remove();
   const mine = $("slotMe").firstElementChild;
-  if (mine) fx.punch(mine, 0.12, 240);
+  if (mine) fx.land(mine);
   const ruff = r.events.some(e => e.type === "CardPlayed" && e.extra === 1);
   if (ruff) {
     fx.popup("王吃！", $("aMe"), { size: 60, color: GOLD, flags: ["pop", "shake"], hold: 800, delay: 120 });
-    setTimeout(() => fx.shakeScreen(14, 320), fx.ms(180));
+    setTimeout(() => { fx.shakeScreen(12, 320); sfx.ruff(); burstAt($("aMe"), { count: 14, kinds: ["star", "dust"], speed: 220 }); }, fx.ms(180));
     fx.buzz([30, 40, 70]);
   }
   await fx.wait(fx.ms(ruff ? 900 : 600));
@@ -414,7 +450,8 @@ async function animateSettle(evs: GameEvent[]) {
   const won = evs.find(e => e.type === "TrickWon");
   if (won) {
     const card = $(won.seat === ME ? "slotMe" : "slotOpp").firstElementChild as HTMLElement | null;
-    if (card) { fx.glow(card, 700); fx.punch(card, 0.18, 320); }
+    const level = evs.some(e => e.type === "GameOver") ? 3 : won.extra === 1 ? 2 : 1;
+    trickFeedback(level === 3 ? 2 : level, won.seat === ME, card, $("stable"));
   }
   const up = evs.find(e => e.type === "FaceUpTaken");
   if (up) {
@@ -433,6 +470,7 @@ async function animateSettle(evs: GameEvent[]) {
         fx.fly(clone, r, fx.rectAt(c.x, meWon ? dest.top + 40 : c.y, r.width * 0.8, r.height * 0.8), { dur: 460 }).then(f => f.remove());
       }, fx.ms(320));
     }
+    sfx.faceUp(meWon);
     fx.popup(meWon ? `搶到 ${cardText(up.card)}！` : `${cardText(up.card)} 被阿禾拿走`, anchor(up.seat),
       { size: 28, color: meWon ? GOLD : MUTED, flags: meWon ? ["pop", "wave"] : ["pop"], delay: 380 });
     if (meWon) fresh.add(up.card);
@@ -443,6 +481,7 @@ async function animateSettle(evs: GameEvent[]) {
       const dest2 = (drew.seat === ME ? $("sHand") : $("sOppFan")).getBoundingClientRect();
       const c2 = fx.center(dest2);
       setTimeout(() => {
+        sfx.draw();
         fx.fly(fx.backEl(), r, fx.rectAt(c2.x, drew.seat === ME ? dest2.top + 44 : c2.y, 34, 48), { dur: 420, fade: true }).then(f => f.remove());
       }, fx.ms(620));
       if (drew.seat === ME && drew.card >= 0) fresh.add(drew.card);
@@ -459,7 +498,8 @@ async function animateSettle(evs: GameEvent[]) {
       { size: 70, color: made ? GOLD : BAD, flags: made ? ["pop", "wave"] : ["pop", "shake"], hold: 1300, delay: 450 });
     const scored = evs.find(e => e.type === "HandScored");
     if (scored) fx.popup(`+${scored.value} 分`, anchor(scored.seat), { size: 36, color: GOLD, flags: ["pop", "wave"], hold: 900, delay: 1100 });
-    setTimeout(() => { fx.shakeScreen(10, 360); if (made) fx.confetti(60); }, fx.ms(600));
+    setTimeout(() => { contractFeedback(made, $("aCenter"), $("stable")); if (made) shower(50); }, fx.ms(600));
+    if (scored) setTimeout(() => sfx.scoreHit(), fx.ms(1150));
     fx.buzz(made ? [30, 50, 30, 50, 120] : [220]);
     await fx.wait(fx.ms(1500));
     return;
@@ -473,6 +513,7 @@ function selectBid(i: number) {
   if (busy || run.done || run.actions.length) return;
   if (selBid === i && i === CONTRACT) { confirmBid(); return; }   // 同一格點兩次 = 送出（跟正式牌桌一樣）
   selBid = i;
+  sfx.select();
   fx.buzz(8);
   renderTable();
   renderNarrator();
@@ -486,15 +527,20 @@ async function confirmBid() {
   if (!r.ok) return;
   busy = true;
   fx.popup(bidText(CONTRACT), $("aMe"), { size: 44, color: RED, flags: ["pop"] });
+  sfx.stamp();
   fx.buzz(15);
   renderTable();
   renderNarrator();
   await fx.wait(fx.ms(950));
   settle(run);
   fx.popup("Pass", $("aOpp"), { size: 30, color: MUTED });
+  sfx.pass();
   renderTable();
   await fx.wait(fx.ms(500));
   fx.popup(`合約 ${bidText(CONTRACT)}`, $("aCenter"), { size: 40, color: GOLD, flags: ["pop", "wave"], hold: 1000 });
+  sfx.stamp();
+  const plateEl = document.querySelector(".splate .big");
+  if (plateEl) { fx.stampIn(plateEl); burstAt(plateEl, { count: 10, kinds: ["dust", "star"], speed: 160 }); }
   const g = document.getElementById("goal");
   if (g) fx.punch(g, 0.12, 320);
   await fx.wait(fx.ms(700));
@@ -521,6 +567,15 @@ $("sBoard").addEventListener("click", ev => {
   if (t.closest("#sCall")) confirmBid();
 });
 $("restart").addEventListener("click", restartStory);
+$("narrator").addEventListener("click", finishTyping);
+const setDlg = $<HTMLDialogElement>("setDlg");
+$("setBtn").addEventListener("click", () => { renderSettings($("setBox")); setDlg.showModal(); sfx.slide(); });
+$("setClose").addEventListener("click", () => setDlg.close());
+setDlg.addEventListener("click", ev => { if (ev.target === setDlg) setDlg.close(); });
+document.addEventListener("pointerdown", ev => {
+  const b = (ev.target as HTMLElement).closest(".s-emph, .s-minor, .s-back, .book, .notes, .snav a, #restart, .btn");
+  if (b) sfx.press();
+}, { passive: true });
 $("navChapters").addEventListener("click", ev => {
   ev.preventDefault();
   $("contentsBox").scrollIntoView({ behavior: "smooth", block: "start" });

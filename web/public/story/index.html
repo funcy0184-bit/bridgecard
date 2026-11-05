@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111A2B">
+<meta name="theme-color" content="#24170F">
 <meta name="description" content="走進台南巷口的小牌店，跟店主阿禾邊玩邊學雙人蜜月橋牌：搶牌、叫牌、王吃、打成，四幕約 5 分鐘。">
 <title>阿禾的牌店｜來打橋牌</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F2D49'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
-<script>try{var t=JSON.parse(localStorage.getItem("hb-web-settings")||"{}").theme;if(t==="wine"||t==="green")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237A2732'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<script>try{var s=JSON.parse(localStorage.getItem("hb-web-settings")||"{}");if(s.intensity!==undefined)document.documentElement.dataset.motion=s.intensity}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;500;700&display=swap">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/story/story.css">
 </head>
@@ -22,6 +22,7 @@
     <a href="#contentsBox" id="navChapters">章節練習</a>
     <a href="/?solo=1">單機對戰</a>
   </nav>
+  <button class="notes" id="setBtn" type="button" aria-label="設定">⚙</button>
   <button class="notes" id="notesBtn" type="button">速查</button>
 </header>
 
@@ -52,7 +53,7 @@
     </section>
 
     <section class="narrator" id="narrator" aria-label="阿禾說">
-      <div class="seller"><img src="/story/ahe.svg" alt="" width="48" height="48"><div><strong>阿禾</strong><small>巷口牌店店主</small></div></div>
+      <div class="seller"><img src="/art/stamp-ahe.svg" alt="" width="44" height="53"><div><strong>阿禾</strong><small>巷口牌店店主 · 點一下聽完整句</small></div></div>
       <h2 id="spoken" aria-live="polite"></h2>
       <p id="more"></p>
       <div id="feedback" aria-live="polite" aria-atomic="true"></div>
@@ -79,6 +80,10 @@
   <p>莊家的對手先出。對方先出的花色你手上有，就一定要跟；沒有才可以墊別的牌，或出王牌「王吃」。</p>
   <h3>打成與計分</h3>
   <p>莊家拿到目標墩數叫「打成」：線數 × 10 分，每多一墩 +2。少幾墩叫「倒幾墩」，對手每墩得 10 分。加倍 ×2、再加倍 ×4。先到 100 分贏。</p>
+</dialog>
+<dialog id="setDlg" aria-labelledby="setTitle">
+  <div class="dhead"><h2 id="setTitle">設定</h2><button id="setClose" type="button" aria-label="關閉設定">×</button></div>
+  <div id="setBox" class="settings"></div>
 </dialog>
 <div id="fx" aria-hidden="true"></div>
 <noscript>請開啟瀏覽器的 JavaScript，才能在故事裡出牌。</noscript>

@@ -1,22 +1,20 @@
 /* 阿禾的牌店：故事書的一頁 = 一張可以點的牌桌（左／上）＋阿禾說話的米色紙（右／下）
    顏色跟著牌桌主題（暮色藍／酒紅／經典綠），變數都在 /style.css */
 html:has(body.story), body.story { height: auto; min-height: 100%; }
-body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), transparent 70%) fixed, var(--bg); overscroll-behavior: auto; }
+body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .story a { color: inherit; }
 
 /* ---------------- 上方列 ---------------- */
 .sbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px;
-  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px; background: rgba(10,15,26,.82); backdrop-filter: blur(8px);
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px; background: rgba(24,15,9,.86); backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(255,255,255,.08); }
-:root[data-theme="wine"] .sbar { background: rgba(26,10,16,.82); }
-:root[data-theme="green"] .sbar { background: rgba(12,32,27,.82); }
 .brand { display: flex; align-items: center; gap: 6px; text-decoration: none; font: 700 19px var(--display); white-space: nowrap; }
 .brand span { color: var(--muted); font-size: 22px; line-height: 1; }
 .brand b { background: linear-gradient(180deg, #FFF6E6 10%, #F3D9A6 55%, #D9A23A 100%); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .06em; }
 .snav { display: flex; gap: 2px; margin-left: auto; }
 .snav a { padding: 7px 11px; border-radius: 9px; color: var(--muted); text-decoration: none; font-size: 14px; white-space: nowrap; }
-.snav a.on { background: rgba(255,255,255,.1); color: var(--ink-on-felt); font-weight: 700; }
-.snav a:hover { color: var(--ink-on-felt); }
+.snav a.on { background: rgba(255,255,255,.1); color: var(--on-wood); font-weight: 700; }
+.snav a:hover { color: var(--on-wood); }
 .notes { border: 1px solid rgba(255,255,255,.25); background: none; border-radius: 9px; padding: 6px 11px; font-size: 13px; cursor: pointer; white-space: nowrap; }
 
 /* ---------------- 標題 ---------------- */
@@ -32,14 +30,14 @@ body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), tran
 .actno { margin: 4px 0 0; color: var(--gold-hi); font-size: 13px; letter-spacing: .22em; }
 .opening h1 { font: 700 clamp(26px, 6.6vw, 44px)/1.25 var(--display); margin: 2px 0 0; letter-spacing: .04em; color: #FFF6E6; }
 .opening h1:focus { outline: none; }
-.setting { grid-column: 1 / -1; margin: 8px 0 0; color: #D8DEEA; line-height: 1.8; font-size: 15px; }
+.setting { grid-column: 1 / -1; margin: 8px 0 0; color: #E3D3B0; line-height: 1.8; font-size: 15px; }
 
 /* ---------------- 一頁：牌桌＋阿禾 ---------------- */
 .spread { display: grid; grid-template-columns: 1fr; border-radius: 20px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.4), 0 0 0 1px rgba(233,201,139,.18); }
 @media (min-width: 860px) { .spread { grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); } }
 
 .stable { position: relative; isolation: isolate; overflow: hidden; min-width: 0; padding: 42px 14px 12px; min-height: 380px;
-  display: flex; flex-direction: column; gap: 8px; color: var(--ink-on-felt);
+  display: flex; flex-direction: column; gap: 8px; color: var(--on-wood);
   background: radial-gradient(90% 70% at 45% 40%, var(--felt) 0%, var(--felt-dark) 62%, var(--felt-deep) 100%); }
 .stable::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .16; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' d='M0 0h150v150H0z' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E"); }
@@ -53,7 +51,7 @@ body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), tran
 
 .sopp { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 62px; justify-content: flex-end; }
 .sname { font-size: 12px; color: var(--muted); }
-.sname b { color: var(--ink-on-felt); }
+.sname b { color: var(--on-wood); }
 
 .sboard { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; min-height: 150px; padding: 4px 0; }
 .lab { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; }
@@ -71,7 +69,7 @@ body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), tran
 .lab.up .slot.empty { background: rgba(0,0,0,.18); }
 
 .sstat { text-align: center; font-size: 13px; color: var(--muted); min-height: 20px; }
-.sstat b { color: var(--ink-on-felt); }
+.sstat b { color: var(--on-wood); }
 .sstat .red, .splate .red { color: var(--red-soft); }
 
 .shandbox { border-top: 1px solid rgba(233,241,236,.12); padding-top: 6px; }
@@ -107,7 +105,7 @@ body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), tran
 
 .splate { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; }
 .splate .auct { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.splate .auct span { padding: 3px 9px; border-radius: 8px; background: rgba(0,0,0,.25); color: var(--ink-on-felt); }
+.splate .auct span { padding: 3px 9px; border-radius: 8px; background: rgba(0,0,0,.25); color: var(--on-wood); }
 .splate .auct i { font-style: normal; }
 .splate .auct .wait { color: var(--muted); }
 .splate .big { font: 700 56px/1.05 var(--display); }
@@ -153,7 +151,7 @@ body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), tran
 .ihead button { border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 6px 0 6px 10px; }
 #contents { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
 .book { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; text-align: left; cursor: pointer;
-  border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: var(--ink-on-felt); }
+  border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: var(--on-wood); }
 .book:hover { border-color: rgba(242,196,106,.4); }
 .book.on { background: rgba(242,196,106,.12); border-color: rgba(242,196,106,.55); }
 .book .bi { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 20px serif; background: rgba(255,255,255,.08); }
@@ -202,3 +200,48 @@ body.story { background: radial-gradient(60% 40% at 100% 100%, var(--glow), tran
   .sgrid button.goal:not(.sel) { animation: none; box-shadow: 0 0 0 3px var(--gold-hi); }
   .rail i { transition: none; }
 }
+
+/* ---------------- 復古版（木桌、羊皮紙、綠絨布黑金框） ---------------- */
+.brand b { letter-spacing: .18em; font-weight: 500; }
+.opening h1 { font-weight: 300; letter-spacing: .12em; color: #FBF1DA; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.place { color: var(--gold-hi); }
+.actno { color: var(--gold-hi); }
+.spread { box-shadow: 0 14px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(201,154,75,.35); border-radius: 14px; }
+.stable { background: radial-gradient(90% 75% at 45% 40%, var(--felt) 0%, var(--felt-dark) 65%, var(--felt-deep) 100%); }
+.frame { border-color: rgba(201,154,75,.85); outline-color: rgba(201,154,75,.35); }
+.frame::before, .frame::after { content: ""; position: absolute; width: 24px; height: 24px; background: url(/art/corner.svg) no-repeat center / contain; }
+.frame::before { left: -3px; top: -3px; } .frame::after { right: -3px; bottom: -3px; transform: scale(-1, -1); }
+.skip { color: var(--ink); background-color: var(--paper); background-image: var(--noise); clip-path: var(--torn-a); border-radius: 0; box-shadow: none; padding: 5px 16px; }
+.sname { color: #E9DCC0; }
+.lab figcaption { color: #F3E3BE; }
+.narrator { background-color: var(--paper); background-image: radial-gradient(ellipse at 40% 30%, rgba(255,250,235,.6), transparent 60%), radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(120,80,30,.22) 100%), var(--noise);
+  color: var(--ink); box-shadow: inset 0 0 0 7px transparent, inset 0 0 0 8px rgba(185,138,62,.5); }
+.narrator h2 { font-weight: 500; color: var(--ink); cursor: pointer; }
+.seller img { animation: aheBob calc(3.2s / var(--spd)) ease-in-out infinite; transform-origin: 50% 90%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+@keyframes aheBob { 0%, 100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(-1deg) translateY(-2px); } }
+.seller small { color: var(--ink-soft); }
+#more.more { color: #3B2E20; }
+#feedback { background: rgba(255,250,235,.5); border-left-color: var(--gold); color: #4B3B22; }
+#feedback.ok { background: rgba(232,239,225,.75); border-left-color: #4E7A5D; color: #23402C; }
+.story .s-emph { color: #F7E9CC; background: var(--wine); box-shadow: inset 0 0 0 1px rgba(226,184,96,.85), inset 0 0 0 3px var(--wine), inset 0 0 0 3.7px rgba(226,184,96,.55), 0 3px 0 rgba(0,0,0,.4);
+  transition: transform calc(.34s * var(--spd)) var(--spring); }
+.story .s-emph:active { transform: translateY(2px) scale(.97); }
+.s-minor { border-color: rgba(185,138,62,.75); color: var(--ink); transition: transform calc(.34s * var(--spd)) var(--spring); }
+.s-minor:active { transform: translateY(2px) scale(.97); }
+.s-back, .nudge { color: var(--ink-soft); }
+.book { background-color: rgba(240,227,198,.08); border-color: rgba(201,154,75,.35); }
+.book.on { background: rgba(226,184,96,.16); border-color: rgba(226,184,96,.7); }
+.book.on .bi { background: var(--wine); color: #F7E9CC; }
+.sgrid button { background: var(--paper-hi); box-shadow: inset 0 0 0 1px rgba(185,138,62,.7), 0 2px 0 rgba(0,0,0,.25); font-family: var(--display);
+  transition: transform calc(.3s * var(--spd)) var(--spring), background .15s; }
+.sgrid button.sel { background: var(--wine); color: #F7E9CC; }
+.splate .goal, .tally { box-shadow: inset 0 0 0 1px rgba(226,184,96,.55); }
+#notes, #setDlg { background-color: var(--paper); background-image: var(--noise); color: var(--ink); }
+#setDlg { max-width: min(92vw, 440px); border: 0; border-radius: 14px; padding: 18px 18px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+#setDlg::backdrop { background: rgba(14,8,4,.6); }
+#setDlg h2 { margin: 0; font: 500 20px var(--display); letter-spacing: .2em; }
+#setDlg .settings { margin-top: 12px; }
+#notes h3 { color: var(--wine); }
+.notes { color: var(--on-wood); border-color: rgba(201,154,75,.55); }
+@media (prefers-reduced-motion: reduce) { .seller img { animation: none; } }
+[data-motion="0"] .seller img, [data-motion="1"] .seller img { animation: none; }
