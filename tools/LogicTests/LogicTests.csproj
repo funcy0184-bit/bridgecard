@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    不用開 Unity 就能跑的規則測試。
+    直接編譯 Assets 裡的 Logic（純 C#）和 Tests/EditMode，跟 Unity Test Runner 跑的是同一份程式碼。
+    LangVersion 鎖在 9，跟 Unity 6 一樣，避免這裡能編、Unity 裡卻報錯。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RootNamespace>HoneymoonBridge.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Assets/HoneymoonBridge/Scripts/Logic/**/*.cs" />
+    <Compile Include="../../Assets/HoneymoonBridge/Tests/EditMode/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+  </ItemGroup>
+</Project>

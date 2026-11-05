@@ -1,0 +1,16 @@
+name: 規則測試
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  logic-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: 規則單元測試 + 5000 局模擬
+        run: dotnet test tools/LogicTests --logger "console;verbosity=normal"

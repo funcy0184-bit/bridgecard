@@ -1,0 +1,31 @@
+# ---- Unity 自動產生，不進版控 ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+crashlytics-build.properties
+
+# IDE 產生的方案檔
+.vs/
+.vscode/
+.idea/
+*.csproj
+!tools/**/*.csproj
+*.sln
+*.suo
+*.user
+*.unityproj
+
+# ---- 不開 Unity 跑測試用的 .NET 專案 ----
+tools/**/bin/
+tools/**/obj/
+tools/**/TestResults/
