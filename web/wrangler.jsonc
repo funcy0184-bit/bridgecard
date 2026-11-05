@@ -5,6 +5,9 @@
   "name": "bridgecard",
   "main": "src/server/worker.ts",
   "compatibility_date": "2026-10-01",
+  // 正式網址 https://bridgecard.<帳戶子網域>.workers.dev 固定開著；預覽網址先不用
+  "workers_dev": true,
+  "preview_urls": false,
   "build": { "command": "npm run build" },
   "assets": {
     "directory": "./public",
