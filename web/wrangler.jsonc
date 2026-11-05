@@ -2,7 +2,7 @@
   // 蜜月橋牌網頁連線版
   // 部署：Cloudflare 後台 Workers → 建立 → 匯入 GitHub repo，根目錄填 web（細節見 web/README.md）
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "honeymoon-bridge",
+  "name": "bridgecard",
   "main": "src/server/worker.ts",
   "compatibility_date": "2026-10-01",
   "build": { "command": "npm run build" },

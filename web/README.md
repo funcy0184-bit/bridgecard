@@ -25,13 +25,13 @@
 
    | 欄位 | 填什麼 |
    |---|---|
-   | Project name | `honeymoon-bridge`（**一定要跟 `wrangler.jsonc` 裡的 `name` 一樣**） |
+   | Project name | `bridgecard`（**一定要跟 `wrangler.jsonc` 裡的 `name` 一樣**） |
    | Production branch | `feature/web-online-v1` |
    | Root directory（Path） | `web` |
    | Build command | 留空（`wrangler.jsonc` 裡已經寫了） |
    | Deploy command | `npx wrangler deploy`（預設值） |
 
-4. 按 **Deploy**。跑完會給你一個網址，長得像 `https://honeymoon-bridge.你的帳號.workers.dev`
+4. 按 **Deploy**。跑完會給你一個網址，長得像 `https://bridgecard.你的帳號.workers.dev`
 5. 用手機打開那個網址 → 開房 → 把房號傳給朋友
 
 > 後台的按鈕名稱 Cloudflare 偶爾會改。找不到的話，跟 Claude 說你卡在哪一步、畫面上有哪些選項。
