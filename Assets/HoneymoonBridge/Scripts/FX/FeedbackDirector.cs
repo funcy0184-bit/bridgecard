@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 namespace HoneymoonBridge
@@ -28,9 +29,29 @@ namespace HoneymoonBridge
             StartCoroutine(ft.Show(content, color, size, flags, hold));
         }
 
+        // 延遲一下再跳字，避免跟同一瞬間的其他大字疊在一起
+        public void PopupLater(float delay, string content, RectTransform at, Color color, float size = 44f,
+                               TextFXFlags flags = TextFXFlags.PopIn, float hold = 0.7f)
+        {
+            StartCoroutine(PopupAfter(delay, content, at, color, size, flags, hold));
+        }
+
+        IEnumerator PopupAfter(float delay, string content, RectTransform at, Color color, float size,
+                               TextFXFlags flags, float hold)
+        {
+            yield return new WaitForSeconds(delay);
+            Popup(content, at, color, size, flags, hold);
+        }
+
         public void ShakeScreen(float amplitude = 12f, float dur = 0.25f)
         {
             if (shakeRoot) StartCoroutine(Tween.Shake(shakeRoot, amplitude, dur));
+        }
+
+        IEnumerator ShakeLater(float delay, float amplitude, float dur)
+        {
+            yield return new WaitForSeconds(delay);
+            ShakeScreen(amplitude, dur);
         }
 
         public void IllegalMove() =>
@@ -45,7 +66,7 @@ namespace HoneymoonBridge
             switch (e.type)
             {
                 case GameEventType.NewHand:
-                    Popup("發牌！", centerAnchor, ink, 64f, TextFXFlags.PopIn, 0.6f);
+                    Popup(e.value > 0 ? $"第 {e.value} 局 · 發牌！" : "發牌！", centerAnchor, ink, 64f, TextFXFlags.PopIn, 0.6f);
                     break;
 
                 case GameEventType.CardPlayed when e.extra == 1:
@@ -90,10 +111,24 @@ namespace HoneymoonBridge
                     Popup("Pass", side, muted, 36f);
                     break;
 
+                case GameEventType.Doubled:
+                    // 嗆聲時刻：抖字 + 震一下
+                    Popup("加倍！", side, me ? gold : bad, 64f, TextFXFlags.PopIn | TextFXFlags.Shake, 0.9f);
+                    ShakeScreen(10f, 0.25f);
+                    break;
+
+                case GameEventType.Redoubled:
+                    // 被嗆回去：比加倍更大更晃
+                    Popup("再加倍！！", side, me ? gold : bad, 76f, TextFXFlags.PopIn | TextFXFlags.Shake, 1.0f);
+                    ShakeScreen(16f, 0.32f);
+                    break;
+
                 case GameEventType.ContractSet:
                 {
                     var bid = Bid.FromIndex(e.value);
-                    Popup($"合約 {bid}", centerAnchor, gold, 80f, TextFXFlags.PopIn | TextFXFlags.Wave, 1.4f);
+                    int dbl = System.Math.Max(0, e.extra);
+                    Popup($"合約 {Scoring.ContractText(bid, dbl)}", centerAnchor, gold, 80f,
+                          dbl > 0 ? TextFXFlags.PopIn | TextFXFlags.Wave | TextFXFlags.Shake : TextFXFlags.PopIn | TextFXFlags.Wave, 1.4f);
                     break;
                 }
 
@@ -114,6 +149,18 @@ namespace HoneymoonBridge
 
                 case GameEventType.Redeal:
                     Popup("雙方都 Pass · 重發", centerAnchor, muted, 52f, TextFXFlags.PopIn, 1f);
+                    break;
+
+                case GameEventType.HandScored:
+                    // 「打成！」大字還在中間，分數跳在得分方那一側
+                    PopupLater(0.5f, me ? $"+{e.value} 分" : $"{oppName} +{e.value} 分", side,
+                               me ? gold : muted, me ? 60f : 44f,
+                               me ? TextFXFlags.PopIn | TextFXFlags.Wave : TextFXFlags.PopIn, 1.2f);
+                    break;
+
+                case GameEventType.MatchOver:
+                    // 結算面板的標題會負責慶祝，這裡只負責「爽」：晚一點、大力震一下
+                    StartCoroutine(ShakeLater(2.5f, me ? 20f : 8f, 0.45f));   // 跟結算面板跳出來同一刻
                     break;
             }
         }

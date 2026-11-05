@@ -54,7 +54,42 @@ namespace HoneymoonBridge
         const float NtSafety = 0.9f;
         const float OpenFloor = 6.4f;     // 還沒人叫時，預估到這個數就先開叫 1 階，避免動不動全 Pass 重發
 
-        // 回傳 null = Pass
+        // 加倍門檻：我當防守方預估能拿的墩數，要比「讓莊家倒約需要的墩數」多這麼多才敢加倍
+        // （加倍輸了要賠兩倍，所以比叫牌保守。5000 局模擬：約 3% 的局會加倍，七成讓對手倒約）
+        const float DoubleMargin = 3.0f;
+        const float NtDoubleMargin = 3.5f;
+        const float RedoubleMargin = 1.5f;   // 我當莊家被加倍：預估比需要多這麼多才敢再加倍
+
+        // 完整叫牌決策：回傳 Call 編碼（叫品 / Pass / 加倍 / 再加倍）。只看自己的手牌
+        public static int ChooseCall(HoneymoonGame g, int p)
+        {
+            // 我就是目前的莊家（剛被加倍）：只考慮再加倍或 Pass，不跟自己搶叫
+            if (g.HighestBidder == p)
+                return g.CanRedouble(p) && ShouldRedouble(g, p) ? Call.Redouble : Call.Pass;
+
+            var bid = ChooseBid(g, p);
+            if (bid.HasValue) return bid.Value.Index;
+            if (g.CanDouble(p) && ShouldDouble(g, p)) return Call.Double;
+            return Call.Pass;
+        }
+
+        // 對手的合約要拿 N 墩，我能拿超過 13 - N 墩他就倒了
+        public static bool ShouldDouble(HoneymoonGame g, int p)
+        {
+            var b = g.HighestBid.Value;
+            float mine = EstimateTricks(g.Hands[p], b.Strain);
+            float margin = b.Strain == Strain.NoTrump ? NtDoubleMargin : DoubleMargin;
+            return mine - margin > 13 - b.TricksNeeded;
+        }
+
+        public static bool ShouldRedouble(HoneymoonGame g, int p)
+        {
+            var b = g.HighestBid.Value;
+            float safety = b.Strain == Strain.NoTrump ? NtSafety : SuitSafety;
+            return EstimateTricks(g.Hands[p], b.Strain) - safety >= b.TricksNeeded + RedoubleMargin;
+        }
+
+        // 只決定要叫哪個叫品；回傳 null = 不叫（Pass）
         public static Bid? ChooseBid(HoneymoonGame g, int p)
         {
             var h = g.Hands[p];

@@ -97,7 +97,7 @@ namespace HoneymoonBridge
         // ---------- 兩邊都會呼叫：畫面層的操作 ----------
 
         public void PlayCard(int cardId) => PlayCardRpc(cardId);
-        public void Bid(int bidIndex) => BidRpc(bidIndex);
+        public void Bid(int call) => BidRpc(call);
         public void RequestNewHand() => NewHandRpc();
 
         [Rpc(SendTo.Server)]
@@ -108,10 +108,10 @@ namespace HoneymoonBridge
         }
 
         [Rpc(SendTo.Server)]
-        void BidRpc(int bidIndex, RpcParams rpcParams = default)
+        void BidRpc(int call, RpcParams rpcParams = default)
         {
             int seat = SeatOf(rpcParams.Receive.SenderClientId);
-            if (seat >= 0) host.SubmitBid(seat, bidIndex);
+            if (seat >= 0) host.SubmitBid(seat, call);
         }
 
         [Rpc(SendTo.Server)]

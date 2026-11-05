@@ -12,5 +12,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-      - name: 規則單元測試 + 5000 局模擬
+      - name: 規則單元測試 + 對打模擬
         run: dotnet test tools/LogicTests --logger "console;verbosity=normal"
+      - name: 用假的 Unity API 編譯全部腳本
+        run: dotnet build tools/UnityCompileCheck
+      - name: 檢查場景工具的接線欄位
+        run: python3 tools/check_wiring.py

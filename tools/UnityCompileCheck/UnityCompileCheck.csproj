@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    「沒有 Unity 也能先抓編譯錯誤」用的專案。
+    Stubs/ 裡是手寫的假 Unity API（只有型別和方法簽名，沒有任何功能），
+    拿來編譯 Assets 裡全部的腳本：打錯字、型別不合、欄位名稱錯，這裡就會報錯。
+    限制：假 API 是照目前腳本用到的部分寫的，真正的 Unity 套件如果改了 API 名稱，這裡抓不到 → 最後還是以 Unity Console 為準。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <OutputType>Library</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+    <NoWarn>$(NoWarn);CS0067;CS0414;CS0169;CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Stubs/**/*.cs" />
+    <Compile Include="../../Assets/HoneymoonBridge/Scripts/**/*.cs" />
+  </ItemGroup>
+</Project>

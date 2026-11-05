@@ -36,7 +36,7 @@ namespace HoneymoonBridge
         }
 
         public void PlayCard(int cardId) => host.PlayCard(0, cardId);
-        public void Bid(int bidIndex) => host.SubmitBid(0, bidIndex);
+        public void Bid(int call) => host.SubmitBid(0, call);
         public void RequestNewHand() => host.NewHand();
     }
 }

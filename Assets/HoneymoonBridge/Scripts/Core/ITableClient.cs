@@ -12,7 +12,7 @@ namespace HoneymoonBridge
         int MySeat { get; }          // 單機永遠是 0；連線時房主 0、朋友 1
 
         void PlayCard(int cardId);
-        void Bid(int bidIndex);      // -1 = Pass
-        void RequestNewHand();
+        void Bid(int call);          // 0..34 叫品；Call.Pass(-1)、Call.Double(-2)、Call.Redouble(-3)
+        void RequestNewHand();       // 局末「下一局」；整場結束時是「再來一場」
     }
 }

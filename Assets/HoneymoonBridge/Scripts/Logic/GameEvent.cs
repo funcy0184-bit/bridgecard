@@ -4,7 +4,7 @@ namespace HoneymoonBridge
 {
     public enum GameEventType
     {
-        NewHand,        // 新的一局
+        NewHand,        // 新的一局；value=第幾局
         CardPlayed,     // seat 出了 card；value=1 代表目前這張最大；extra=1 代表王吃
         TrickWon,       // seat 贏墩；card=贏的那張；value=打牌階段的累計墩數（抽牌階段為 -1）；extra=1 代表王吃
         FaceUpTaken,    // seat 拿走明牌 card
@@ -12,10 +12,16 @@ namespace HoneymoonBridge
         DrawPhaseOver,  // 牌堆抽完
         BidMade,        // seat 叫了 value（叫品編號）
         Passed,         // seat Pass
-        ContractSet,    // seat 是莊家，value=叫品編號
+        ContractSet,    // seat 是莊家，value=叫品編號，extra=加倍狀態（0/1/2）
         GameOver,       // seat=莊家，value=拿到墩數，extra=需要墩數
         Illegal,        // seat 出了不合法的牌（只傳給本人）
-        Redeal          // 雙方都 Pass，重發
+        Redeal,         // 雙方都 Pass，重發
+
+        // 下面是 ② 完整對戰新增的（加在最後，舊的編號不變）
+        Doubled,        // seat 加倍；value=被加倍的叫品編號
+        Redoubled,      // seat 再加倍；value=叫品編號
+        HandScored,     // seat 這局得分；value=得幾分，extra=得分後的總分
+        MatchOver       // seat 贏得整場；value=贏家總分，extra=輸家總分
     }
 
     // 遊戲發生的每件事都包成一個事件。

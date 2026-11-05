@@ -162,6 +162,7 @@ namespace HoneymoonBridge.EditorTools
             table.gameObject.AddComponent<Image>().color = Felt;
 
             var status = Place(AddText(NewRect("Status", table), "抽牌階段", 30, FeltInk), 0, 1, 40, -36, 400, 50, TextAlignmentOptions.Left);
+            var score = Place(AddText(NewRect("Score", table), "第 1 局｜你 0 · 電腦 0｜先到 100 分", 24, Gold), 0, 1, 40, -92, 460, 40, TextAlignmentOptions.Left);
             var info = Place(AddText(NewRect("Info", table), "", 26, FeltInk), 0.5f, 1, 0, -50, 900, 80, TextAlignmentOptions.Center);
             var oppCount = Place(AddText(NewRect("OppCount", table), "電腦：13 張", 28, FeltInk), 1, 1, -40, -36, 400, 50, TextAlignmentOptions.Right);
 
@@ -169,14 +170,14 @@ namespace HoneymoonBridge.EditorTools
             var oppSlot = Anchor("OppSlot", table, 0.5f, 0.5f, 0, 110);
             var mySlot = Anchor("MySlot", table, 0.5f, 0.5f, 0, -60);
             var faceUpSlot = Anchor("FaceUpSlot", table, 0, 0.5f, 220, 40);
-            Place(AddText(NewRect("FaceUpLabel", table), "明牌", 24, FeltInk), 0, 0.5f, 220, 130, 200, 40, TextAlignmentOptions.Center);
+            var faceUpLabel = Place(AddText(NewRect("FaceUpLabel", table), "明牌", 24, FeltInk), 0, 0.5f, 120, 130, 200, 40, TextAlignmentOptions.Center);   // 跟明牌同一條中線
             var centerAnchor = Anchor("CenterAnchor", table, 0.5f, 0.5f, 0, 30);
             var myAnchor = Anchor("MyAnchor", table, 0.5f, 0, 0, 300);
 
             var memo = Place(AddText(NewRect("Memo", table), "", 22, FeltInk), 0, 0, 40, 330, 520, 90, TextAlignmentOptions.TopLeft);
             var message = Place(AddText(NewRect("Message", table), "", 24, FeltInk), 1, 0, -40, 330, 620, 110, TextAlignmentOptions.BottomRight);
 
-            var turnTmp = Place(AddText(NewRect("TurnText", table), "輪到你", 40, Gold), 0.5f, 0, 0, 230, 400, 60, TextAlignmentOptions.Center);
+            var turnTmp = Place(AddText(NewRect("TurnText", table), "輪到你", 40, Gold), 0.5f, 0, 0, 262, 400, 60, TextAlignmentOptions.Center);   // 留空間給浮起來的手牌
             turnTmp.fontStyle = FontStyles.Bold;
             var turnFx = turnTmp.gameObject.AddComponent<TextFX>();
 
@@ -188,21 +189,40 @@ namespace HoneymoonBridge.EditorTools
             hlg.childControlWidth = hlg.childControlHeight = false;
             hlg.childForceExpandWidth = hlg.childForceExpandHeight = false;
 
-            var newHand = MakeButton("NewHand", table, "再來一局", 0.5f, 0.5f, 0, -200, 260, 72, Gold, Ink);
+            // 叫牌紀錄（左側；抽牌階段放明牌的位置，叫牌後就空出來了）
+            var auctionPanel = Panel("AuctionPanel", table, 0, 0.5f, 40, 80, 400, 360, FeltDark);
+            var auctionText = AddText(NewRect("Text", auctionPanel), "<b>叫牌紀錄</b>", 24, FeltInk);
+            Stretch((RectTransform)auctionText.transform);
+            ((RectTransform)auctionText.transform).offsetMin = new Vector2(22, 16);
+            ((RectTransform)auctionText.transform).offsetMax = new Vector2(-22, -16);
+            auctionText.alignment = TextAlignmentOptions.TopLeft;
+            var auctionToggle = MakeButton("AuctionToggle", table, "叫牌紀錄", 0, 1, 150, -156, 220, 52, Paper, Ink);
 
-            // 叫牌面板（右側）
-            var bidPanel = NewRect("BidPanel", table);
-            SetAnchor(bidPanel, 1, 0.5f, -230, 20, 440, 520);
-            var bpImg = bidPanel.gameObject.AddComponent<Image>();
-            bpImg.sprite = rounded; bpImg.type = Image.Type.Sliced; bpImg.color = FeltDark;
-            Place(AddText(NewRect("Title", bidPanel), "叫牌", 30, FeltInk), 0.5f, 1, 0, -32, 400, 44, TextAlignmentOptions.Center);
+            // 叫牌面板（右側）：上面是目前合約，中間 35 個叫品，下面是試算和按鈕
+            var bidPanel = Panel("BidPanel", table, 1, 0.5f, -40, 90, 460, 660, FeltDark);
+            Place(AddText(NewRect("Title", bidPanel), "叫牌", 30, FeltInk), 0.5f, 1, 0, -24, 420, 40, TextAlignmentOptions.Center);
+            var bidContract = Place(AddText(NewRect("Contract", bidPanel), "還沒有人叫牌", 24, Gold), 0.5f, 1, 0, -62, 430, 34, TextAlignmentOptions.Center);
             var grid = NewRect("BidGrid", bidPanel);
-            SetAnchor(grid, 0.5f, 1, 0, -250, 420, 380);
+            SetAnchor(grid, 0.5f, 1, 0, -100, 420, 358);
             var glg = grid.gameObject.AddComponent<GridLayoutGroup>();
             glg.cellSize = new Vector2(78, 46); glg.spacing = new Vector2(6, 6);
             glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount; glg.constraintCount = 5;
             glg.childAlignment = TextAnchor.UpperCenter;
-            var pass = MakeButton("Pass", bidPanel, "Pass", 0.5f, 0, 0, 44, 200, 56, Paper, Ink);
+            var bidPreview = Place(AddText(NewRect("Preview", bidPanel), "", 21, FeltInk), 0.5f, 1, 0, -464, 436, 112, TextAlignmentOptions.Top);
+            AutoSize(bidPreview, 15, 21);   // 可以加倍時會有四行，字太多就自動縮小
+            var confirmBid = MakeButton("ConfirmBid", bidPanel, "叫", 0.5f, 0, -135, 40, 170, 56, Gold, Ink);
+            var pass = MakeButton("Pass", bidPanel, "Pass", 0.5f, 0, 20, 40, 120, 56, Paper, Ink);
+            var dbl = MakeButton("Double", bidPanel, "加倍", 0.5f, 0, 155, 40, 130, 56, Paper, Hex("B8233A"));
+
+            // 局末結算（正中央）：明細 + 總分 + 下一局
+            var resultPanel = Panel("ResultPanel", table, 0.5f, 0.5f, 0, 20, 760, 560, new Color(FeltDark.r, FeltDark.g, FeltDark.b, 0.97f));
+            var resultTitle = Place(AddText(NewRect("Title", resultPanel), "第 1 局結算", 52, FeltInk), 0.5f, 1, 0, -28, 700, 72, TextAlignmentOptions.Center);
+            resultTitle.fontStyle = FontStyles.Bold;
+            var resultTitleFx = resultTitle.gameObject.AddComponent<TextFX>();
+            var resultBody = Place(AddText(NewRect("Body", resultPanel), "", 28, FeltInk), 0.5f, 1, 0, -112, 680, 340, TextAlignmentOptions.Top);
+            resultBody.lineSpacing = 8;
+            AutoSize(resultBody, 20, 28);
+            var newHand = MakeButton("NewHand", resultPanel, "下一局", 0.5f, 0, 0, 62, 280, 72, Gold, Ink);
 
             // --- 跳字層：放在牌桌之後，永遠蓋在最上面，而且不擋點擊 ---
             var fxLayer = NewRect("FxLayer", canvas);
@@ -241,9 +261,14 @@ namespace HoneymoonBridge.EditorTools
             Wire(view,
                 ("cardPrefab", cardPrefab), ("bidButtonPrefab", bidPrefab),
                 ("handRoot", hand), ("oppAnchor", oppAnchor), ("mySlot", mySlot), ("oppSlot", oppSlot), ("faceUpSlot", faceUpSlot),
-                ("statusText", status), ("infoText", info), ("oppCountText", oppCount),
+                ("faceUpLabel", faceUpLabel.gameObject),
+                ("statusText", status), ("infoText", info), ("scoreText", score), ("oppCountText", oppCount),
                 ("messageText", message), ("memoText", memo), ("turnText", turnFx),
-                ("bidPanel", bidPanel.gameObject), ("bidGridRoot", grid), ("passButton", pass),
+                ("bidPanel", bidPanel.gameObject), ("bidGridRoot", grid),
+                ("bidContractText", bidContract), ("bidPreviewText", bidPreview),
+                ("confirmBidButton", confirmBid), ("passButton", pass), ("doubleButton", dbl),
+                ("auctionPanel", auctionPanel.gameObject), ("auctionText", auctionText), ("auctionToggle", auctionToggle),
+                ("resultPanel", resultPanel.gameObject), ("resultTitle", resultTitleFx), ("resultBody", resultBody),
                 ("newHandButton", newHand), ("fx", fx));
             Wire(fx,
                 ("floatingPrefab", floatPrefab), ("fxLayer", fxLayer), ("shakeRoot", table),
@@ -298,6 +323,23 @@ namespace HoneymoonBridge.EditorTools
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(x, y);
             rt.sizeDelta = new Vector2(84, 118);
+            return rt;
+        }
+
+        static void AutoSize(TextMeshProUGUI t, float min, float max)
+        {
+            t.enableAutoSizing = true;
+            t.fontSizeMin = min;
+            t.fontSizeMax = max;
+        }
+
+        // 圓角底板
+        static RectTransform Panel(string name, RectTransform parent, float ax, float ay, float x, float y, float w, float h, Color color)
+        {
+            var rt = NewRect(name, parent);
+            SetAnchor(rt, ax, ay, x, y, w, h);
+            var img = rt.gameObject.AddComponent<Image>();
+            img.sprite = rounded; img.type = Image.Type.Sliced; img.color = color;
             return rt;
         }
 

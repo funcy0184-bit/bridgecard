@@ -16,14 +16,7 @@ namespace HoneymoonBridge.Tests
             return g;
         }
 
-        static void FinishDrawPhase(HoneymoonGame g)
-        {
-            while (g.Phase == Phase.Draw)
-            {
-                if (g.TrickComplete) g.ResolveTrick();
-                else g.PlayCard(g.CurrentPlayer, SimpleAI.ChooseCard(g, g.CurrentPlayer));
-            }
-        }
+        static void FinishDrawPhase(HoneymoonGame g) => TestUtil.FinishDrawPhase(g);
 
         [Test]
         public void StartNew_Deals13Each_And26InStock()

@@ -14,6 +14,8 @@ namespace HoneymoonBridge
         public float aiDelay = 0.7f;
         [Tooltip("-1 = 沒有電腦（連線模式），1 = 座位 1 由電腦控制")]
         public int aiSeat = -1;
+        [Tooltip("整場先到幾分獲勝")]
+        public int targetScore = Scoring.DefaultTarget;
 
         public HoneymoonGame Game { get; private set; }
 
@@ -25,9 +27,13 @@ namespace HoneymoonBridge
         public void Begin()
         {
             if (Game != null) Game.Emitted -= Route;
-            Game = new HoneymoonGame();
+            Game = new HoneymoonGame(targetScore: targetScore);
             Game.Emitted += Route;
-            NewHand();
+            StopAllCoroutines();
+            running = false;
+            Game.StartNewMatch();
+            Push();
+            Kick();
         }
 
         void Route(GameEvent e, int to)
@@ -36,11 +42,14 @@ namespace HoneymoonBridge
             else EventFor?.Invoke(to, e);
         }
 
+        // 局末按「下一局」：整場還沒結束就發下一局（分數保留），結束了就開新的一場
         public void NewHand()
         {
+            if (Game == null || Game.Phase != Phase.Finished) return;
             StopAllCoroutines();
             running = false;
-            Game.StartNew();
+            if (Game.MatchOver) Game.StartNewMatch();
+            else Game.StartNew();
             Push();
             Kick();
         }
@@ -51,11 +60,11 @@ namespace HoneymoonBridge
             if (Game.PlayCard(seat, Card.FromId(cardId))) { Push(); Kick(); }
         }
 
-        public void SubmitBid(int seat, int bidIndex)
+        // call：0..34 叫品、Call.Pass、Call.Double、Call.Redouble
+        public void SubmitBid(int seat, int call)
         {
             if (Game == null || running) return;
-            Bid? b = bidIndex < 0 ? (Bid?)null : Bid.FromIndex(bidIndex);
-            if (Game.MakeBid(seat, b)) { Push(); Kick(); }
+            if (Game.MakeCall(seat, call)) { Push(); Kick(); }
         }
 
         void Kick()
@@ -82,7 +91,7 @@ namespace HoneymoonBridge
                 {
                     yield return new WaitForSeconds(aiDelay);
                     if (Game.Phase == Phase.Bidding)
-                        Game.MakeBid(aiSeat, SimpleAI.ChooseBid(Game, aiSeat));
+                        Game.MakeCall(aiSeat, SimpleAI.ChooseCall(Game, aiSeat));
                     else
                         Game.PlayCard(aiSeat, SimpleAI.ChooseCard(Game, aiSeat));
                     Push();

@@ -16,12 +16,26 @@ namespace HoneymoonBridge
         public int leadCard = -1, followCard = -1;
         public int leaderSeat, currentSeat;
         public int myTricks, oppTricks;
-        public int highestBid = -1, highestBidder = -1, declarer = -1, minBid;
         public int[] oppTakenFaceUp = new int[0];   // 記牌小抄
+
+        // ---- 叫牌 ----
+        public int highestBid = -1, highestBidder = -1, declarer = -1, minBid;
+        public int doubled;                          // 0 / 1 加倍 / 2 再加倍
+        public bool canDouble, canRedouble;          // 只有輪到我叫、而且可以的時候才是 true
+        public int[] auctionSeats = new int[0];      // 叫牌紀錄：第 i 筆是誰叫的
+        public int[] auctionCalls = new int[0];      //           叫了什麼（Call 編碼）
+
+        // ---- 計分 ----
+        public int myScore, oppScore, targetScore;
+        public int handNumber;                       // 第幾局
+        public bool hasResult;                       // 這局打完了，result 有內容
+        public HandResult result = new HandResult();
+        public int matchWinner = -1;                 // 整場贏家；-1 = 還沒結束
 
         public Phase Phase => (Phase)phase;
         public bool TrickComplete => leadCard >= 0 && followCard >= 0;
         // 兩張牌都上桌、等結算的那一下不算你的回合
         public bool IsMyTurn => currentSeat == seat && !TrickComplete;
+        public bool MatchOver => matchWinner >= 0;
     }
 }
