@@ -29,6 +29,10 @@ const B = await phone(DEV_B, "朋友");
 await A.fill("#name", "阿明");
 await shot(A, "01-home");
 await A.click("#create");
+// 第一次在這支手機按「開房」會先問要不要跟阿禾學：選「我會玩，直接開始」
+await A.waitForSelector("#storyOffer:not([hidden])");
+console.log("✓ 第一次開房會先問要不要跟阿禾學");
+await A.click("#offerSkip");
 await A.waitForSelector("#wait:not([hidden])");
 const code = (await A.textContent("#bigCode")).trim();
 console.log("✓ 房主開房，房號", code);

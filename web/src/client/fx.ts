@@ -4,21 +4,38 @@ import { cardText, isRedCard, rankOf, rankText, SUIT_SYMBOL, suitOf } from "../g
 
 // ---------------- 設定 ----------------
 
-export interface FxSettings { speed: 0 | 1 | 2; shake: boolean; vibrate: boolean; }
+export type ThemeId = "dusk" | "wine" | "green";
+export interface FxSettings { speed: 0 | 1 | 2; shake: boolean; vibrate: boolean; theme: ThemeId; }
 const SPEED_MULT = [1.35, 1, 0.7];   // 慢 / 標準 / 快：動畫時間倍率
 export const SPEED_LABELS = ["慢", "標準", "快"];
+// 牌桌顏色：暮色藍是「來打橋牌」主視覺的顏色；經典綠是第一版的牌桌綠
+export const THEMES: { id: ThemeId; label: string; bg: string }[] = [
+  { id: "dusk", label: "暮色藍", bg: "#111A2B" },
+  { id: "wine", label: "酒紅", bg: "#1F1016" },
+  { id: "green", label: "經典綠", bg: "#16302A" },
+];
 const KEY = "hb-web-settings";
 const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export const settings: FxSettings = loadSettings();
 
 function loadSettings(): FxSettings {
-  const def: FxSettings = { speed: 1, shake: !reduced, vibrate: true };
-  try { return { ...def, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return def; }
+  const def: FxSettings = { speed: 1, shake: !reduced, vibrate: true, theme: "dusk" };
+  let s = def;
+  try { s = { ...def, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { /* 用預設值 */ }
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = "dusk";
+  return s;
 }
 export function saveSettings() {
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* 無痕模式存不了就算了 */ }
   applySpeed();
+  applyTheme();
+}
+export function applyTheme() {
+  const t = THEMES.find(x => x.id === settings.theme) ?? THEMES[0];
+  if (t.id === "dusk") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t.id;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t.bg);
 }
 export function applySpeed() {
   document.documentElement.style.setProperty("--spd", String(SPEED_MULT[settings.speed] * (reduced ? 0.6 : 1)));
@@ -52,6 +69,7 @@ export function initFx(fxLayer: HTMLElement, shakeRoot: HTMLElement) {
   layer = fxLayer;
   shakeTarget = shakeRoot;
   applySpeed();
+  applyTheme();
 }
 
 export const center = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });

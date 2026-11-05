@@ -1,5 +1,5 @@
 {
-  // 手機瀏覽器這一側：畫面、動畫、連線（跟雲端共用 src/game 的規則）
+  // 手機瀏覽器這一側：畫面、動畫、連線、單機、阿禾的故事（跟雲端共用 src/game 的規則）
   "compilerOptions": {
     "target": "ES2020",
     "module": "ES2022",
@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["src/client", "src/game", "src/server/protocol.ts"]
+  "include": ["src/client", "src/story", "src/game", "src/server/protocol.ts"]
 }

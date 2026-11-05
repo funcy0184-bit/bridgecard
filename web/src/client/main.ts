@@ -1,4 +1,5 @@
-// 手機端主程式：首頁（開房／加入）→ 等朋友 → 牌桌。
+// 手機端主程式：首頁（先跟阿禾學／跟電腦打／開房／加入）→ 等朋友 → 牌桌。
+// 牌桌不管對面是雲端房間（Connection）還是手機上的電腦（LocalTable），收到的訊息都一樣。
 // 跟 Unity 版 GameView 一樣的分工：收「事件」放動畫，收「狀態」把牌桌畫對（事件一定比狀態先到）。
 import { Call, bidText, callText, cardText, isBid, isRedBid, isRedCard, rankOf, suitOf, SUIT_SYMBOL, tricksNeeded, bidStrain, Strain } from "../game/cards";
 import { GameEvent, Phase, TableState } from "../game/game";
@@ -6,13 +7,14 @@ import { breakdown, contractText, declarerPreview, defenderPreview, madePoints, 
 import { SeatInfo, ServerMsg, isValidCode, normalizeCode } from "../server/protocol";
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
+import { Link, LocalTable, hasUnfinishedSolo } from "./solo";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const GOLD = "#F0C25A", INK = "#E9F1EC", MUTED = "#A9C0B7", BAD = "#FF8A8A", GOOD = "#7FD6A2", RED = "#FF9BA8";
 
 // ---------------- 狀態 ----------------
 
-let conn: Connection | null = null;
+let conn: Link | null = null;
 let mySeat = -1;
 let st: TableState | null = null;
 let seats: SeatInfo[] = [];
@@ -55,13 +57,14 @@ codeInput.addEventListener("keydown", e => { if (e.key === "Enter") $("join").cl
 function say(msg: string, err = false) { homeMsg.textContent = msg; homeMsg.classList.toggle("err", err); }
 const myName = () => { const n = nameInput.value.trim(); if (n) store.set("hb-name", n); return n; };
 
-$("create").addEventListener("click", async () => {
+$("create").addEventListener("click", () => offerStoryFirst(createAndEnter));
+async function createAndEnter() {
   const b = $<HTMLButtonElement>("create");
   b.disabled = true; say("開房中…");
   try { enter(await createRoom()); }
   catch (e) { say((e as Error).message, true); }
   finally { b.disabled = false; }
-});
+}
 
 $("join").addEventListener("click", async () => {
   const code = normalizeCode(codeInput.value);
@@ -80,23 +83,86 @@ function refreshResume() {
   const b = $("resume");
   b.hidden = !(last && savedToken(last));
   if (!b.hidden) b.textContent = `回到 ${last} 這桌`;
+  $("solo").textContent = hasUnfinishedSolo() ? "繼續跟電腦的牌局" : "跟電腦打一局";
+  refreshStoryCard();
+}
+
+// ---------------- 阿禾的故事（教學）入口 ----------------
+
+const STORY_KEY = "hb.story.v2";      // 跟 /story/ 用同一個進度鍵
+const OFFER_KEY = "hb-story-offered";
+function storyProgress(): { page: number; finished: boolean } | null {
+  try {
+    const p = JSON.parse(store.get(STORY_KEY) ?? "null");
+    return p && p.v === 2 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished } : null;
+  } catch { return null; }
+}
+const ACT_OF_PAGE = [1, 2, 3, 3, 4];
+function refreshStoryCard() {
+  const p = storyProgress();
+  const card = $("storyCard");
+  card.classList.toggle("first", !p);
+  $("storyCardTitle").textContent = !p ? "第一次玩？先跟阿禾學" : p.finished ? "再聽一次阿禾的故事" : "繼續阿禾的故事";
+  $("storyCardSub").textContent = !p ? "四幕小故事，邊玩邊學 · 約 5 分鐘"
+    : p.finished ? "四幕都完成了 ✓ 隨時回來複習" : `上次看到第 ${ACT_OF_PAGE[p.page] ?? 1} 幕`;
+}
+// 第一次按「跟電腦打／開房」：先問要不要跟阿禾學（只問一次）
+let offerThen: (() => void) | null = null;
+function offerStoryFirst(then: () => void) {
+  if (storyProgress() || store.get(OFFER_KEY)) { then(); return; }
+  store.set(OFFER_KEY, "1");
+  offerThen = then;
+  $("storyOffer").hidden = false;
+}
+$("offerSkip").addEventListener("click", () => {
+  $("storyOffer").hidden = true;
+  const then = offerThen; offerThen = null;
+  then?.();
+});
+$("storyOffer").addEventListener("click", ev => { if (ev.target === $("storyOffer")) $("storyOffer").hidden = true; });
+
+// ---------------- 單機：跟電腦打 ----------------
+
+$("solo").addEventListener("click", () => offerStoryFirst(() => enterSolo(false)));
+
+function enterSolo(fresh: boolean) {
+  conn?.close();
+  resetTable();
+  say("");
+  history.replaceState(null, "", "/?solo=1");     // 重新整理會回到同一局
+  const t = new LocalTable(myName(), fresh);
+  conn = t;
+  t.onMessage = onMsg;
+  t.onStatus = () => {};
+  t.open();
 }
 $("resume").addEventListener("click", () => { const last = store.get(LAST_ROOM_KEY); if (last) enter(last); });
 
 function goHome(msg = "", err = false) {
   conn?.close(); conn = null;
   clearTimeout(resultTimer);
-  for (const id of ["result", "menu", "auctionPop", "banner"]) $(id).hidden = true;
+  for (const id of ["result", "menu", "auctionPop", "banner", "storyOffer"]) $(id).hidden = true;
   history.replaceState(null, "", "/");
   show("home"); say(msg, err); refreshResume();
 }
 
 // ---------------- 連線 ----------------
 
-function enter(code: string) {
-  conn?.close();
+function resetTable() {
   mySeat = -1; st = null; seats = []; started = false; selCard = selBid = -1; resultShownFor = -1; lastFaceUp = -1;
   inFlight.clear(); freshCards.clear();
+  lastTurnText = "";
+  handBox.replaceChildren();
+  $("oppFan").replaceChildren();
+  $("mySlot").replaceChildren();
+  $("oppSlot").replaceChildren();
+  $("stock").dataset.up = "";
+  $("ticker").textContent = "";
+}
+
+function enter(code: string) {
+  conn?.close();
+  resetTable();
   say("連線中…");
   history.replaceState(null, "", `/?room=${code}`);
   conn = new Connection(code, myName());
@@ -112,7 +178,7 @@ function onMsg(m: ServerMsg) {
   switch (m.t) {
     case "welcome":
       mySeat = m.seat;
-      $("roomChip").textContent = `房號 ${m.code}`;
+      $("roomChip").textContent = conn?.solo ? "單機 · 跟電腦" : `房號 ${m.code}`;
       break;
     case "lobby":
       seats = m.seats; started = m.started;
@@ -153,9 +219,9 @@ function showWait() {
 const inviteUrl = () => `${location.origin}/?room=${conn?.code ?? ""}`;
 $("share").addEventListener("click", async () => {
   const url = inviteUrl();
-  const text = `來跟我打蜜月橋牌！房號 ${conn?.code}`;
+  const text = `來打橋牌！跟我打一場蜜月橋牌，房號 ${conn?.code}`;
   try {
-    if (navigator.share) await navigator.share({ title: "蜜月橋牌", text, url });
+    if (navigator.share) await navigator.share({ title: "來打橋牌", text, url });
     else { await navigator.clipboard.writeText(`${text}\n${url}`); flashLabel($("share"), "已複製邀請！"); }
   } catch { /* 使用者取消分享 */ }
 });
@@ -815,6 +881,15 @@ function drawHidden(toMe: boolean) {
 // ---------------- 選單 ----------------
 
 function renderMenu() {
+  $("themeSeg").replaceChildren(...fx.THEMES.map(t => {
+    const b = document.createElement("button");
+    b.textContent = t.label;
+    b.setAttribute("aria-pressed", String(fx.settings.theme === t.id));
+    b.addEventListener("click", () => { fx.settings.theme = t.id; fx.saveSettings(); renderMenu(); });
+    return b;
+  }));
+  $("restartSolo").hidden = !conn?.solo;
+  $("leaveBtn").textContent = conn?.solo ? "回首頁" : "離開這桌";
   const seg = $("speedSeg");
   seg.replaceChildren(...fx.SPEED_LABELS.map((l, i) => {
     const b = document.createElement("button");
@@ -837,7 +912,12 @@ $("buzzToggle").addEventListener("click", () => {
   fx.settings.vibrate = !fx.settings.vibrate; fx.saveSettings(); renderMenu();
   fx.buzz(40);
 });
-$("leaveBtn").addEventListener("click", () => goHome("你的座位會保留，按「回到這桌」就能回去"));
+$("leaveBtn").addEventListener("click", () =>
+  goHome(conn?.solo ? "這局幫你存好了，按「繼續跟電腦的牌局」就能接著打" : "你的座位會保留，按「回到這桌」就能回去"));
+$("restartSolo").addEventListener("click", () => {
+  $("menu").hidden = true;
+  if (conn instanceof LocalTable) conn.restart();     // 會發 NewHand：牌桌照新局的流程清空重畫
+});
 for (const m of ["menu", "auctionPop"]) {
   const modal = $(m);
   modal.addEventListener("click", ev => {
@@ -855,8 +935,11 @@ function esc(s: string) {
 
 fx.initFx($("fx"), $("app"));
 {
-  const room = normalizeCode(new URLSearchParams(location.search).get("room") ?? "");
-  if (isValidCode(room)) {
+  const params = new URLSearchParams(location.search);
+  const room = normalizeCode(params.get("room") ?? "");
+  const solo = params.get("solo");
+  if (solo === "new" || solo === "1") enterSolo(solo === "new");   // 故事最後的「自己跟電腦打一局」= new：重新發牌
+  else if (isValidCode(room)) {
     codeInput.value = room;
     if (savedToken(room)) enter(room);
     else say(`朋友邀請你加入 ${room} 這桌，填好暱稱按「加入」`);

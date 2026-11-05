@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#16302A">
-<meta name="description" content="蜜月橋牌：兩個人的橋牌，開房把房號傳給朋友就能用手機一起打">
-<title>蜜月橋牌</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232E5A4E'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#111A2B">
+<meta name="description" content="來打橋牌：兩個人的蜜月橋牌。先跟巷口牌店的阿禾玩四幕小故事學規則，再跟電腦或朋友用手機一起打。">
+<title>來打橋牌</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F2D49'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<script>try{var t=JSON.parse(localStorage.getItem("hb-web-settings")||"{}").theme;if(t==="wine"||t==="green")document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
@@ -15,21 +16,28 @@
 <body>
 <div id="app">
 
-  <!-- ============ 首頁：開房／輸入房號 ============ -->
+  <!-- ============ 首頁：先學（阿禾的故事）／跟電腦打／開房跟朋友打 ============ -->
   <section id="home" class="screen">
     <div class="hero">
       <div class="suits" aria-hidden="true">♠<span class="r">♥</span><span class="r">♦</span>♣</div>
-      <h1>蜜月橋牌</h1>
-      <p class="sub">兩個人的橋牌 · 手機連線版</p>
+      <h1>來打橋牌</h1>
+      <p class="en">LET'S PLAY BRIDGE</p>
+      <p class="sub">兩個人的蜜月橋牌 · 手機就能打</p>
     </div>
+    <a id="storyCard" class="modecard" href="/story/">
+      <img src="/story/ahe.svg" alt="" width="46" height="46">
+      <span class="mc-text"><b id="storyCardTitle">第一次玩？先跟阿禾學</b><small id="storyCardSub">四幕小故事，邊玩邊學 · 約 5 分鐘</small></span>
+      <i aria-hidden="true">›</i>
+    </a>
+    <button id="solo" class="btn ghost">跟電腦打一局</button>
+    <div class="or"><span>跟朋友連線</span></div>
     <label class="field"><span>你的暱稱</span>
       <input id="name" maxlength="10" placeholder="例如：阿明" autocomplete="nickname" enterkeyhint="done">
     </label>
     <button id="resume" class="btn ghost" hidden></button>
     <button id="create" class="btn gold big">開房</button>
-    <div class="or"><span>或輸入朋友給的房號</span></div>
     <div class="join">
-      <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD" aria-label="房號" enterkeyhint="go">
+      <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="房號" aria-label="朋友給的房號" enterkeyhint="go">
       <button id="join" class="btn">加入</button>
     </div>
     <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
@@ -127,12 +135,14 @@
   <div id="menu" class="modal" hidden>
     <div class="sheet">
       <h3>設定</h3>
+      <div class="setting"><span>牌桌顏色</span><div class="seg" id="themeSeg"></div></div>
       <div class="setting"><span>動畫速度</span><div class="seg" id="speedSeg"></div></div>
       <div class="setting"><span>畫面震動</span><button class="toggle" id="shakeToggle"></button></div>
       <div class="setting"><span>手機震動</span><button class="toggle" id="buzzToggle"></button></div>
       <details class="rules">
         <summary>規則速查</summary>
         <ul>
+          <li><a class="link" href="/story/">跟阿禾重看一次教學故事 ›</a></li>
           <li><b>抽牌</b>：13 墩全程無王。贏墩拿明牌，輸的摸暗牌，這 13 墩不計分。</li>
           <li><b>叫牌</b>：♣ → ♦ → ♥ → ♠ → 無王，然後下一線。叫 N 線要拿 N + 6 墩。雙方起手都 Pass 就重發；有人叫過，另一方 Pass 就定約。</li>
           <li><b>加倍</b>：防守方可以加倍，被加倍的莊家可以再加倍；有人蓋叫就清掉。</li>
@@ -144,6 +154,17 @@
         <button class="btn close" data-close>關閉</button>
         <button class="btn ghost" id="leaveBtn">離開這桌</button>
       </div>
+      <button class="btn ghost small" id="restartSolo" hidden>重新發牌，開新的一場</button>
+    </div>
+  </div>
+  <!-- 第一次玩：先問要不要跟阿禾學 -->
+  <div id="storyOffer" class="modal" hidden>
+    <div class="sheet offer">
+      <img src="/story/ahe.svg" alt="" width="64" height="64">
+      <h3>第一次玩蜜月橋牌？</h3>
+      <p>巷口牌店的阿禾可以陪你玩四幕小故事：搶牌、叫牌、王吃、打成，大約 5 分鐘。</p>
+      <a class="btn gold big" href="/story/">先跟阿禾學</a>
+      <button class="btn ghost" id="offerSkip">我會玩，直接開始</button>
     </div>
   </div>
 </div>

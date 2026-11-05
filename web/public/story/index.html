@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111A2B">
+<meta name="description" content="走進台南巷口的小牌店，跟店主阿禾邊玩邊學雙人蜜月橋牌：搶牌、叫牌、王吃、打成，四幕約 5 分鐘。">
+<title>阿禾的牌店｜來打橋牌</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F2D49'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<script>try{var t=JSON.parse(localStorage.getItem("hb-web-settings")||"{}").theme;if(t==="wine"||t==="green")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/story/story.css">
+</head>
+<body class="story">
+<header class="sbar">
+  <a class="brand" href="/" aria-label="回到來打橋牌首頁"><span aria-hidden="true">‹</span><b>來打橋牌</b></a>
+  <nav class="snav" aria-label="遊戲模式">
+    <a class="on" href="/story/" aria-current="page">故事入門</a>
+    <a href="#contentsBox" id="navChapters">章節練習</a>
+    <a href="/?solo=1">單機對戰</a>
+  </nav>
+  <button class="notes" id="notesBtn" type="button">速查</button>
+</header>
+
+<main class="smain">
+  <div class="opening">
+    <p class="place" id="place"></p>
+    <div class="prog" aria-label="故事進度"><span id="progLabel"></span><div class="rail"><i id="progFill"></i></div></div>
+    <div class="headline"><p class="actno" id="actNo"></p><h1 id="title" tabindex="-1"></h1></div>
+    <p class="setting" id="setting"></p>
+  </div>
+
+  <div class="spread">
+    <section class="stable" id="stable" aria-label="阿禾的牌桌">
+      <div class="frame" aria-hidden="true"></div>
+      <img class="cup" src="/story/teacup.svg" alt="" aria-hidden="true">
+      <div class="tlabel"><i aria-hidden="true"></i><span id="tableLabel"></span></div>
+      <div class="skip" id="skip" hidden></div>
+      <div class="sopp"><div class="fan" id="sOppFan"></div><span class="sname">阿禾 · <b id="sOppCount"></b> 張（只看得到牌背）</span></div>
+      <div class="sboard" id="sBoard"></div>
+      <div class="sstat" id="sStat"></div>
+      <div class="shandbox">
+        <div class="hlabel"><span>你的手牌</span><span id="handNote"></span></div>
+        <div class="shand" id="sHand" aria-label="你的手牌"></div>
+      </div>
+      <div class="anchor" id="aOpp"></div>
+      <div class="anchor" id="aCenter"></div>
+      <div class="anchor" id="aMe"></div>
+    </section>
+
+    <section class="narrator" id="narrator" aria-label="阿禾說">
+      <div class="seller"><img src="/story/ahe.svg" alt="" width="48" height="48"><div><strong>阿禾</strong><small>巷口牌店店主</small></div></div>
+      <h2 id="spoken" aria-live="polite"></h2>
+      <p id="more"></p>
+      <div id="feedback" aria-live="polite" aria-atomic="true"></div>
+      <div id="controls"></div>
+    </section>
+  </div>
+
+  <section class="itinerary" id="contentsBox" aria-label="故事目錄">
+    <div class="ihead"><span>故事目錄 · 章節練習</span><button id="restart" type="button">↻ 從頭開始</button></div>
+    <div id="contents"></div>
+    <p class="inote">每一幕都可以點進去單獨重玩；重新整理會回到上次那一頁。</p>
+  </section>
+</main>
+
+<dialog id="notes" aria-labelledby="notesTitle">
+  <div class="dhead"><h2 id="notesTitle">牌桌速查</h2><button id="notesClose" type="button" aria-label="關閉速查">×</button></div>
+  <h3>前半場：搶牌</h3>
+  <p>兩人各 13 張。牌堆翻開一張明牌，這一墩贏的人拿明牌，輸的人摸一張暗牌。出一張、補一張，搶 13 墩。這段沒有王牌，墩數不算分。</p>
+  <h3>一墩</h3>
+  <p>兩人各出一張、比一次輸贏。先出的人決定花色；贏的人先出下一墩。</p>
+  <h3>叫牌</h3>
+  <p>叫「數字＋花色」：花色是王牌（NT＝無王），數字加 6 是要贏的墩數，例如 2♥＝紅心當王、贏 8 墩。後叫的要比前面大；一方叫了、另一方 Pass 就定約。雙方一開始都 Pass 就重發。防守方可以加倍，莊家可以再加倍。</p>
+  <h3>後半場：出牌</h3>
+  <p>莊家的對手先出。對方先出的花色你手上有，就一定要跟；沒有才可以墊別的牌，或出王牌「王吃」。</p>
+  <h3>打成與計分</h3>
+  <p>莊家拿到目標墩數叫「打成」：線數 × 10 分，每多一墩 +2。少幾墩叫「倒幾墩」，對手每墩得 10 分。加倍 ×2、再加倍 ×4。先到 100 分贏。</p>
+</dialog>
+<div id="fx" aria-hidden="true"></div>
+<noscript>請開啟瀏覽器的 JavaScript，才能在故事裡出牌。</noscript>
+<script type="module" src="/story/story.js"></script>
+</body>
+</html>

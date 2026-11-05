@@ -1,27 +1,46 @@
-/* 蜜月橋牌 · 手機連線版
-   配色跟 Unity 版、橋牌入門小桌同一套：牌桌綠、牌面白、紅黑花色、金色強調 */
+/* 來打橋牌 · 手機版（連線、單機、阿禾的故事共用）
+   配色取自「來打橋牌」主視覺：暮色藏青＋暖金＋一點夕陽；牌面白、紅黑花色。
+   設定裡可以換牌桌顏色（data-theme）：暮色藍（預設）／酒紅／經典綠 */
 :root {
-  --bg: #16302A;
-  --felt: #2E5A4E;
-  --felt-dark: #244A40;
-  --felt-deep: #1C3B33;
-  --felt-line: #3E6E60;
-  --ink-on-felt: #E9F1EC;
-  --muted: #A9C0B7;
-  --paper: #F8FAF8;
-  --ink: #1B2A3A;
+  --bg: #111A2B;
+  --felt: #2C3E60;
+  --felt-dark: #1F2D49;
+  --felt-deep: #162138;
+  --felt-line: #445C8C;
+  --glow: rgba(246,174,112,.20);      /* 右下角的夕陽光 */
+  --ink-on-felt: #F4EFE6;
+  --muted: #AAB5CC;
+  --paper: #FBF8F1;
+  --ink: #1B2233;
   --red: #B8233A;
   --red-soft: #FF9BA8;
   --gold: #D9A23A;
-  --gold-hi: #F0C25A;
+  --gold-hi: #F2C46A;
   --good: #7FD6A2;
   --bad: #FF8A8A;
-  --back: #2F4B7A;
+  --back: #8A3343;                    /* 牌背：酒紅，在藍色桌上一眼分得出來 */
+  --back-2: #9E4152;
+  --sheet-a: #283A5E;
+  --sheet-b: #1C2944;
+  --panel: rgba(21,31,53,.95);
+  --backdrop: rgba(6,10,20,.6);
   --display: "LXGW WenKai TC", "Kaiti TC", "STKaiti", serif;
   --body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --spd: 1;
   --cw: 60px;
   color-scheme: dark;
+}
+:root[data-theme="wine"] {
+  --bg: #1F1016; --felt: #5B2A39; --felt-dark: #45202C; --felt-deep: #301620; --felt-line: #84495A;
+  --glow: rgba(246,190,120,.16); --muted: #D2B4BC;
+  --back: #2F4B7A; --back-2: #39598F;
+  --sheet-a: #522734; --sheet-b: #3A1B25; --panel: rgba(54,24,34,.95); --backdrop: rgba(18,6,10,.6);
+}
+:root[data-theme="green"] {
+  --bg: #16302A; --felt: #2E5A4E; --felt-dark: #244A40; --felt-deep: #1C3B33; --felt-line: #3E6E60;
+  --glow: rgba(255,220,150,.06); --muted: #A9C0B7;
+  --back: #2F4B7A; --back-2: #39598F;
+  --sheet-a: #23493F; --sheet-b: #1B3A32; --panel: rgba(20,44,37,.94); --backdrop: rgba(5,14,11,.55);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -32,7 +51,8 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 
 #app {
   position: relative; max-width: 520px; margin: 0 auto; height: 100dvh; overflow: hidden;
-  background: radial-gradient(120% 80% at 50% 45%, var(--felt) 0%, var(--felt-dark) 62%, var(--felt-deep) 100%);
+  background: radial-gradient(80% 45% at 92% 104%, var(--glow), transparent 70%),
+    radial-gradient(120% 80% at 50% 45%, var(--felt) 0%, var(--felt-dark) 62%, var(--felt-deep) 100%);
   box-shadow: 0 0 60px rgba(0,0,0,.4);
 }
 .screen { position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -95,7 +115,7 @@ h1 { font-family: var(--display); font-size: clamp(44px, 13vw, 60px); margin: 6p
 .card .ix b { font-size: calc(var(--cw) * .36); font-weight: 700; letter-spacing: -.04em; }
 .card .ix i { font-style: normal; font-size: calc(var(--cw) * .28); }
 .card .pip { position: absolute; right: 8%; bottom: 3%; font-size: calc(var(--cw) * .6); line-height: 1; }
-.card.back { background: repeating-linear-gradient(45deg, var(--back) 0 5px, #39598f 5px 10px);
+.card.back { background: repeating-linear-gradient(45deg, var(--back) 0 5px, var(--back-2) 5px 10px);
   box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--gold), 0 2px 5px rgba(0,0,0,.35); }
 .card.flying { position: fixed; margin: 0; z-index: 5; pointer-events: none; transform-origin: center; }
 
@@ -167,7 +187,7 @@ h1 { font-family: var(--display); font-size: clamp(44px, 13vw, 60px); margin: 6p
 
 /* ---------------- 叫牌面板 ---------------- */
 .bidpanel { position: absolute; inset: 4px; display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border-radius: 18px;
-  background: rgba(20,44,37,.94); box-shadow: 0 8px 30px rgba(0,0,0,.35); overflow: auto; }
+  background: var(--panel); box-shadow: 0 8px 30px rgba(0,0,0,.35); overflow: auto; }
 .bidpanel.mine { box-shadow: 0 8px 30px rgba(0,0,0,.35), inset 0 0 0 2px var(--gold-hi), 0 0 22px rgba(240,194,90,.25); }
 .bidtop { display: flex; align-items: center; gap: 8px; min-height: 28px; flex: none; }
 .bidhead { flex: none; font: 700 16px var(--display); color: var(--gold-hi); white-space: nowrap; }
@@ -197,8 +217,8 @@ h1 { font-family: var(--display); font-size: clamp(44px, 13vw, 60px); margin: 6p
 
 /* ---------------- 對話框 ---------------- */
 .modal { position: absolute; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center;
-  background: rgba(5,14,11,.55); backdrop-filter: blur(2px); padding: 12px; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
-.sheet { width: 100%; max-width: 480px; background: linear-gradient(180deg, #23493F, #1B3A32); border-radius: 22px; padding: 18px;
+  background: var(--backdrop); backdrop-filter: blur(2px); padding: 12px; padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
+.sheet { width: 100%; max-width: 480px; background: linear-gradient(180deg, var(--sheet-a), var(--sheet-b)); border-radius: 22px; padding: 18px;
   box-shadow: 0 -6px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(233,241,236,.08); display: flex; flex-direction: column; gap: 12px;
   animation: sheetUp calc(.32s * var(--spd)) cubic-bezier(.2,1.2,.4,1); max-height: 92%; overflow: auto; }
 @keyframes sheetUp { from { transform: translateY(40px) scale(.96); opacity: 0; } }
@@ -262,3 +282,39 @@ h1 { font-family: var(--display); font-size: clamp(44px, 13vw, 60px); margin: 6p
   .bidhead { font-size: 14px; }
   .opp .who { min-width: 54px; }
 }
+
+/* ---------------- 首頁：來打橋牌（主視覺風格）＋模式選擇 ---------------- */
+/* 內容比螢幕高時可以捲動；夠高時上下置中 */
+#home { justify-content: flex-start; overflow-y: auto; gap: 12px; }
+#home > :first-child { margin-top: auto; }
+#home > :last-child { margin-bottom: auto; }
+#home h1 { background: linear-gradient(180deg, #FFF6E6 10%, #F3D9A6 55%, #D9A23A 100%); -webkit-background-clip: text; background-clip: text;
+  color: transparent; text-shadow: none; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); letter-spacing: .1em; padding-left: .1em; margin-bottom: 0; }
+.en { margin: 0 0 6px; font: 500 12px var(--body); letter-spacing: .42em; padding-left: .42em; color: #E9D3A8; text-align: center; }
+.modecard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; text-decoration: none;
+  background: linear-gradient(180deg, #FFF9EE, #F3E6CC); color: var(--ink); box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 1.5px rgba(242,196,106,.55);
+  transition: transform .08s; }
+.modecard:active { transform: translateY(2px) scale(.99); }
+.modecard.first { animation: callme calc(2.4s * var(--spd)) ease-in-out infinite; }
+@keyframes callme { 0%, 100% { box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 1.5px rgba(242,196,106,.55); }
+  50% { box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 3px rgba(242,196,106,.9), 0 0 24px rgba(242,196,106,.45); } }
+.modecard img { flex: none; border-radius: 50%; }
+.mc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mc-text b { font: 700 18px var(--display); }
+.mc-text small { font-size: 13px; color: #6B5A3E; }
+.modecard i { font-style: normal; font-size: 26px; color: #B07A1C; }
+#home .or { margin-top: 2px; }
+.sheet.offer { align-items: center; text-align: center; }
+.sheet.offer p { margin: 0; color: var(--ink-on-felt); line-height: 1.6; }
+.sheet.offer .btn { width: 100%; text-decoration: none; text-align: center; }
+.sheet.offer img { border-radius: 50%; box-shadow: 0 0 0 3px rgba(242,196,106,.5); }
+#restartSolo { align-self: center; }
+.rules .link { font-size: 14px; }
+@media (max-height: 700px) {
+  #home { gap: 9px; }
+  #home .suits { display: none; }
+  #home h1 { font-size: 44px; }
+  #home .btn.big { padding: 12px; font-size: 18px; }
+  #home .foot { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .modecard.first { animation: none; } }

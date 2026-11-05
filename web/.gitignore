@@ -4,4 +4,6 @@ node_modules/
 # 部署時由 wrangler 的 build 指令產生
 public/app.js
 public/app.js.map
+public/story/story.js
+public/story/story.js.map
 test-results/
