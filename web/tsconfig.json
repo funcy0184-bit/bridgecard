@@ -1,0 +1,15 @@
+{
+  // 雲端（Cloudflare Workers）這一側：規則、房間伺服器、測試
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": ["src/game", "src/server", "test"]
+}

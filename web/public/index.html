@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#16302A">
+<meta name="description" content="蜜月橋牌：兩個人的橋牌，開房把房號傳給朋友就能用手機一起打">
+<title>蜜月橋牌</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232E5A4E'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ 首頁：開房／輸入房號 ============ -->
+  <section id="home" class="screen">
+    <div class="hero">
+      <div class="suits" aria-hidden="true">♠<span class="r">♥</span><span class="r">♦</span>♣</div>
+      <h1>蜜月橋牌</h1>
+      <p class="sub">兩個人的橋牌 · 手機連線版</p>
+    </div>
+    <label class="field"><span>你的暱稱</span>
+      <input id="name" maxlength="10" placeholder="例如：阿明" autocomplete="nickname" enterkeyhint="done">
+    </label>
+    <button id="resume" class="btn ghost" hidden></button>
+    <button id="create" class="btn gold big">開房</button>
+    <div class="or"><span>或輸入朋友給的房號</span></div>
+    <div class="join">
+      <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD" aria-label="房號" enterkeyhint="go">
+      <button id="join" class="btn">加入</button>
+    </div>
+    <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
+    <p class="foot">朋友不用註冊，打開這個網址、輸入房號就能一起打。</p>
+  </section>
+
+  <!-- ============ 等朋友 ============ -->
+  <section id="wait" class="screen" hidden>
+    <p class="label">房號</p>
+    <div id="bigCode" class="bigcode" aria-live="polite"></div>
+    <p class="sub">把房號傳給朋友，他打開這個網址輸入就能加入</p>
+    <div class="row">
+      <button id="share" class="btn gold">分享邀請</button>
+      <button id="copy" class="btn">複製連結</button>
+    </div>
+    <p class="waiting">等朋友加入<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
+    <button id="cancelWait" class="btn ghost small">取消</button>
+  </section>
+
+  <!-- ============ 牌桌 ============ -->
+  <section id="table" class="screen" hidden>
+    <header class="topbar">
+      <span class="chip" id="roomChip"></span>
+      <div class="score" aria-live="polite">
+        <span id="handNo" class="hn"></span>
+        <span>你 <b id="myScore">0</b></span>
+        <span class="sep">·</span>
+        <span><span id="oppNameTop"></span> <b id="oppScore">0</b></span>
+        <small>／<span id="target">100</span></small>
+      </div>
+      <button id="menuBtn" class="icon" aria-label="選單">⋯</button>
+    </header>
+
+    <div class="opp" id="oppArea">
+      <div class="who"><span class="dot" id="oppDot"></span><b id="oppName"></b><span id="oppCount" class="cnt"></span></div>
+      <div class="fan" id="oppFan"></div>
+      <div class="memo" id="memo" title="對手抽牌階段拿走的明牌"></div>
+    </div>
+
+    <div class="status"><span id="statusText"></span><button id="auctionBtn" class="link" hidden>叫牌紀錄</button></div>
+
+    <div class="felt" id="felt">
+      <div class="stock" id="stock"></div>
+      <div class="contract" id="contractChip" hidden></div>
+      <div class="trick">
+        <div class="slot" id="oppSlot"></div>
+        <div class="anchor" id="centerAnchor"></div>
+        <div class="slot" id="mySlot"></div>
+      </div>
+      <div class="anchor" id="oppAnchor"></div>
+      <div class="anchor" id="myAnchor"></div>
+      <div class="ticker" id="ticker" aria-live="polite"></div>
+
+      <div class="bidpanel" id="bidPanel" hidden>
+        <div class="bidtop">
+          <span class="bidhead" id="bidContract"></span>
+          <div class="auction" id="auctionStrip"></div>
+        </div>
+        <div class="grid" id="bidGrid"></div>
+        <p class="preview" id="bidPreview"></p>
+        <div class="bidbtns">
+          <button id="bidConfirm" class="btn gold">叫</button>
+          <button id="bidPass" class="btn">Pass</button>
+          <button id="bidDouble" class="btn dbl">加倍</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="turn" id="turnLine"></div>
+    <div class="hand" id="hand" aria-label="你的手牌"></div>
+  </section>
+
+  <div id="banner" class="banner" hidden role="status"></div>
+
+  <!-- 局末結算 -->
+  <div id="result" class="modal" hidden>
+    <div class="sheet result">
+      <h2 id="resTitle"></h2>
+      <div id="resBody" class="resbody"></div>
+      <div id="resTotal" class="restotal"></div>
+      <button id="nextBtn" class="btn gold big">下一局</button>
+    </div>
+  </div>
+
+  <!-- 叫牌紀錄（打牌中回看） -->
+  <div id="auctionPop" class="modal" hidden>
+    <div class="sheet">
+      <h3>叫牌紀錄</h3>
+      <ol id="auctionList" class="alist"></ol>
+      <button class="btn close" data-close>關閉</button>
+    </div>
+  </div>
+
+  <!-- 選單 -->
+  <div id="menu" class="modal" hidden>
+    <div class="sheet">
+      <h3>設定</h3>
+      <div class="setting"><span>動畫速度</span><div class="seg" id="speedSeg"></div></div>
+      <div class="setting"><span>畫面震動</span><button class="toggle" id="shakeToggle"></button></div>
+      <div class="setting"><span>手機震動</span><button class="toggle" id="buzzToggle"></button></div>
+      <details class="rules">
+        <summary>規則速查</summary>
+        <ul>
+          <li><b>抽牌</b>：13 墩全程無王。贏墩拿明牌，輸的摸暗牌，這 13 墩不計分。</li>
+          <li><b>叫牌</b>：♣ → ♦ → ♥ → ♠ → 無王，然後下一線。叫 N 線要拿 N + 6 墩。雙方起手都 Pass 就重發；有人叫過，另一方 Pass 就定約。</li>
+          <li><b>加倍</b>：防守方可以加倍，被加倍的莊家可以再加倍；有人蓋叫就清掉。</li>
+          <li><b>打牌</b>：非莊家先出。有首引的花色一定要跟，缺門可以墊牌或出王。</li>
+          <li><b>計分</b>：打成得「線數 × 10 × 倍率」+ 每超 1 墩 2 分；倒約時防守方每墩得「10 × 倍率」。先到 100 分贏。</li>
+        </ul>
+      </details>
+      <div class="row">
+        <button class="btn close" data-close>關閉</button>
+        <button class="btn ghost" id="leaveBtn">離開這桌</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="fx" aria-hidden="true"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  // 手機瀏覽器這一側：畫面、動畫、連線（跟雲端共用 src/game 的規則）
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": ["src/client", "src/game", "src/server/protocol.ts"]
+}
