@@ -350,11 +350,11 @@ function actCard(i: number) {
 
 // 一句講完：intro／outro 會自己往下一句（點一下對話可以立刻往下）
 function readTime(t: string) { return (fx.settings.fast ? 700 : 1300) + [...t].length * (fx.settings.fast ? 22 : 42); }
+// 對話只在玩家點的時候往下（不自動翻頁）
 function scheduleAuto() {
   clearTimeout(autoTimer);
-  if (mode !== "intro" && mode !== "outro") return;
-  autoTimer = window.setTimeout(advance, readTime(lines[li]?.text ?? ""));
 }
+void readTime;
 function advance() {
   clearTimeout(autoTimer);
   if (typing) { finishTyping(); return; }
@@ -686,11 +686,16 @@ document.addEventListener("pointerdown", ev => {
   const b = (ev.target as HTMLElement).closest(".s-emph, .s-minor, .s-back, .book, .notes, .snav a, #restart, .btn");
   if (b) sfx.press();
 }, { passive: true });
+// 章節目錄：手機上是從下面滑上來的抽屜，電腦上捲到下面
+const narrow = () => matchMedia("(max-width: 700px)").matches;
 $("navChapters").addEventListener("click", ev => {
   ev.preventDefault();
+  if (narrow()) { document.body.classList.toggle("show-chapters"); if (document.body.classList.contains("show-chapters")) fx.slideIn($("contentsBox"), "up"); return; }
   $("contentsBox").scrollIntoView({ behavior: "smooth", block: "start" });
   fx.punch($("contents"), 0.03, 300);
 });
+$("closeChapters").addEventListener("click", () => document.body.classList.remove("show-chapters"));
+$("contents").addEventListener("click", () => document.body.classList.remove("show-chapters"));
 const notes = $<HTMLDialogElement>("notes");
 $("notesBtn").addEventListener("click", () => notes.showModal());
 $("notesClose").addEventListener("click", () => notes.close());
@@ -704,4 +709,9 @@ window.addEventListener("resize", () => {
 // ---------------- 啟動 ----------------
 
 fx.initFx($("fx"), $("stable"));
-goto(progress.page, false);
+// 首頁的篇章卡片：/story/?act=2 直接到第二幕
+{
+  const a = Number(new URLSearchParams(location.search).get("act"));
+  if (a >= 1 && a <= ACTS.length) { history.replaceState(null, "", "/story/"); goto(firstStepOfAct(a - 1), false); }
+  else goto(progress.page, false);
+}

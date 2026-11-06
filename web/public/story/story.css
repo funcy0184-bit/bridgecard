@@ -256,10 +256,104 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 #more.tapnext { font-size: 12.5px; color: var(--ink-soft); animation: tapnext calc(1.6s / var(--spd)) ease-in-out infinite; }
 @keyframes tapnext { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 .narrator[data-mode="intro"] #spoken, .narrator[data-mode="outro"] #spoken { min-height: 3em; }
-.actcard { position: absolute; left: 50%; top: 42%; translate: -50% -50%; z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 2px;
+.actcard { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 12px 28px; clip-path: var(--torn-b); background-color: var(--paper); background-image: var(--noise); color: var(--ink);
   box-shadow: inset 0 0 0 5px transparent, inset 0 0 0 6px rgba(185,138,62,.7); white-space: nowrap; }
 .actcard small { font-size: 12px; letter-spacing: .5em; color: var(--wine); }
 .actcard b { font: 500 22px var(--display); letter-spacing: .15em; }
 @media (prefers-reduced-motion: reduce) { #more.tapnext { animation: none; } }
 .narrator.narr .seller small { visibility: hidden; }
+
+/* ---------------- 手機：一個畫面放下牌桌＋對話（不用捲動），目錄改成抽屜 ---------------- */
+.ch-close { display: none; }
+@media (max-width: 700px) {
+  html:has(body.story), body.story { height: 100%; }
+  body.story { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  .sbar { position: static; flex: none; flex-wrap: nowrap; gap: 6px; padding: calc(env(safe-area-inset-top) + 6px) 10px 6px; }
+  .brand { font-size: 16px; }
+  .brand b { letter-spacing: .08em; }
+  .snav { order: 0; width: auto; margin-left: auto; gap: 2px; }
+  .snav a { flex: none; padding: 6px 8px; font-size: 13px; }
+  .snav a.on { display: none; }
+  .notes { margin-left: 0; padding: 5px 9px; font-size: 12.5px; }
+  .smain { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding: 4px 10px calc(env(safe-area-inset-bottom) + 8px); }
+  .opening { flex: none; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .place, .setting { display: none !important; }
+  .headline { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+  .actno { margin: 0; font-size: 11px; letter-spacing: .12em; white-space: nowrap; }
+  .opening h1 { font-size: 17px; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .prog { order: 2; flex: none; font-size: 11px; }
+  .prog b { font-size: 13px; }
+  .rail { width: 56px; margin-top: 3px; }
+  .spread { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 12px; }
+  .stable { flex: 1 1 auto; min-height: 0; padding: 30px 8px 6px; gap: 4px; overflow-x: hidden; overflow-y: auto; }
+  .narrator { flex: 0 1 auto; max-height: 46%; overflow-y: auto; padding: 10px 14px; }
+  .seller img { width: 30px; height: 36px; }
+  .seller strong { font-size: 14px; }
+  .narrator h2 { margin: 6px 0 2px; font-size: 18px; line-height: 1.5; }
+  #more { font-size: 13px; }
+  #feedback { margin-top: 6px; padding: 6px 10px; font-size: 13px; line-height: 1.6; }
+  #controls { padding-top: 8px; gap: 6px; }
+  .s-emph, .s-minor { padding: 9px 12px; font-size: 14px; }
+  .itinerary { position: fixed; left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); z-index: 40; margin: 0; padding: 14px;
+    display: none; max-height: 78dvh; overflow-y: auto; border-radius: 14px;
+    background: linear-gradient(180deg, var(--wood-1), var(--wood-2)); box-shadow: 0 0 0 1px rgba(201,154,75,.6), 0 20px 50px rgba(0,0,0,.6); }
+  body.show-chapters .itinerary { display: block; }
+  .ihead { gap: 10px; }
+  .ihead > span { flex: 1; }
+  .ch-close { display: inline-block; border: 0; background: none; color: var(--gold-hi); font-size: 13px; cursor: pointer; padding: 6px 0 6px 8px; }
+  .inote { display: none; }
+}
+/* 矮螢幕（iPhone SE、有網址列的瀏覽器）：牌、間距再收一點 */
+@media (max-width: 700px) and (max-height: 720px) {
+  .sopp { min-height: 0; gap: 2px; }
+  .sopp .fan { --cw: 22px; height: calc(22px * 1.42); }
+  .sopp .fan .card { margin-left: -14px; }
+  .sname { font-size: 11px; }
+  .sboard { min-height: 0; gap: 6px; padding: 2px 0; }
+  .sboard .slot, .pile { --cw: 46px; }
+  .lab { gap: 4px; }
+  .lab figcaption { font-size: 10.5px; }
+  .shand { --cw: 44px; min-height: calc(var(--cw) * 1.42 + 12px); padding-top: 10px; }
+  .hlabel { font-size: 11px; }
+  .sstat { display: none; }
+  .tlabel { top: 12px; font-size: 10px; }
+  .cup { width: 60px; right: -14px; top: -14px; }
+  .skip { font-size: 12px; padding: 3px 12px; }
+  .sgrid { gap: 4px; }
+  .sgrid button { height: 30px; font-size: 14px; }
+  .smean { min-height: 2.6em; font-size: 12.5px; }
+  .smore { display: none; }
+  .splate .big { font-size: 38px; }
+  .splate { gap: 3px; }
+  .tally strong { font-size: 26px; }
+  .narrator h2 { font-size: 16.5px; }
+  .narrator { padding: 8px 12px; }
+  /* 叫牌這一頁最擠：阿禾的牌背先收起來（上面的字已經說了 13 張），按鈕、間距收一點 */
+  .stable[data-step="bid"] { padding-top: 26px; }
+  .stable[data-step="bid"] .sopp { display: none; }
+  /* 意思和「叫 2♥」並排，省下一整行 */
+  .sbid { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px 8px; }
+  .sgrid, .smore { grid-column: 1 / -1; }
+  .smean { text-align: left; }
+  .smean:has(+ .btn[hidden]) { grid-column: 1 / -1; text-align: center; }
+  .sgrid button { height: 28px; }
+  .sbid .btn { min-width: 0; padding: 9px 14px; white-space: nowrap; }
+  .stable[data-step="bid"] .shand { --cw: 40px; padding-top: 8px; min-height: calc(var(--cw) * 1.42 + 10px); }
+  .stable[data-step="bid"] .hlabel { display: none; }
+  .seller small { display: none; }
+  .seller img { width: 26px; height: 31px; }
+  #controls { padding-top: 5px; }
+  .s-minor { padding: 6px 10px; font-size: 13px; }
+}
+
+/* 對話框：文字區可以捲，按鈕永遠釘在最下面看得到 */
+.ntext { width: 100%; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+#controls { flex: none; }
+@media (max-width: 700px) {
+  /* 牌桌裡的東西不准被擠扁疊在一起：放不下就讓牌桌自己捲 */
+  .stable > :not(.anchor) { flex-shrink: 0; }
+  .sboard { flex: 1 0 auto; }
+  .narrator { overflow: hidden; max-height: 50%; }
+  .narrator[data-mode="done"] { max-height: 58%; }
+}

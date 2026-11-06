@@ -4,7 +4,7 @@
   "type": "module",
   "description": "來打橋牌（蜜月橋牌網頁版）：阿禾的故事教學、跟電腦單機、Cloudflare Workers + Durable Objects 雲端開房",
   "scripts": {
-    "build": "esbuild src/client/main.ts --bundle --format=esm --target=es2020 --minify --sourcemap --outfile=public/app.js && esbuild src/story/main.ts --bundle --format=esm --target=es2020 --minify --sourcemap --outfile=public/story/story.js",
+    "build": "node scripts/build.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",

@@ -19,7 +19,7 @@ import {
   trickFeedback, victory,
 } from "./feedback";
 import { burstAt } from "./particles";
-import { renderSettings } from "./settings-ui";
+import { BUILD, renderSettings } from "./settings-ui";
 import { emo, risk as riskOf } from "./tension";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -89,8 +89,13 @@ const myName = () => { const n = nameInput.value.trim(); if (n) store.set("hb-na
 
 $("goOnline").addEventListener("click", () => offerStoryFirst(() => { show("online"); refreshResume(); }));
 $("onlineBack").addEventListener("click", () => show("home"));
-$("goRules").addEventListener("click", () => openModal("rulesModal"));
-$("goSettings").addEventListener("click", () => openMenu());
+$("goRules").addEventListener("click", () => { $("homeMenu").hidden = true; openModal("rulesModal"); });
+$("goSettings").addEventListener("click", () => { $("homeMenu").hidden = true; openMenu(); });
+$("goMenu").addEventListener("click", () => openModal("homeMenu"));
+// 🔔 最新消息：每個新版本第一次打開前有紅點
+const NEWS_KEY = "hb-news-seen";
+$("newsDot").hidden = store.get(NEWS_KEY) === BUILD.sha;
+$("goNews").addEventListener("click", () => { store.set(NEWS_KEY, BUILD.sha); $("newsDot").hidden = true; openModal("newsModal"); });
 
 $("create").addEventListener("click", async () => {
   const b = $<HTMLButtonElement>("create");
@@ -117,7 +122,7 @@ function refreshResume() {
   const b = $("resume");
   b.hidden = !(last && savedToken(last));
   if (!b.hidden) b.textContent = `回到 ${last} 這桌`;
-  $("soloSub").textContent = hasUnfinishedSolo() ? "繼續跟阿禾（電腦）的牌局" : "跟阿禾（電腦）打一場";
+  $("soloSub").textContent = hasUnfinishedSolo() ? "繼續上次的牌局" : "";
   refreshStoryCard();
 }
 $("resume").addEventListener("click", () => { const last = store.get(LAST_ROOM_KEY); if (last) enter(last); });
@@ -127,7 +132,7 @@ function goHome(msg = "", err = false, toOnline = false) {
   conn?.close(); conn = null;
   clearTimeout(resultTimer);
   resultSig.skip = true;
-  for (const id of ["result", "menu", "auctionPop", "banner", "storyOffer", "rulesModal"]) $(id).hidden = true;
+  for (const id of ["result", "menu", "auctionPop", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal"]) $(id).hidden = true;
   history.replaceState(null, "", "/");
   show(toOnline ? "online" : "home");
   say(toOnline ? msg : "", err);
@@ -139,20 +144,26 @@ function goHome(msg = "", err = false, toOnline = false) {
 
 const STORY_KEY = "hb.story.v2";      // 跟 /story/ 用同一個進度鍵
 const OFFER_KEY = "hb-story-offered";
-function storyProgress(): { page: number; finished: boolean } | null {
+function storyProgress(): { page: number; finished: boolean; answers: Record<string, unknown> } | null {
   try {
     const p = JSON.parse(store.get(STORY_KEY) ?? "null");
-    return p && p.v === 2 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished } : null;
+    return p && p.v === 2 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished, answers: p.answers ?? {} } : null;
   } catch { return null; }
 }
+const ACT_STEPS = [["grab"], ["bid"], ["follow", "ruff"], ["last"]];
 const ACT_OF_PAGE = [1, 2, 3, 3, 4];
 function refreshStoryCard() {
   const p = storyProgress();
-  $("storyCardTitle").textContent = !p ? "故事教學" : p.finished ? "再聽一次故事" : "繼續故事教學";
   $("storyCardSub").textContent = !p ? "第一次玩？跟阿禾邊玩邊學，約 5 分鐘"
-    : p.finished ? "四幕都完成了 ✓ 隨時回來複習" : `上次看到第 ${ACT_OF_PAGE[p.page] ?? 1} 幕`;
-  $("solo").classList.toggle("lead", !!p);
-  $("storyCard").classList.toggle("lead", !p);
+    : p.finished ? "四幕都完成了 ✓ 隨時回來複習任何一幕" : `跟著阿禾的小故事，上次看到第 ${ACT_OF_PAGE[p.page] ?? 1} 幕`;
+  // 篇章卡片：打完的打勾、下一個要打的框起來
+  let next = -1;
+  document.querySelectorAll<HTMLElement>(".cv-card").forEach((c, i) => {
+    const done = !!p && ACT_STEPS[i].every(id => p.answers[id]);
+    c.classList.toggle("done", done);
+    if (!done && next < 0) next = i;
+  });
+  document.querySelectorAll<HTMLElement>(".cv-card").forEach((c, i) => c.classList.toggle("next", i === next && !!p));
 }
 // 第一次按「開始對戰／朋友連線」：先問要不要跟阿禾學（只問一次）
 let offerThen: (() => void) | null = null;
@@ -1450,7 +1461,7 @@ $("restartSolo").addEventListener("click", () => {
   $("menu").hidden = true;
   if (conn instanceof LocalTable) conn.restart();     // 會發 NewHand：牌桌照新局的流程清空重畫
 });
-for (const m of ["menu", "auctionPop", "rulesModal", "storyOffer"]) {
+for (const m of ["menu", "auctionPop", "rulesModal", "storyOffer", "homeMenu", "newsModal"]) {
   const modal = $(m);
   modal.addEventListener("click", ev => {
     if (ev.target === modal || (ev.target as HTMLElement).closest("[data-close]")) modal.hidden = true;
@@ -1459,7 +1470,7 @@ for (const m of ["menu", "auctionPop", "rulesModal", "storyOffer"]) {
 
 // 按鈕：按下去像厚紙卡（音效＋手機輕震）
 document.addEventListener("pointerdown", ev => {
-  const b = (ev.target as HTMLElement).closest<HTMLElement>(".btn, .strip, .icon, .back");
+  const b = (ev.target as HTMLElement).closest<HTMLElement>(".btn, .strip, .icon, .back, .cv-btn, .cv-card, .cv-icon");
   if (b && !(b as HTMLButtonElement).disabled) { sfx.press(); fx.buzz(6); }
 }, { passive: true });
 
@@ -1485,9 +1496,10 @@ emo.onChange(p => $("bidPanel").style.setProperty("--tension", p.toFixed(2)));
     else { show("online"); say(`朋友邀請你加入 ${room} 這桌，填好暱稱按「加入」`); }
   }
   refreshResume();
-  // 首頁的紙卡依序滑入
+  // 封面：標題、三顆按鈕、四張篇章卡依序淡入
   if (screen === "home") {
     fx.slideIn($("titleCard"), "up");
-    Array.from(document.querySelectorAll("#home .strip")).forEach((el, i) => fx.slideIn(el, i % 2 ? "left" : "right", 80 + i * 60));
+    Array.from(document.querySelectorAll("#home .cv-btn")).forEach((el, i) => fx.slideIn(el, "up", 90 + i * 70));
+    Array.from(document.querySelectorAll("#home .cv-card")).forEach((el, i) => fx.slideIn(el, "up", 320 + i * 60));
   }
 }

@@ -53,10 +53,9 @@ console.log("首頁");
 await page.goto(base + "/");
 check((await page.title()) === "來打橋牌", "網頁標題是「來打橋牌」");
 check((await text("#home h1")) === "來打橋牌", "首頁大標題是「來打橋牌」");
-check((await text("#storyCardSub")).includes("第一次玩"), "主選單有「故事教學：第一次玩？」入口");
-check((await page.locator("#home .strip").count()) === 5, "主選單五張紙卡：開始對戰、朋友連線、故事教學、規則速查、設定");
-const wood = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--wood-1").trim());
-check(!!wood && (await page.evaluate(() => getComputedStyle(document.getElementById("app")).backgroundImage)).includes("gradient"), `木桌背景（${wood}）`);
+check((await text("#storyCardSub")).includes("第一次玩"), "封面的故事篇章寫著「第一次玩？」");
+check((await page.locator("#home .cv-btn").count()) === 3 && (await page.locator("#home .cv-card").count()) === 4, "封面：故事教學、人機對戰、朋友連線三顆按鈕＋四個篇章");
+check(await page.evaluate(() => getComputedStyle(document.getElementById("home")).backgroundImage.includes("gradient")), "封面是米白紙底");
 await page.locator("#solo").click();
 check(await page.locator("#storyOffer").isVisible(), "第一次按「跟電腦打一局」會先問要不要跟阿禾學");
 await shot("01-offer");
@@ -250,8 +249,8 @@ check((await page.evaluate(() => document.documentElement.dataset.motion)) === "
 await page.goto(base + "/story/");
 check((await page.evaluate(() => document.documentElement.dataset.motion)) === "0", "故事頁也用同一份設定");
 await page.goto(base + "/");
-check((await text("#storyCardTitle")).includes("再聽一次"), "主選單入口變成「再聽一次故事」");
-check((await text("#soloSub")).includes("繼續"), "主選單可以繼續跟電腦的牌局");
+check((await text("#storyCardSub")).includes("四幕都完成了") && (await page.locator(".cv-card.done").count()) === 4, "封面四個篇章都打勾");
+check((await text("#soloSub")).includes("繼續"), "人機對戰按鈕提示可以繼續上次的牌局");
 
 check(errors.length === 0, `主控台沒有錯誤${errors.length ? "：" + errors.join(" | ") : ""}`);
 await browser.close();

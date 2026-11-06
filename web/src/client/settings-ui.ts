@@ -2,6 +2,22 @@
 import * as fx from "./fx";
 import { sfx } from "./sound";
 
+declare const __BUILD__: { sha: string; at: string } | undefined;
+export const BUILD = typeof __BUILD__ !== "undefined" && __BUILD__ ? __BUILD__ : { sha: "dev", at: "" };
+
+// 回報問題時貼給 Claude 的資訊：版本、網址、裝置、螢幕、設定（不含任何個人資料或牌局內容）
+export function reportText(): string {
+  const s = fx.settings;
+  return [
+    "【來打橋牌 回報資訊】",
+    `版本：${BUILD.sha}${BUILD.at ? `（${BUILD.at}）` : ""}`,
+    `頁面：${location.pathname}${location.search}`,
+    `畫面大小：${innerWidth}×${innerHeight}（像素比 ${devicePixelRatio}）`,
+    `裝置：${navigator.userAgent}`,
+    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋快速" : ""}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}`,
+  ].join("\n");
+}
+
 function toggle(label: string, get: () => boolean, set: (v: boolean) => void, onChange?: () => void): HTMLElement {
   const row = document.createElement("div");
   row.className = "setting";
@@ -81,6 +97,27 @@ export function renderSettings(box: HTMLElement) {
     slider("背景音樂", () => s.music, v => { s.music = v; }, () => {}),
     toggle("手機震動", () => s.vibrate, v => { s.vibrate = v; }, () => fx.buzz(30)),
   );
+  // 版本、回報、重設
+  const foot = document.createElement("div");
+  foot.className = "setfoot";
+  const ver = document.createElement("small");
+  ver.textContent = `版本 ${BUILD.sha}${BUILD.at ? ` · ${BUILD.at}` : ""}`;
+  const copy = document.createElement("button");
+  copy.type = "button"; copy.className = "btn paper small"; copy.textContent = "複製回報資訊";
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(reportText()); copy.textContent = "已複製，貼給 Claude 就好"; }
+    catch { copy.textContent = "這個瀏覽器不能複製，請截圖這一頁"; }
+    sfx.select();
+  });
+  const reset = document.createElement("button");
+  reset.type = "button"; reset.className = "btn ghost small"; reset.textContent = "重設這支手機的進度";
+  reset.addEventListener("click", () => {
+    if (!confirm("清除這支手機上的故事進度、跟電腦的存檔和「第一次玩」提示？（設定會保留，連線房間不受影響）")) return;
+    for (const k of ["hb.story.v2", "hb-solo-v1", "hb-story-offered", "hb-news-seen"]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
+    location.href = "/";
+  });
+  foot.append(ver, copy, reset);
+  box.appendChild(foot);
   if (fx.reduced) {
     const note = document.createElement("p");
     note.className = "setnote";

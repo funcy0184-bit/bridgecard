@@ -17,44 +17,47 @@
 <div id="app">
   <div class="frameline" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
-  <!-- ============ 01 首頁與主選單 ============ -->
-  <section id="home" class="screen">
-    <header class="titlecard" id="titleCard">
-      <div class="tc-ace card" aria-hidden="true"><span class="ix"><b>A</b><i>♠</i></span><span class="pip">♠</span></div>
-      <div class="tc-under" aria-hidden="true"></div>
-      <div class="tc-paper">
-        <div class="orn-moon" aria-hidden="true"><svg viewBox="0 0 120 24"><path d="M2 12 H44 M76 12 H118" stroke="currentColor" stroke-width=".8"/><circle cx="40" cy="12" r="1.4" fill="currentColor"/><circle cx="80" cy="12" r="1.4" fill="currentColor"/><path d="M55 6 a8 8 0 1 0 10 12 a6.5 6.5 0 1 1 -10 -12z" fill="currentColor"/><path d="M60 0 v3 M51 3 l2 2 M69 3 l-2 2" stroke="currentColor" stroke-width=".8"/></svg></div>
-        <h1>來打橋牌</h1>
-        <p class="en">PLAY BRIDGE</p>
-        <div class="orn-line" aria-hidden="true"><svg viewBox="0 0 120 12"><path d="M2 6 H50 M70 6 H118" stroke="currentColor" stroke-width=".8"/><path d="M60 1 L65 6 L60 11 L55 6 Z" fill="currentColor"/></svg></div>
-      </div>
-      <img class="seal" src="/art/seal.svg" alt="" width="64" height="64">
-      <img class="stamp" src="/art/stamp-ahe.svg" alt="阿禾" width="56" height="67">
-      <img class="clip" src="/art/clip.svg" alt="" width="18" height="50">
+  <!-- ============ 01 首頁（封面）：米白紙、拱框、三顆主按鈕、故事四個篇章 ============ -->
+  <section id="home" class="screen cover">
+    <div class="cv-top">
+      <button id="goMenu" class="cv-icon" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 H21 M3 12 H21 M3 17.5 H21"/></svg></button>
+      <button id="goNews" class="cv-icon" type="button" aria-label="最新消息"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17 V11 a6 6 0 0 1 12 0 v6 l1.5 1.5 H4.5 Z M10 20.5 a2 2 0 0 0 4 0 M12 3.5 v1.5"/></svg><i class="cv-dot" id="newsDot" hidden></i></button>
+    </div>
+    <img class="cv-branch" src="/art/branch.svg" alt="" aria-hidden="true">
+    <header class="cv-arch" id="titleCard">
+      <svg class="cv-archline" viewBox="0 0 320 300" preserveAspectRatio="none" aria-hidden="true"><path d="M1 299 V120 C 1 100 12 90 30 90 H58 C 90 90 100 40 160 30 C 220 40 230 90 262 90 H290 C 308 90 319 100 319 120 V299"/><path d="M156 30 l4 -7 l4 7 l-4 7 z" class="dia"/><path d="M160 4 v12 M154 10 h12" class="spark"/></svg>
+      <div class="cv-suits" aria-hidden="true"><i>♠</i><i class="r">♥</i><i class="r">♦</i><i>♣</i></div>
+      <h1>來打橋牌</h1>
+      <p class="cv-en"><span>Bridge Card Game</span></p>
+      <p class="cv-tag">兩個人的經典橋牌，一場思考與默契的牌局</p>
+      <div class="cv-div" aria-hidden="true"><i>◆</i></div>
     </header>
-    <nav class="menu" aria-label="主選單">
-      <button id="solo" class="strip lead" type="button">
-        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><rect x="5" y="6" width="15" height="21" rx="2" transform="rotate(-14 12 16)" fill="none" stroke="currentColor"/><rect x="15" y="4" width="15" height="21" rx="2" fill="#F4E8CF" stroke="currentColor"/><path d="M22.5 10 c-3 3 -4 5 -1.5 6 c1 .3 1.2 -.4 1.5 -.9 c.3 .5 .5 1.2 1.5 .9 c2.5 -1 1.5 -3 -1.5 -6z M22.5 15.5 l-1 3 h2z" fill="currentColor"/><path d="M33 8 l3 -2 M34 13 h3 M3 9 l-2 -2" stroke="currentColor" stroke-width=".8"/></svg>
-        <span class="st"><b>開始對戰</b><small id="soloSub">跟阿禾（電腦）打一場</small></span>
-      </button>
-      <button id="goOnline" class="strip" type="button">
-        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><circle cx="14" cy="12" r="4.5" fill="none" stroke="currentColor"/><circle cx="26" cy="12" r="4.5" fill="none" stroke="currentColor"/><path d="M5 26 c1 -6 5 -8 9 -8 s8 2 9 8 M17 26 c1 -6 5 -8 9 -8 s8 2 9 8" fill="none" stroke="currentColor"/><path d="M20 2 v3 M14 3 l1 2 M26 3 l-1 2" stroke="currentColor" stroke-width=".8"/></svg>
-        <span class="st"><b>朋友連線</b><small>開房、輸入房號，各用自己的手機</small></span>
-      </button>
-      <a id="storyCard" class="strip" href="/story/">
-        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 8 c5 -2 10 -1 15 2 v17 c-5 -3 -10 -4 -15 -2z M19 10 c5 -3 10 -4 15 -2 v17 c-5 -2 -10 -1 -15 2" fill="none" stroke="currentColor"/><path d="M36 2 c-6 4 -10 10 -11 16 l2 1 c2 -6 6 -11 9 -17z" fill="currentColor"/></svg>
-        <span class="st"><b id="storyCardTitle">故事教學</b><small id="storyCardSub">第一次玩？跟阿禾邊玩邊學，約 5 分鐘</small></span>
+    <nav class="cv-menu" aria-label="主選單">
+      <a id="storyCard" class="cv-btn primary" href="/story/"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
+        <svg class="ic" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 6 c6 -3 12 -2 17 2 v18 c-5 -4 -11 -5 -17 -2z M20 8 c5 -4 11 -5 17 -2 v18 c-6 -3 -12 -2 -17 2"/></svg>
+        <span class="lbl" id="storyCardTitle">故事教學</span><i class="chev" aria-hidden="true">›</i>
       </a>
-      <button id="goRules" class="strip" type="button">
-        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 7 c4 -2 8 -1 12 1 v17 c-4 -2 -8 -3 -12 -1z M16 8 c3 -2 6 -2 9 -1" fill="none" stroke="currentColor"/><circle cx="25" cy="17" r="6" fill="none" stroke="currentColor"/><path d="M29.5 21.5 l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <span class="st"><b>規則速查</b><small>搶牌、叫牌、出牌、計分</small></span>
+      <button id="solo" class="cv-btn" type="button"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
+        <svg class="ic" viewBox="0 0 40 30" aria-hidden="true"><rect x="8" y="9" width="24" height="17" rx="5"/><path d="M20 9 V4"/><circle cx="20" cy="3" r="1.6"/><circle cx="15" cy="16" r="1.6" class="f"/><circle cx="25" cy="16" r="1.6" class="f"/><path d="M16 21 q4 3 8 0 M8 15 H5 v6 h3 M32 15 h3 v6 h-3"/></svg>
+        <span class="lbl">人機對戰<small id="soloSub"></small></span><i class="chev" aria-hidden="true">›</i>
       </button>
-      <button id="goSettings" class="strip" type="button">
-        <svg class="mi" viewBox="0 0 40 32" aria-hidden="true"><circle cx="20" cy="16" r="5" fill="none" stroke="currentColor"/><path d="M20 4 v4 M20 24 v4 M8 16 h4 M28 16 h4 M11.5 7.5 l2.8 2.8 M25.7 21.7 l2.8 2.8 M11.5 24.5 l2.8 -2.8 M25.7 10.3 l2.8 -2.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-        <span class="st"><b>設定</b><small>動畫、音效、震動</small></span>
+      <button id="goOnline" class="cv-btn" type="button"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
+        <svg class="ic" viewBox="0 0 40 30" aria-hidden="true"><circle cx="15" cy="10" r="5"/><path d="M5 27 c0 -7 4 -10 10 -10 s10 3 10 10 z"/><circle cx="27" cy="12" r="4"/><path d="M24 18 c1 -1 2 -1 3 -1 c5 0 8 3 8 9 h-8"/></svg>
+        <span class="lbl">朋友連線</span><i class="chev" aria-hidden="true">›</i>
       </button>
     </nav>
-    <div class="orn-foot" aria-hidden="true">· · ☾ ✦ ☽ · ·</div>
+    <div class="cv-div small" aria-hidden="true"><i>♣</i></div>
+    <section class="cv-chapters" aria-label="故事教學四個篇章">
+      <h2><img src="/art/sprig.svg" alt="" class="lf l"><span>故事教學 · 四個篇章</span><img src="/art/sprig.svg" alt="" class="lf r"></h2>
+      <p id="storyCardSub">第一次玩？跟阿禾邊玩邊學，約 5 分鐘</p>
+      <div class="cv-cards">
+        <a class="cv-card" href="/story/?act=1" data-act="0"><b>I</b><span>搶牌入門</span><img src="/art/ch1.svg" alt=""><em>✓</em></a>
+        <a class="cv-card" href="/story/?act=2" data-act="1"><b>II</b><span>叫牌入門</span><img src="/art/ch2.svg" alt=""><em>✓</em></a>
+        <a class="cv-card" href="/story/?act=3" data-act="2"><b>III</b><span>王吃技巧</span><img src="/art/ch3.svg" alt=""><em>✓</em></a>
+        <a class="cv-card" href="/story/?act=4" data-act="3"><b>IV</b><span>打成合約</span><img src="/art/ch4.svg" alt=""><em>✓</em></a>
+      </div>
+    </section>
+    <div class="cv-bottom" aria-hidden="true"><img src="/art/chapel.svg" alt=""><i>◆</i></div>
   </section>
 
   <!-- ============ 06 朋友連線 ============ -->
@@ -226,6 +229,32 @@
         <button class="btn ghost" id="leaveBtn" type="button">離開這桌</button>
       </div>
       <button class="btn ghost small" id="restartSolo" type="button" hidden>重新發牌，開新的一場</button>
+    </div>
+  </div>
+
+  <!-- 首頁 ☰：規則速查、設定 -->
+  <div id="homeMenu" class="modal" hidden>
+    <div class="sheet">
+      <h3>選單</h3>
+      <button class="btn paper" id="goRules" type="button">規則速查</button>
+      <button class="btn paper" id="goSettings" type="button">設定（動畫、音效、版本、回報）</button>
+      <a class="btn paper" href="/story/">故事教學目錄</a>
+      <button class="btn ghost close" data-close type="button">關閉</button>
+    </div>
+  </div>
+
+  <!-- 首頁 🔔：最新消息 -->
+  <div id="newsModal" class="modal" hidden>
+    <div class="sheet rules">
+      <h3>最新消息</h3>
+      <ul>
+        <li><b>封面換新</b>：米白紙的新封面，下面四張篇章卡可以直接跳到故事的任何一幕。</li>
+        <li><b>阿禾一句一句講</b>：故事教學的對話由你自己點下一句，手機上牌桌和對話放在同一個畫面。</li>
+        <li><b>情緒張力</b>：叫得越高、被加倍，壓力越大；打成合約的那一刻才釋放。</li>
+        <li><b>手感</b>：選牌、出牌、贏墩、結算都有分級的動畫和音效，可以在「設定」調整或關閉。</li>
+        <li><b>回報問題</b>：「設定」最下面按「複製回報資訊」，連同截圖貼給 Claude。</li>
+      </ul>
+      <button class="btn paper close" data-close type="button">知道了</button>
     </div>
   </div>
 

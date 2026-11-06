@@ -19,7 +19,7 @@
   <a class="brand" href="/" aria-label="回到來打橋牌首頁"><span aria-hidden="true">‹</span><b>來打橋牌</b></a>
   <nav class="snav" aria-label="遊戲模式">
     <a class="on" href="/story/" aria-current="page">故事入門</a>
-    <a href="#contentsBox" id="navChapters">章節練習</a>
+    <a href="#contentsBox" id="navChapters">章節</a>
     <a href="/?solo=1">單機對戰</a>
   </nav>
   <button class="notes" id="setBtn" type="button" aria-label="設定">⚙</button>
@@ -54,16 +54,18 @@
 
     <section class="narrator" id="narrator" aria-label="阿禾說">
       <div class="seller"><img src="/art/stamp-ahe.svg" alt="" width="44" height="53"><div><strong id="who">阿禾</strong><small>巷口牌店店主</small></div></div>
-      <h2 id="spoken" aria-live="polite"></h2>
-      <p id="more"></p>
-      <div id="feedback" aria-live="polite" aria-atomic="true"></div>
+      <div class="ntext">
+        <h2 id="spoken" aria-live="polite"></h2>
+        <p id="more"></p>
+        <div id="feedback" aria-live="polite" aria-atomic="true"></div>
+      </div>
       <div id="controls"></div>
       <div id="talkLog" class="sr-only" aria-live="polite"></div>
     </section>
   </div>
 
   <section class="itinerary" id="contentsBox" aria-label="故事目錄">
-    <div class="ihead"><span>故事目錄 · 章節練習</span><button id="restart" type="button">↻ 從頭開始</button></div>
+    <div class="ihead"><span>故事目錄 · 章節練習</span><button id="restart" type="button">↻ 從頭開始</button><button id="closeChapters" class="ch-close" type="button">關閉</button></div>
     <div id="contents"></div>
     <p class="inote">每一幕都可以點進去單獨重玩；重新整理會回到上次那一頁。</p>
   </section>
