@@ -36,7 +36,7 @@ export function trickFeedback(level: Level, mine: boolean, card: Element | null,
   burstAt(card, { count: level === 3 ? 22 : 12, kinds: level === 3 ? ["star", "dust", "suit"] : ["star", "dust"], speed: level === 3 ? 260 : 200, life: 0.8 });
   fx.shake(felt, level === 3 ? 7 : 4, level === 3 ? 300 : 220);
   sfx.impact(level === 3 ? 1 : 0.6);
-  if (level === 3) { fx.shockAt(card, { size: 240, delay: 90, width: 1.5 }); fx.flash(0.35); }
+  // Level 3 的全畫面爆發交給 EmotionDirector.release（先收束再爆發）
 }
 
 // Hitstop：只給關鍵事件（王吃、關鍵墩 80ms；合約達成 100ms）
@@ -117,8 +117,9 @@ export async function bidChip(text: string, red: boolean, tier: number, from: DO
     { duration: fx.ms(180), easing: "ease-out", fill: "forwards", composite: "replace" });
   fx.punch(target, 0.1 + tier * 0.06, 260 + tier * 30);
   if (tier >= 1) fx.glow(target, 380 + tier * 120);
-  const counts = [3, 8, 14, 24][tier];
-  burstAt(target, { count: counts, kinds: tier === 0 ? ["dust"] : tier === 1 ? ["dust", "star"] : tier === 2 ? ["star", "dust", "ink"] : ["star", "suit", "dust"], speed: 120 + tier * 50, life: 0.6 + tier * 0.1 });
+  // 加碼是在累積壓力，不是慶祝：粒子只做提示，等級最高也不到勝利的份量
+  const counts = [2, 6, 10, 14][tier];
+  burstAt(target, { count: counts, kinds: tier === 0 ? ["dust"] : tier === 1 ? ["dust", "star"] : ["star", "dust", "ink"], speed: 110 + tier * 40, life: 0.55 + tier * 0.08 });
   if (tier >= 2) {
     fx.shockAt(target, { size: 100 + tier * 40 });
     fx.shake(felt, tier === 3 ? 5 : 3, 200);

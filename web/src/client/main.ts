@@ -20,6 +20,7 @@ import {
 } from "./feedback";
 import { burstAt } from "./particles";
 import { renderSettings } from "./settings-ui";
+import { emo, risk as riskOf } from "./tension";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const GOLD = "#F3D488", INK = "#FBF4E4", MUTED = "#D8C7A4", BAD = "#F2A0A0", GOOD = "#B5E3BE", RED = "#F5AAB3";
@@ -46,7 +47,6 @@ const inFlight = new Set<number>();
 const freshCards = new Set<number>();
 let resultSig = { skip: false };
 let streak = 0;            // 你連續贏了幾墩（輸一墩、換階段、新的一局就歸零）
-let tension = 0;           // 競叫張力 0..1（加碼累積、Pass 釋放、重發歸零）
 const chipPending = new Set<number>();   // 叫牌籌碼還在飛：那一邊的叫牌紙卡先不換字
 let hoverWant = -1, hoverTimer = 0;
 
@@ -463,6 +463,7 @@ function renderCenter(first: boolean) {
     flipNumber($("tallyBig"), String(iDecl ? s.myTricks : s.oppTricks), true, Math.min(4, Math.max(0, streak - 1)) * 0.06);
     $("tallyNeed").textContent = String(tricksNeeded(s.highestBid));
     $("tallyLine").textContent = `你 ${s.myTricks}｜${oppName()} ${s.oppTricks}`;
+    if (s.phase === Phase.Play) emo.sustain(s);
   }
   renderTrick();
 }
@@ -885,7 +886,7 @@ function renderBid(first = false) {
 
   // 你 vs 對手：雙方最後一次叫的
   const lastOf = (seat: number) => { for (let i = s.auctionCalls.length - 1; i >= 0; i--) if (s.auctionSeats[i] === seat) return s.auctionCalls[i]; return null; };
-  panel.style.setProperty("--tension", tension.toFixed(2));
+  panel.style.setProperty("--tension", emo.pressure.toFixed(2));
   for (const [id, seat] of [["bidMeCard", s.seat], ["bidOppCard", 1 - s.seat]] as const) {
     if (chipPending.has(seat)) continue;
     const b = $(id).querySelector("b") as HTMLElement;
@@ -1001,7 +1002,7 @@ async function showResult(instant: boolean) {
   $("resRibbon").textContent = matchOver ? "整場結算" : `第 ${r.handNumber} 局結算`;
   const title = $("resTitle");
   title.textContent = matchOver ? (iWon ? "你獲勝！" : `${opp}獲勝`)
-    : r.made ? (iDecl ? "合約達成！" : `${opp}打成了`) : (iDecl ? `倒 ${r.undertricks} 墩` : "成功擊破！");
+    : r.made ? (iDecl ? "合約達成！" : `${opp}打成了`) : (iDecl ? "差一點！" : "成功擊破！");
   title.className = good ? "" : "lose";
   $("rsContract").innerHTML = isRedBid(r.bidIndex) ? `<span class="red">${contractText(r.bidIndex, r.doubled)}</span>` : contractText(r.bidIndex, r.doubled);
   $("rsNeed").textContent = String(r.tricksNeeded);
@@ -1030,6 +1031,7 @@ async function showResult(instant: boolean) {
   next.textContent = matchOver ? "再來一場" : "下一局";
   $("result").hidden = false;
   $("skipHint").hidden = sig.skip;
+  emo.clear();
 
   // 一步一步亮出來：合約 → 目標 → 實得 → 判定 → 得分 → 明細 → 總分 → 勝利
   const steps = ["rsC", "rsN", "rsT", "resVerdict", "resBand", "resBody", "totMe", "totOpp", "resTotal"];
@@ -1054,7 +1056,7 @@ async function showResult(instant: boolean) {
   if (!sig.skip) {
     const v = $("resVerdict").firstElementChild as HTMLElement;
     stamp(v, !r.made);
-    setTimeout(() => { if (good) sfx.contract(true); else sfx.defeat(); }, fx.ms(180));
+    setTimeout(() => { if (good) sfx.contract(true); else sfx.soft(); }, fx.ms(180));
     await fx.wait(fx.ms(560));
   }
   // 5～6：得分開始加速（不重擊，留給總分）
@@ -1068,7 +1070,14 @@ async function showResult(instant: boolean) {
     rollNumber($("rtMe"), before[0], s.myScore, { dur: 420, hit: r.scorer === me, signal: sig }),
     rollNumber($("rtOpp"), before[1], s.oppScore, { dur: 420, hit: r.scorer !== me, signal: sig }),
   ]);
-  if (!sig.skip && good) { burstAt($(r.scorer === me ? "rtMe" : "rtOpp"), { count: 14, kinds: ["dust", "star"], speed: 200 }); fx.shockAt($(r.scorer === me ? "rtMe" : "rtOpp"), { size: 140 }); }
+  if (!sig.skip && good) {
+    // 高風險合約成功：光芒、粒子、衝擊都更強（風險只看合約線數與加倍）
+    const pw = 0.4 + 0.6 * riskOf(r.bidIndex, r.doubled);
+    const tgt = $(r.scorer === me ? "rtMe" : "rtOpp");
+    burstAt(tgt, { count: Math.round(10 + 26 * pw), kinds: pw > 0.7 ? ["dust", "star", "suit"] : ["dust", "star"], speed: 180 + 120 * pw });
+    fx.shockAt(tgt, { size: 120 + 160 * pw });
+    if (pw > 0.7) { fx.flash(0.3 * pw); sfx.impact(pw); }
+  }
   await showStep("resTotal", 0);
   for (const id of steps) $(id).classList.remove("pending");
   $("skipHint").hidden = true;
@@ -1080,7 +1089,7 @@ async function showResult(instant: boolean) {
   if (matchOver && iWon) {
     victory($("resTitle"));
     fx.popup("冠軍！", $("resTitle"), { size: 44, color: GOLD, flags: ["pop", "wave"], hold: 1200 });
-  } else if (matchOver) sfx.defeat();
+  } else if (matchOver) sfx.soft();
 }
 
 // 點一下結算單：跳過動畫，直接看結果
@@ -1141,7 +1150,7 @@ function onEvent(e: GameEvent) {
       sfx.slide();
       sfx.resetStreak();
       streak = 0; streakGlow($("felt"), 0);
-      tension = 0;
+      emo.clear();
       fx.popup(e.value > 0 ? `第 ${e.value} 局 · 發牌！` : "發牌！", centerAnchor(), { size: 28, color: INK, flags: ["pop"], hold: 600 });
       tick(`第 ${e.value} 局開始，${me ? "你" : esc(oppName())}先出`);
       break;
@@ -1179,7 +1188,7 @@ function onEvent(e: GameEvent) {
       break;
 
     case "DrawPhaseOver":
-      streak = 0; streakGlow($("felt"), 0); tension = 0;
+      streak = 0; streakGlow($("felt"), 0); emo.clear();
       // 放在上方的階段橫幅，不要蓋住等一下跳出來的叫牌面板
       fx.popup("搶牌結束 · 開始叫牌", $("phaseChip"), { size: 20, color: GOLD, flags: ["pop"], hold: 900, delay: 700 });
       setTimeout(() => sfx.stamp(), fx.ms(900));
@@ -1190,8 +1199,8 @@ function onEvent(e: GameEvent) {
       // 叫牌逐級升溫：等級越高越重；雙方一直加碼，張力就一直疊上去
       const raise = !!st && st.highestBid >= 0;
       const tier = bidTier(bidLevel(e.value));
-      tension = raise ? Math.min(1, tension + 0.16 + tier * 0.06) : tier * 0.12;
-      $("bidPanel").style.setProperty("--tension", tension.toFixed(2));
+      emo.bid(e.value, raise);
+      const tension = emo.pressure;
       const target = $(me ? "bidMeCard" : "bidOppCard");
       const visible = !$("bidPanel").hidden && target.getBoundingClientRect().width > 0;
       if (raise) fx.popup("加碼！", side, { size: 20 + tier * 4, color: tier >= 2 ? GOLD : INK, flags: tier >= 2 ? ["pop", "shake"] : ["pop"], delay: 40 });
@@ -1209,18 +1218,17 @@ function onEvent(e: GameEvent) {
     case "Passed":
       fx.popup("Pass", side, { size: 26, color: MUTED });
       sfx.pass();
-      if (tension > 0.05) {
-        // Pass：張力釋放
-        tension *= 0.4;
-        $("bidPanel").style.setProperty("--tension", tension.toFixed(2));
-        setTimeout(() => sfx.release(), fx.ms(90));
+      {
+        // 這一聲 Pass 如果結束叫牌，壓力不放掉、直接帶進合約；開場的 Pass 才稍微鬆一點
+        const ends = !!st && st.highestBid >= 0;
+        emo.pass(ends);
+        if (!ends && emo.pressure > 0.05) setTimeout(() => sfx.release(), fx.ms(90));
       }
       break;
 
     case "Doubled":
       // 加倍：紅色衝擊、低頻敲擊、短暫局部震動
-      tension = Math.min(1, tension + 0.3);
-      $("bidPanel").style.setProperty("--tension", tension.toFixed(2));
+      emo.double();
       fx.popup("加倍！", side, { size: 50, color: "#F08A96", flags: ["pop", "shake"], hold: 900 });
       doubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
       fx.buzz([40, 30, 40]);
@@ -1228,8 +1236,7 @@ function onEvent(e: GameEvent) {
 
     case "Redoubled":
       // 再加倍：雙重衝擊波、金紅粒子、短促亮光、更重的音效
-      tension = 1;
-      $("bidPanel").style.setProperty("--tension", "1");
+      emo.redouble();
       fx.popup("再加倍！！", side, { size: 54, color: GOLD, flags: ["pop", "shake"], hold: 1000 });
       redoubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
       fx.buzz([50, 30, 50, 30, 90]);
@@ -1238,7 +1245,7 @@ function onEvent(e: GameEvent) {
     case "ContractSet": {
       // 合約確定：在牌桌中央蓋下去，再一次重擊定格到上方的合約欄（保留加倍狀態）
       const d = Math.max(0, e.extra);
-      tension = 0;
+      emo.contract(e.value, d);
       const sub = `莊家 ${nameOf(e.seat)} · 目標 ${tricksNeeded(e.value)} 墩`;
       setTimeout(() => {
         const strip = $("infoStrip");
@@ -1252,10 +1259,10 @@ function onEvent(e: GameEvent) {
     case "GameOver": {
       const made = e.value >= e.extra;
       const good = me === made;    // 我是莊家且打成，或對方是莊家且倒約
+      // 失敗時不放羞辱或懲罰特效：字小一點、顏色柔和、不震
       fx.popup(made ? "打成！" : `倒 ${e.extra - e.value} 墩`, centerAnchor(),
-        { size: 70, color: good ? GOLD : BAD, flags: made ? ["pop", "wave"] : ["pop", "shake"], hold: 1500, delay: 650 });
-      setTimeout(() => fx.shake($("felt"), good ? 6 : 9, 320), fx.ms(700));
-      fx.buzz(good ? [30, 50, 30, 50, 120] : [220]);
+        { size: good ? 70 : 40, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1500, delay: 650 });
+      if (good) { setTimeout(() => fx.shake($("felt"), 6, 320), fx.ms(700)); fx.buzz([30, 50, 30, 50, 120]); }
       break;
     }
     case "HandScored":
@@ -1271,8 +1278,7 @@ function onEvent(e: GameEvent) {
 
     case "Redeal":
       fx.popup("雙方都 Pass · 重發", centerAnchor(), { size: 26, color: MUTED, hold: 900 });
-      tension = 0;
-      sfx.release();
+      emo.redeal();
       sfx.slide();
       break;
   }
@@ -1365,9 +1371,10 @@ async function collectTrick(e: GameEvent, level: Level, label: string) {
   if (!drawing) {
     const good = winnerMe;
     if (level === 3 && label) {
-      const text = label === "合約達成" ? (winnerMe ? "合約達成！" : `${oppName()}合約達成`) : (winnerMe ? "合約擊破！" : "合約被擊破");
-      fx.popup(text, centerAnchor(), { size: 40, color: good ? GOLD : BAD, flags: good ? ["pop", "wave"] : ["pop"], hold: 1100, delay: 240 });
-      setTimeout(() => contractFeedback(good, centerAnchor(), felt), fx.ms(220));
+      const text = label === "合約達成" ? (winnerMe ? "合約達成！" : `${oppName()}的合約達成`) : (winnerMe ? "擊破合約！" : "這次差一點");
+      const r0 = riskOf(st?.highestBid ?? -1, st?.doubled ?? 0);
+      fx.popup(text, centerAnchor(), { size: good ? 40 + Math.round(r0 * 12) : 28, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1100, delay: good ? 380 : 240 });
+      setTimeout(() => void emo.release(good, r0, centerAnchor(), felt), fx.ms(200));
     } else if (level === 2 && label && label !== "王吃") {
       fx.popup(winnerMe ? `${label}！` : label, centerAnchor(), { size: 30, color: winnerMe ? GOLD : MUTED, flags: ["pop"], delay: 200 });
     }
@@ -1465,6 +1472,8 @@ function esc(s: string) {
 // ---------------- 啟動 ----------------
 
 fx.initFx($("fx"), $("app"));
+emo.attach($("app"));
+emo.onChange(p => $("bidPanel").style.setProperty("--tension", p.toFixed(2)));
 {
   const params = new URLSearchParams(location.search);
   const room = normalizeCode(params.get("room") ?? "");

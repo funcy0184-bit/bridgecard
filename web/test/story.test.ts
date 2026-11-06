@@ -8,7 +8,7 @@ import { Call, Strain, Suit, bidIndex, cardId } from "../src/game/cards";
 import { GameEvent, Phase, TableState } from "../src/game/game";
 import { score } from "../src/game/scoring";
 import {
-  ACTS, AHE, CONTRACT, LINES, ME, STEPS, StepId, act, bidMeaning, outcomeOf, replay, resultLine, settle, start, stepIndex,
+  ACTS, AHE, CONTRACT, LINES, ME, STEPS, StepId, TALK, act, bidMeaning, outcomeOf, replay, resultLine, settle, start, stepIndex,
 } from "../src/story/script";
 import { LocalTable, SOLO_KEY } from "../src/client/solo";
 import type { ServerMsg } from "../src/server/protocol";
@@ -287,5 +287,24 @@ describe("單機：跟電腦（阿禾）打", () => {
     expect(got[1]).toMatchObject({ t: "lobby", started: true, seats: [{ name: "小明" }, { name: "阿禾" }] });
     expect(got.some(m => m.t === "state")).toBe(true);
     t.close();
+  });
+});
+
+describe("一句一句講", () => {
+  it("每一幕的前情最後一句就是阿禾的問題；出牌後第一句是阿禾的反應", () => {
+    for (const st of STEPS) {
+      const t = TALK[st.id];
+      expect(t.intro.at(-1)!.text).toBe(LINES[st.id].ask);
+      expect(t.intro.length).toBeGreaterThanOrEqual(3);
+      for (const o of st.outcomes) {
+        const run = start(st);
+        expect(t.outro(o, run)[0].text).toBe(LINES[st.id].reply(o));
+      }
+    }
+  });
+  it("第四幕的分數台詞取自計分程式", () => {
+    const run = start(step("last"));
+    act(run, C(CL, 14)); settle(run);
+    expect(TALK.last.outro("made", run).map(l => l.text).join("")).toContain("就是 20 分");
   });
 });

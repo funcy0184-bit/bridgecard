@@ -41,6 +41,7 @@ function applyVolumes() {
   sfxBus.gain.setTargetAtTime(settings.muted ? 0 : settings.sfx * 0.9, t, 0.02);
   musicBus.gain.setTargetAtTime(settings.muted ? 0 : settings.music * 0.3, t, 0.15);   // 八音盒只是背景：非常輕
   if (settings.music > 0 && !settings.muted) music.start(); else music.stop();
+  drone.refresh();
 }
 onSettings(applyVolumes);
 
@@ -56,6 +57,7 @@ export function unlockAudio() {
   const s = c.createBufferSource();
   s.buffer = b; s.connect(c.destination); s.start(0);
   applyVolumes();
+  drone.refresh();
 }
 if (typeof window !== "undefined") {
   for (const ev of ["pointerdown", "keydown", "touchend"]) window.addEventListener(ev, unlockAudio, { once: false, passive: true });
@@ -262,6 +264,10 @@ export const sfx = {
     [1047, 1319, 1568, 2093].forEach((f, i) => bell(0.12 + i * 0.07, f, 0.09, 0.8));
     hiss({ at: 0.1, dur: 0.7, vol: 0.05, type: "highpass", freq: 7000 });
   },
+  // 對方達成合約：友善、輕輕的一聲（不羞辱）
+  soft() { if (ok("soft", 200)) { bell(0, 659, 0.05, 0.5); bell(0.12, 523, 0.04, 0.6); } },
+  // 釋放前吸一口氣：短短的上揚氣音
+  inhale() { if (ok("inhale", 200)) hiss({ dur: 0.16, vol: 0.07, freq: 900, sweepTo: 4200, q: 0.5 }); },
   defeat() {
     if (!ok("defeat", 400)) return;
     [349, 294, 233].forEach((f, i) => tone({ at: i * 0.16, freq: f, dur: 0.38, vol: 0.08, type: "triangle" }));
@@ -274,6 +280,32 @@ export const sfx = {
   type() { if (ok("type", 45)) hiss({ dur: 0.015, vol: 0.035, freq: 3500, q: 2 }); },
   impactAt(at = 0, vol = 0.6) { if (ok("impactAt", 60)) { thump(at, 92, 0.45 * vol, 0.2); hiss({ at, dur: 0.12, vol: 0.14 * vol, type: "lowpass", freq: 700 }); } },
 };
+
+// ---------------- 張力的低頻嗡聲：壓力高才浮出來，非常輕 ----------------
+
+export const drone = (() => {
+  let g: GainNode | null = null;
+  let lvl = 0;
+  function nodes() {
+    if (!ctx || g) return;
+    g = ctx.createGain();
+    g.gain.value = 0;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 170;
+    for (const f of [55, 82.4, 55.4]) { const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f; o.connect(lp); o.start(); }
+    lp.connect(g); g.connect(sfxBus);
+  }
+  return {
+    level(p: number) {
+      lvl = p;
+      if (!ctx || !unlocked) return;
+      nodes();
+      const v = p < 0.35 ? 0 : ((p - 0.35) / 0.65) * 0.07;
+      g!.gain.setTargetAtTime(settings.muted || settings.intensity === 0 ? 0 : v, ctx.currentTime, 0.5);
+    },
+    refresh() { this.level(lvl); },
+  };
+})();
 
 // ---------------- 背景音樂：慢慢的八音盒（當場生成，不用音樂檔） ----------------
 

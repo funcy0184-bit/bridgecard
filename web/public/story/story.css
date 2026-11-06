@@ -245,3 +245,21 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .notes { color: var(--on-wood); border-color: rgba(201,154,75,.55); }
 @media (prefers-reduced-motion: reduce) { .seller img { animation: none; } }
 [data-motion="0"] .seller img, [data-motion="1"] .seller img { animation: none; }
+
+/* ---------------- 一句一句講 ---------------- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.setting:empty { display: none; }
+.narrator { cursor: pointer; }
+.narrator.narr h2 { font-style: italic; font-weight: 300; color: #4A3B2A; font-size: clamp(17px, 4.6vw, 22px); }
+.narrator.narr .seller img { filter: grayscale(.6) opacity(.55); }
+.narrator.narr #who { color: var(--ink-soft); letter-spacing: .3em; }
+#more.tapnext { font-size: 12.5px; color: var(--ink-soft); animation: tapnext calc(1.6s / var(--spd)) ease-in-out infinite; }
+@keyframes tapnext { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+.narrator[data-mode="intro"] #spoken, .narrator[data-mode="outro"] #spoken { min-height: 3em; }
+.actcard { position: absolute; left: 50%; top: 42%; translate: -50% -50%; z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 12px 28px; clip-path: var(--torn-b); background-color: var(--paper); background-image: var(--noise); color: var(--ink);
+  box-shadow: inset 0 0 0 5px transparent, inset 0 0 0 6px rgba(185,138,62,.7); white-space: nowrap; }
+.actcard small { font-size: 12px; letter-spacing: .5em; color: var(--wine); }
+.actcard b { font: 500 22px var(--display); letter-spacing: .15em; }
+@media (prefers-reduced-motion: reduce) { #more.tapnext { animation: none; } }
+.narrator.narr .seller small { visibility: hidden; }

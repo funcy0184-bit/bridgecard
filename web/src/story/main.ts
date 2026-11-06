@@ -5,12 +5,12 @@ import { SUIT_SYMBOL, bidText, cardText, isRedBid, suitOf, tricksNeeded, Suit } 
 import { GameEvent, TableState } from "../game/game";
 import * as fx from "../client/fx";
 import { sfx } from "../client/sound";
-import { contractFeedback, trickFeedback } from "../client/feedback";
+import { bidChip, bidTier, contractFeedback, contractSlam, trickFeedback } from "../client/feedback";
 import { burstAt, shower } from "../client/particles";
 import { renderSettings } from "../client/settings-ui";
 import {
   ACTS, AHE, CONTRACT, LINES, ME, Outcome, STEPS, StepId, StepRun,
-  act, bidMeaning, firstStepOfAct, outcomeOf, replay, settle, start,
+  act, bidMeaning, firstStepOfAct, outcomeOf, replay, settle, start, TALK, Line,
 } from "./script";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -56,10 +56,19 @@ let triedIllegal = false;   // 試過不能出的牌之後，才把不能出的�
 let justFinished = false;
 const fresh = new Set<number>();
 
+// 對話：intro（旁白＋阿禾一句一句帶進來）→ prompt（輪到你）→ outro（阿禾一句一句說明）→ done
+type Mode = "intro" | "prompt" | "outro" | "done";
+let mode: Mode = "prompt";
+let lines: Line[] = [];
+let li = 0;
+let autoTimer = 0;
+let talkLog: Line[] = [];
+let shownAct = -1;
+
 const view = (): TableState => run.game.viewFor(ME);
 const step = () => run.step;
 
-function goto(page: number, scroll = true) {
+function goto(page: number, scroll = true, skipIntro = false) {
   page = Math.max(0, Math.min(STEPS.length - 1, page));
   progress.page = page;
   save();
@@ -68,6 +77,20 @@ function goto(page: number, scroll = true) {
   run = (ans && replay(st, ans)) || start(st);
   busy = false; selBid = -1; retryLine = ""; triedIllegal = false; justFinished = false;
   fresh.clear();
+  talkLog = [];
+  clearTimeout(autoTimer);
+  const o = outcomeOf(run);
+  if (run.done && o) {
+    // 已經打過：直接看結果（重新整理也回到這裡）
+    lines = TALK[st.id].outro(o, run); li = lines.length - 1; mode = "done";
+    talkLog = lines.slice();
+  } else if (skipIntro) {
+    lines = [TALK[st.id].intro.at(-1)!]; li = 0; mode = "prompt";
+  } else {
+    lines = TALK[st.id].intro; li = 0; mode = lines.length > 1 ? "intro" : "prompt";
+  }
+  if (st.act !== shownAct && !run.done && !skipIntro) actCard(st.act);
+  shownAct = st.act;
   render();
   fx.slideIn($("narrator"), "right");
   if (scroll) {
@@ -79,7 +102,7 @@ function goto(page: number, scroll = true) {
 function retryStep() {
   delete progress.answers[step().id];
   save();
-  goto(progress.page, false);
+  goto(progress.page, false, true);
   $("stable").scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
@@ -106,7 +129,7 @@ function render() {
   $("place").textContent = L.place;
   $("actNo").textContent = A.no + (st.id === "follow" ? " · 之一" : st.id === "ruff" ? " · 之二" : "");
   $("title").textContent = A.title;
-  $("setting").textContent = L.setting;
+  $("setting").textContent = "";        // 場景說明改由旁白一句一句講
   $("progLabel").innerHTML = `第 <b>${st.act + 1}</b> 幕 / ${ACTS.length}`;
   $("progFill").style.width = `${((progress.page + (run.done ? 1 : 0.4)) / STEPS.length) * 100}%`;
   $("tableLabel").textContent = L.table;
@@ -282,13 +305,15 @@ function layoutHand(box: HTMLElement, n: number) {
 // ---------------- 阿禾說：一個字一個字講（點一下就講完） ----------------
 
 let typing = 0, typedTarget = "";
-function speak(el: HTMLElement, text: string) {
-  if (typedTarget === text && el.dataset.full === text) return;   // 同一句話不重播
+let typedDone: (() => void) | null = null;
+function speak(el: HTMLElement, text: string, done?: () => void) {
+  if (typedTarget === text && el.dataset.full === text) { if (!typing) done?.(); else typedDone = done ?? null; return; }   // 同一句話不重播
   typedTarget = text;
   el.dataset.full = text;
   clearInterval(typing);
   typing = 0;
-  if (!fx.motionOn()) { el.textContent = text; return; }
+  typedDone = done ?? null;
+  if (!fx.motionOn()) { el.textContent = text; typedDone?.(); return; }
   const chars = [...text];
   let i = 0;
   el.textContent = "";
@@ -297,7 +322,7 @@ function speak(el: HTMLElement, text: string) {
     i = Math.min(chars.length, i + 1);
     el.textContent = chars.slice(0, i).join("");
     if (i % 3 === 1) sfx.type();
-    if (i >= chars.length) { clearInterval(typing); typing = 0; }
+    if (i >= chars.length) { clearInterval(typing); typing = 0; typedDone?.(); }
   }, fx.settings.fast ? 14 : 26);
 }
 function finishTyping() {
@@ -305,15 +330,92 @@ function finishTyping() {
   clearInterval(typing);
   typing = 0;
   $("spoken").textContent = typedTarget;
+  typedDone?.();
+}
+
+// 幕間：牌桌上浮出「第二幕・…」的紙條
+function actCard(i: number) {
+  const a = ACTS[i];
+  const c = document.createElement("div");
+  c.className = "actcard";
+  const small = document.createElement("small"); small.textContent = a.no;
+  const b = document.createElement("b"); b.textContent = a.title;
+  c.append(small, b);
+  $("stable").appendChild(c);
+  sfx.slide();
+  const dur = fx.motionOn() ? fx.ms(1500) : 900;
+  c.animate([{ opacity: 0, translate: "0 10px" }, { opacity: 1, translate: "0 0", offset: 0.15 }, { opacity: 1, offset: 0.75 }, { opacity: 0, translate: "0 -6px" }],
+    { duration: dur, easing: "ease-out", fill: "forwards" }).finished.then(() => c.remove()).catch(() => c.remove());
+}
+
+// 一句講完：intro／outro 會自己往下一句（點一下對話可以立刻往下）
+function readTime(t: string) { return (fx.settings.fast ? 700 : 1300) + [...t].length * (fx.settings.fast ? 22 : 42); }
+function scheduleAuto() {
+  clearTimeout(autoTimer);
+  if (mode !== "intro" && mode !== "outro") return;
+  autoTimer = window.setTimeout(advance, readTime(lines[li]?.text ?? ""));
+}
+function advance() {
+  clearTimeout(autoTimer);
+  if (typing) { finishTyping(); return; }
+  if (mode === "intro") {
+    li++;
+    if (li >= lines.length - 1) { li = lines.length - 1; mode = "prompt"; }
+  } else if (mode === "outro") {
+    li++;
+    if (li >= lines.length) { li = lines.length - 1; mode = "done"; }
+  } else return;
+  sfx.type();
+  renderNarrator();
+  if (mode === "prompt" || mode === "done") revealNarrator();
+}
+// 點牌桌時阿禾還在講：直接跳到輪到你
+function skipToPrompt() {
+  if (mode !== "intro") return;
+  clearTimeout(autoTimer);
+  finishTyping();
+  li = lines.length - 1;
+  mode = "prompt";
+  renderNarrator();
+}
+function skipTalk() {
+  clearTimeout(autoTimer);
+  finishTyping();
+  if (mode === "intro") skipToPrompt();
+  else if (mode === "outro") { li = lines.length - 1; mode = "done"; renderNarrator(); }
+}
+function startOutro() {
+  const o = outcomeOf(run);
+  if (!o) { render(); return; }
+  lines = TALK[step().id].outro(o, run); li = 0; mode = "outro";
+  render();
+}
+function logLine(ln: Line) {
+  const last = talkLog.at(-1);
+  if (!last || last.text !== ln.text) talkLog.push(ln);
+  $("talkLog").textContent = talkLog.map(l => (l.who === "ahe" ? "阿禾：" : "") + l.text).join("\n");
+}
+function sayLine(ln: Line) {
+  $("who").textContent = ln.who === "ahe" ? "阿禾" : "旁白";
+  $("narrator").classList.toggle("narr", ln.who === "narr");
+  logLine(ln);
+  speak($("spoken"), ln.text, scheduleAuto);
 }
 
 function renderNarrator() {
   const st = step(), L = LINES[st.id];
   const o = outcomeOf(run);
   const spoken = $("spoken"), more = $("more"), fb = $("feedback");
-  if (run.done && o) {
-    speak(spoken, L.reply(o));
-    more.textContent = L.more?.(o) ?? "";
+  $("narrator").dataset.mode = mode;
+  clearTimeout(autoTimer);
+  if (mode === "intro" || mode === "outro") {
+    sayLine(lines[li]);
+    more.textContent = mode === "intro" ? "點一下對話繼續 ▸（點牌桌可以直接開始）" : "點一下對話繼續 ▸";
+    more.className = "tapnext";
+    fb.className = ""; fb.textContent = "";
+  } else if (mode === "done" && run.done && o) {
+    sayLine(lines[li] ?? { who: "ahe", text: L.reply(o) });
+    more.textContent = "";
     more.className = "more";
     fb.className = "ok";
     fb.replaceChildren(document.createTextNode(L.explain(run, o)));
@@ -324,13 +426,13 @@ function renderNarrator() {
       fb.appendChild(t);
     }
   } else if (retryLine) {
-    speak(spoken, retryLine);
+    sayLine({ who: "ahe", text: retryLine });
     more.textContent = "改出另一張試試。";
     more.className = "hint";
     fb.className = "retry";
     fb.textContent = `對方先出 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，你手上還有 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，這墩就要跟 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}。`;
   } else {
-    speak(spoken, L.ask);
+    sayLine({ who: "ahe", text: L.ask });
     more.textContent = L.hint;
     more.className = "hint";
     if (st.kind === "bid" && selBid >= 0 && selBid !== CONTRACT && L.nudge) {
@@ -338,6 +440,7 @@ function renderNarrator() {
       fb.textContent = `阿禾：${L.nudge}`;
     } else { fb.className = ""; fb.textContent = ""; }
   }
+  void spoken;
   renderControls(o);
 }
 
@@ -354,7 +457,9 @@ function btn(text: string, cls: string, onClick: () => void, arrow = false) {
 function renderControls(o: Outcome | null) {
   const box = $("controls"), st = step(), L = LINES[st.id];
   box.replaceChildren();
-  if (run.done && o) {
+  if (mode === "intro" || mode === "outro") {
+    box.appendChild(btn(mode === "intro" ? "跳過，直接開始" : "跳過對話", "s-minor", skipTalk));
+  } else if (run.done && o) {
     if (st.id === "last") {
       const a = document.createElement("a");
       a.className = "s-emph";
@@ -396,6 +501,7 @@ function revealNarrator() {
 const anchor = (who: number) => $(who === ME ? "aMe" : "aOpp");
 
 async function onCardTap(id: number, el: HTMLElement) {
+  if (mode === "intro") { skipToPrompt(); fx.bounce(el); return; }
   if (busy || step().kind !== "play" || run.trick || run.done) return;
   const r = act(run, id);
   if (!r.ok) {
@@ -441,7 +547,7 @@ async function onCardTap(id: number, el: HTMLElement) {
   await animateSettle(evs);
   record();
   busy = false;
-  render();
+  startOutro();
   if (justFinished) { const t = document.getElementById("tally"); if (t) fx.punch(t, 0.3, 420); }
   revealNarrator();
 }
@@ -510,6 +616,7 @@ async function animateSettle(evs: GameEvent[]) {
 // ---------------- 叫牌 ----------------
 
 function selectBid(i: number) {
+  if (mode === "intro") { skipToPrompt(); return; }
   if (busy || run.done || run.actions.length) return;
   if (selBid === i && i === CONTRACT) { confirmBid(); return; }   // 同一格點兩次 = 送出（跟正式牌桌一樣）
   selBid = i;
@@ -526,27 +633,27 @@ async function confirmBid() {
   const r = act(run, CONTRACT);
   if (!r.ok) return;
   busy = true;
-  fx.popup(bidText(CONTRACT), $("aMe"), { size: 44, color: RED, flags: ["pop"] });
-  sfx.stamp();
   fx.buzz(15);
   renderTable();
   renderNarrator();
-  await fx.wait(fx.ms(950));
+  // 叫牌籌碼：從你這邊上浮，落到叫牌紀錄上「你 2♥」那一格（跟正式牌桌同一套演出）
+  const mine = document.querySelector("#sBoard .splate .auct span");
+  if (mine) await bidChip(bidText(CONTRACT), isRedBid(CONTRACT), bidTier(2), $("aMe").getBoundingClientRect(), mine, $("stable"), 0.15);
+  else sfx.stamp();
+  await fx.wait(fx.ms(650));
   settle(run);
   fx.popup("Pass", $("aOpp"), { size: 30, color: MUTED });
   sfx.pass();
   renderTable();
-  await fx.wait(fx.ms(500));
-  fx.popup(`合約 ${bidText(CONTRACT)}`, $("aCenter"), { size: 40, color: GOLD, flags: ["pop", "wave"], hold: 1000 });
-  sfx.stamp();
-  const plateEl = document.querySelector(".splate .big");
-  if (plateEl) { fx.stampIn(plateEl); burstAt(plateEl, { count: 10, kinds: ["dust", "star"], speed: 160 }); }
+  await fx.wait(fx.ms(420));
+  // 合約定格：在牌桌中央蓋章，再落進合約欄
+  await contractSlam(bidText(CONTRACT), isRedBid(CONTRACT), "莊家 你 · 目標 8 墩", 0, $("stable"), document.querySelector("#sBoard .splate .big"));
   const g = document.getElementById("goal");
   if (g) fx.punch(g, 0.12, 320);
-  await fx.wait(fx.ms(700));
+  await fx.wait(fx.ms(300));
   record();
   busy = false;
-  render();
+  startOutro();
   revealNarrator();
 }
 
@@ -567,7 +674,10 @@ $("sBoard").addEventListener("click", ev => {
   if (t.closest("#sCall")) confirmBid();
 });
 $("restart").addEventListener("click", restartStory);
-$("narrator").addEventListener("click", finishTyping);
+$("narrator").addEventListener("click", ev => {
+  if ((ev.target as HTMLElement).closest("button, a")) return;
+  if (mode === "intro" || mode === "outro") advance(); else finishTyping();
+});
 const setDlg = $<HTMLDialogElement>("setDlg");
 $("setBtn").addEventListener("click", () => { renderSettings($("setBox")); setDlg.showModal(); sfx.slide(); });
 $("setClose").addEventListener("click", () => setDlg.close());

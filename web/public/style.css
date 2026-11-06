@@ -521,3 +521,12 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .why { position: fixed; z-index: 55; translate: -50% -100%; padding: 4px 10px; font-size: 12.5px; white-space: nowrap; color: var(--ink); pointer-events: none;
   background-color: var(--paper); background-image: var(--noise); clip-path: var(--torn-b); box-shadow: inset 0 0 0 3px transparent, inset 0 0 0 4px rgba(184,35,58,.6); }
 .why b { color: var(--red); }
+
+/* ---------------- 情緒張力：背景陰影＋牌桌局部聚光（--pressure 0..1，只影響畫面） ---------------- */
+.vignette { position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: calc(var(--pressure, 0) * .8);
+  background: radial-gradient(ellipse 88% 78% at 50% 52%, transparent 46%, rgba(12,6,2,.42) 78%, rgba(6,3,1,.7) 100%);
+  transition: opacity calc(.8s * var(--spd)) ease, transform calc(.15s * var(--spd)) ease; }
+.vignette::after { content: ""; position: absolute; inset: 0; mix-blend-mode: screen; opacity: .9;
+  background: radial-gradient(ellipse 42% 26% at 50% 47%, rgba(255,214,150,.14), transparent 70%); }
+.vignette.converge { opacity: 1; transform: scale(.92); transition-duration: .12s; }
+[data-motion="0"] .vignette.converge { transform: none; }
