@@ -28,7 +28,7 @@ export const ME = 0, AI = 1;
 
 export interface SoloDelays { trick: number; play: number; lead: number; call: number; }
 // 兩張牌都上桌後停 1.3 秒（跟雲端房間一樣）；電腦想一下再出，玩家才看得清楚
-export const DEFAULT_DELAYS: SoloDelays = { trick: 1300, play: 750, lead: 1000, call: 1000 };
+export const DEFAULT_DELAYS: SoloDelays = { trick: 1300, play: 750, lead: 1000, call: 1300 };   // 叫牌多想一下：叫牌面板先出來，籌碼才有地方落
 
 interface Saved { v: 1; game: GameSnapshot; }
 

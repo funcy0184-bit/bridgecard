@@ -39,7 +39,7 @@ function applyVolumes() {
   if (!ctx) return;
   const t = ctx.currentTime;
   sfxBus.gain.setTargetAtTime(settings.muted ? 0 : settings.sfx * 0.9, t, 0.02);
-  musicBus.gain.setTargetAtTime(settings.muted ? 0 : settings.music * 0.55, t, 0.15);
+  musicBus.gain.setTargetAtTime(settings.muted ? 0 : settings.music * 0.3, t, 0.15);   // 八音盒只是背景：非常輕
   if (settings.music > 0 && !settings.muted) music.start(); else music.stop();
 }
 onSettings(applyVolumes);
@@ -122,8 +122,11 @@ function tone(opt: { at?: number; freq: number; dur: number; vol: number; type?:
 }
 
 const thump = (at: number, freq: number, vol: number, dur = 0.12) => tone({ at, freq, dur, vol, drop: 0.45 });
-const bell = (at: number, freq: number, vol: number, dur = 0.45) => tone({ at, freq, dur, vol, partials: [2.01, 3.02], attack: 0.004 });
-const pitch = () => Math.pow(2, Math.min(streak, 5) / 24);   // 連贏：每次升 1/4 音，最多 5 次
+// 乾淨的小鈴／銅片聲：泛音少、收得快，不要電玩味
+const bell = (at: number, freq: number, vol: number, dur = 0.4) => tone({ at, freq, dur, vol, partials: [2.76], attack: 0.003 });
+// 木頭「叩」：分數 Tick、計數
+const tok = (at: number, freq: number, vol: number) => { hiss({ at, dur: 0.016, vol: vol * 1.6, freq: freq * 3, q: 3 }); tone({ at, freq, dur: 0.035, vol, type: "sine", drop: 0.7 }); };
+const pitch = () => Math.pow(2, Math.min(Math.max(0, streak - 1), 5) / 24);   // 連贏：每多一墩升 1/4 音，最多 5 次
 
 // ---------------- 事件音效 ----------------
 
@@ -140,25 +143,26 @@ export const sfx = {
     tone({ at: 0.07, freq: 170, dur: 0.1, vol: 0.07, type: "triangle", drop: 0.8 });
   },
   lift() { if (ok("lift", 40)) hiss({ dur: 0.06, vol: 0.09, freq: 2400, sweepTo: 3600 }); },
-  // 出牌：卡牌拍落木桌
-  land(power = 1) {
+  // 出牌：卡牌拍落木桌。at = 幾秒後落桌（跟飛行動畫同一個時鐘排程，聲音和落桌同一瞬間）
+  land(power = 1, at = 0) {
     if (!ok("land", 30)) return;
-    hiss({ dur: 0.07, vol: 0.32 * power, type: "lowpass", freq: 1400, q: 0.5 });
-    thump(0, 150, 0.32 * power, 0.11);
-    tone({ at: 0.002, freq: 900, dur: 0.02, vol: 0.05 * power, type: "triangle" });
+    hiss({ at, dur: 0.06, vol: 0.34 * power, type: "lowpass", freq: 1500, q: 0.5 });
+    thump(at, 150, 0.32 * power, 0.1);
+    hiss({ at, dur: 0.012, vol: 0.12 * power, freq: 3200, q: 2 });
   },
-  // 贏墩：紙牌收攏＋金屬 Click（連贏會一點一點變高）
-  win(mine: boolean) {
+  // 贏墩：紙牌收攏＋金屬 Click；連贏時（streak）音高一點一點升、聲音一點一點亮
+  win(mine: boolean, run = 0) {
     if (!ok("win", 60)) return;
-    hiss({ dur: 0.16, vol: mine ? 0.18 : 0.12, freq: 1600, sweepTo: 4200, q: 0.7 });
+    hiss({ dur: 0.15, vol: mine ? 0.17 : 0.11, freq: 1600, sweepTo: 4000, q: 0.7 });
     if (mine) {
-      streak++;
-      const p = pitch();
-      tone({ at: 0.08, freq: 2637 * p, dur: 0.07, vol: 0.12, partials: [1.5] });
-      tone({ at: 0.11, freq: 3951 * p, dur: 0.09, vol: 0.07 });
+      streak = run || streak + 1;
+      const p = pitch(), lift = Math.min(4, Math.max(0, streak - 1)) * 0.012;
+      tone({ at: 0.08, freq: 2637 * p, dur: 0.06, vol: 0.1 + lift });
+      tone({ at: 0.105, freq: 3951 * p, dur: 0.08, vol: 0.06 + lift });
+      if (streak >= 3) bell(0.13, 1568 * p, 0.04 + lift, 0.3);
     } else {
       streak = 0;
-      tone({ at: 0.08, freq: 880, dur: 0.07, vol: 0.06, type: "triangle" });
+      tok(0.08, 520, 0.07);
     }
   },
   resetStreak() { streak = 0; },
@@ -168,11 +172,11 @@ export const sfx = {
     thump(0, 95, 0.5 * vol, 0.22);
     hiss({ dur: 0.18, vol: 0.18 * vol, type: "lowpass", freq: 700 });
   },
-  ruff() {
+  ruff(at = 0) {
     if (!ok("ruff", 80)) return;
-    thump(0, 80, 0.5, 0.25);
-    bell(0.03, 1318, 0.12, 0.5);
-    bell(0.05, 1976, 0.08, 0.55);
+    thump(at, 80, 0.48, 0.24);
+    bell(at + 0.03, 1318, 0.1, 0.45);
+    bell(at + 0.05, 1976, 0.06, 0.5);
   },
   // 搶到明牌：亮亮的提示音；被搶走：低一點
   faceUp(mine: boolean) {
@@ -186,7 +190,41 @@ export const sfx = {
     if (!ok("stamp", 60)) return;
     thump(0, 120, 0.35, 0.1);
     hiss({ dur: 0.03, vol: 0.22, freq: 2600, q: 1.4 });
-    tone({ at: 0.01, freq: 520, dur: 0.05, vol: 0.06, type: "triangle" });
+    tok(0.01, 520, 0.05);
+  },
+  // 叫牌籌碼落桌：等級越高越重（tier 0 低、1 中、2 高、3 最高）；競叫張力（0..1）讓鈴聲微升、加一層預備聲
+  bid(tier: number, tension = 0, at = 0) {
+    if (!ok("bid", 50)) return;
+    const up = Math.pow(2, Math.min(1, tension) * 3 / 12);
+    if (tension >= 0.45) hiss({ at: Math.max(0, at - 0.12), dur: 0.12, vol: 0.05 + tension * 0.05, freq: 1200, sweepTo: 3800, q: 0.6 });
+    thump(at, [132, 116, 100, 86][tier], [0.28, 0.34, 0.42, 0.5][tier], 0.11 + tier * 0.03);
+    hiss({ at, dur: 0.025, vol: 0.2, freq: 2600, q: 1.4 });
+    if (tier >= 1) bell(at + 0.015, 1047 * up, 0.035 + tier * 0.015, 0.3);
+    if (tier >= 2) { thump(at + 0.01, 64, 0.22 + (tier - 2) * 0.12, 0.25); bell(at + 0.04, 1568 * up, 0.04, 0.4); }
+    if (tier >= 3) { [523, 784, 1047].forEach((f, i) => bell(at + 0.06 + i * 0.03, f * up, 0.05, 0.6)); hiss({ at: at + 0.05, dur: 0.4, vol: 0.04, type: "highpass", freq: 6500 }); }
+  },
+  // 加倍：紅色衝擊——低頻雙擊＋一聲裂響
+  doubleHit(at = 0) {
+    if (!ok("double", 120)) return;
+    for (let i = 0; i < 2; i++) { thump(at + i * 0.1, 70, 0.52, 0.18); hiss({ at: at + i * 0.1, dur: 0.05, vol: 0.2, type: "lowpass", freq: 900 }); }
+    hiss({ at: at + 0.1, dur: 0.035, vol: 0.18, freq: 1100, q: 2.5 });
+  },
+  // 再加倍：比加倍更重的雙重衝擊＋亮一點的金屬鈴
+  redoubleHit(at = 0) {
+    if (!ok("redouble", 150)) return;
+    for (let i = 0; i < 3; i++) { thump(at + i * 0.09, 62, 0.56, 0.2); hiss({ at: at + i * 0.09, dur: 0.05, vol: 0.22, type: "lowpass", freq: 800 }); }
+    bell(at + 0.2, 1175, 0.09, 0.55); bell(at + 0.23, 1760, 0.06, 0.6);
+    hiss({ at: at + 0.2, dur: 0.35, vol: 0.05, type: "highpass", freq: 6000 });
+  },
+  // 張力釋放：Pass 之後輕輕洩掉
+  release() { if (ok("release", 150)) hiss({ dur: 0.28, vol: 0.06, freq: 2800, sweepTo: 900, q: 0.6 }); },
+  // 合約定格：一次俐落的重擊
+  contractSlam(doubled = 0) {
+    if (!ok("slam", 200)) return;
+    thump(0, 96, 0.5, 0.2);
+    hiss({ dur: 0.03, vol: 0.22, freq: 2400, q: 1.6 });
+    bell(0.02, 784, 0.07, 0.45); bell(0.03, 1175, 0.05, 0.5);
+    if (doubled) thump(0.09, 70, 0.4, 0.18);
   },
   pass() { if (ok("pass", 60)) tone({ freq: 330, dur: 0.08, vol: 0.09, type: "triangle", drop: 0.9 }); },
   // 加倍：厚重的雙擊；再加倍：三下
@@ -205,15 +243,18 @@ export const sfx = {
       [392, 330, 262].forEach((f, i) => tone({ at: i * 0.11, freq: f, dur: 0.28, vol: 0.09, type: "triangle" }));
     }
   },
-  // 分數累積：隨進度升高的 Tick
+  // 分數累積：木頭「叩」，隨進度升高
   tick(progress = 0) {
     if (!ok("tick", 22)) return;
-    tone({ freq: 1100 * Math.pow(2, Math.min(1, progress) * 0.75), dur: 0.025, vol: 0.06, type: "square" });
+    tok(0, 760 * Math.pow(2, Math.min(1, progress) * 0.7), 0.06);
   },
+  // 結算的節拍：前幾項逐項亮出來的「叩」
+  beat(i = 0) { if (ok("beat", 60)) { tok(0, 600 + i * 60, 0.08); hiss({ dur: 0.04, vol: 0.06, freq: 2200 }); } },
   scoreHit() {
     if (!ok("scoreHit", 120)) return;
-    thump(0, 110, 0.42, 0.16);
-    bell(0.01, 1047, 0.12, 0.4); bell(0.02, 1568, 0.08, 0.45);
+    thump(0, 100, 0.5, 0.2);
+    hiss({ dur: 0.04, vol: 0.2, type: "lowpass", freq: 1200 });
+    bell(0.01, 1047, 0.1, 0.45); bell(0.02, 1568, 0.07, 0.5);
   },
   victory() {
     if (!ok("victory", 400)) return;
@@ -231,6 +272,7 @@ export const sfx = {
   slide() { if (ok("slide", 120)) hiss({ dur: 0.2, vol: 0.08, freq: 1800, sweepTo: 3200, q: 0.6 }); },
   join() { if (!ok("join", 150)) return; thump(0, 120, 0.3, 0.1); bell(0.05, 1175, 0.1, 0.35); bell(0.12, 1568, 0.09, 0.4); },
   type() { if (ok("type", 45)) hiss({ dur: 0.015, vol: 0.035, freq: 3500, q: 2 }); },
+  impactAt(at = 0, vol = 0.6) { if (ok("impactAt", 60)) { thump(at, 92, 0.45 * vol, 0.2); hiss({ at, dur: 0.12, vol: 0.14 * vol, type: "lowpass", freq: 700 }); } },
 };
 
 // ---------------- 背景音樂：慢慢的八音盒（當場生成，不用音樂檔） ----------------

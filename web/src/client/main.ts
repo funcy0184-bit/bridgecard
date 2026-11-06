@@ -14,7 +14,10 @@ import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
 import { Link, LocalTable, hasUnfinishedSolo } from "./solo";
 import { sfx } from "./sound";
-import { Level, contractFeedback, flipNumber, hitstop, rollNumber, stamp, trickFeedback, victory } from "./feedback";
+import {
+  Level, bidChip, bidTier, contractFeedback, contractSlam, doubleFx, flipNumber, hitstop, redoubleFx, rollNumber, stamp, streakGlow,
+  trickFeedback, victory,
+} from "./feedback";
 import { burstAt } from "./particles";
 import { renderSettings } from "./settings-ui";
 
@@ -42,6 +45,10 @@ let screen = "home";
 const inFlight = new Set<number>();
 const freshCards = new Set<number>();
 let resultSig = { skip: false };
+let streak = 0;            // 你連續贏了幾墩（輸一墩、換階段、新的一局就歸零）
+let tension = 0;           // 競叫張力 0..1（加碼累積、Pass 釋放、重發歸零）
+const chipPending = new Set<number>();   // 叫牌籌碼還在飛：那一邊的叫牌紙卡先不換字
+let hoverWant = -1, hoverTimer = 0;
 
 const oppName = () => seats[1 - mySeat]?.name || (mySeat === 0 ? "朋友" : "房主");
 const nameOf = (s: number) => s === mySeat ? "你" : oppName();
@@ -399,8 +406,8 @@ function renderOpp(first: boolean) {
 
 function contractHtml(s: TableState) {
   const b = s.highestBid;
-  const txt = contractText(b, s.doubled);
-  return isRedBid(b) ? `<span class="red">${txt}</span>` : txt;
+  const base = isRedBid(b) ? `<span class="red">${bidText(b)}</span>` : bidText(b);
+  return s.doubled > 0 ? `${base}<span class="x">${s.doubled >= 2 ? "再加倍" : "加倍"}</span>` : base;
 }
 
 function renderStatus() {
@@ -453,7 +460,7 @@ function renderCenter(first: boolean) {
     t.style.fontSize = strain === Strain.NoTrump ? "20px" : "";
     const iDecl = s.declarer === s.seat;
     $("tallyLabel").textContent = iDecl ? "你的墩數" : `${oppName()}墩數`;
-    flipNumber($("tallyBig"), String(iDecl ? s.myTricks : s.oppTricks));
+    flipNumber($("tallyBig"), String(iDecl ? s.myTricks : s.oppTricks), true, Math.min(4, Math.max(0, streak - 1)) * 0.06);
     $("tallyNeed").textContent = String(tricksNeeded(s.highestBid));
     $("tallyLine").textContent = `你 ${s.myTricks}｜${oppName()} ${s.oppTricks}`;
   }
@@ -490,7 +497,14 @@ function renderHand(first = false) {
 
   const legal = new Set(s.legal);
   const canPlay = legal.size > 0 && myTurn();
-  if (!canPlay || !legal.has(selCard)) selCard = -1;
+  // 還沒輪到你也可以先選好；輪到你時，先選的牌如果不能出，就放下並說明原因
+  if (s.phase !== Phase.Draw && s.phase !== Phase.Play) selCard = -1;
+  else if (selCard >= 0 && !ids.includes(selCard)) selCard = -1;
+  else if (canPlay && selCard >= 0 && !legal.has(selCard)) {
+    const old = selCard;
+    selCard = -1;
+    setTimeout(() => { const el = handEl(old); if (el) showWhy(el, reasonFor()); }, 0);
+  }
 
   ids.forEach((id, i) => {
     let el = handEl(id);
@@ -555,7 +569,7 @@ function layoutHand() {
 
 function selectCard(id: number, el: HTMLElement) {
   selCard = id;
-  hoverId = -1;
+  hoverId = -1; hoverWant = -1;
   sfx.select();
   fx.buzz(8);
   renderHand();
@@ -578,18 +592,53 @@ function playCard(id: number) {
 
 function unpull() { if (pulled >= 0) { pulled = -1; if (st) renderHand(); } }
 
+// 不能出的原因（不只擺動，還要說清楚）
+function reasonFor(): string {
+  const s = st;
+  if (!s) return "";
+  if (s.leadCard >= 0 && s.followCard >= 0) return "這墩結算中，等一下";
+  if (!myTurn()) return `還沒輪到你，等${esc(oppName())}出牌`;
+  if (s.leaderSeat !== s.seat && s.leadCard >= 0) {
+    const su = suitOf(s.leadCard);
+    return `你手上還有 <b>${SUIT_SYMBOL[su]}</b>，這墩要先跟 <b>${SUIT_SYMBOL[su]}</b>`;
+  }
+  return "這張現在不能出";
+}
+let whyEl: HTMLElement | null = null, whyTimer = 0;
+function showWhy(anchor: HTMLElement, html: string) {
+  whyEl?.remove();
+  clearTimeout(whyTimer);
+  const r = anchor.getBoundingClientRect();
+  const w = document.createElement("div");
+  w.className = "why";
+  w.innerHTML = html;
+  w.style.left = `${Math.max(90, Math.min(innerWidth - 90, r.left + r.width / 2))}px`;
+  w.style.top = `${r.top - 6}px`;
+  document.body.appendChild(w);
+  fx.popIn(w);
+  whyEl = w;
+  whyTimer = window.setTimeout(() => { w.remove(); if (whyEl === w) whyEl = null; }, 1600);
+}
+
 function illegal(id: number) {
   const el = handEl(id);
-  if (el) fx.deny(el);
+  if (el) { fx.deny(el); showWhy(el, reasonFor()); }
   sfx.deny();
   fx.buzz(40);
-  if (st && st.leadCard >= 0) fx.popup(`要先跟 ${SUIT_SYMBOL[suitOf(st.leadCard)]}`, $("turnLine"), { size: 22, color: BAD, flags: ["pop"], hold: 450 });
+  // 順便讓能出的牌亮一下：告訴你可以出哪幾張
+  if (st) for (const c of st.legal) { const e = handEl(c); if (e) fx.glow(e, 520); }
 }
 
 function onCardTap(id: number, el: HTMLElement) {
-  if (!st || waiting || !conn) return;
+  if (!st || !conn) return;
   if (st.phase !== Phase.Draw && st.phase !== Phase.Play) return;
-  if (!myTurn()) { fx.deny(el); sfx.deny(); return; }
+  if (waiting || pulled >= 0) { fx.bounce(el); return; }      // 正在出牌：有反應，但不重複送出
+  if (!myTurn()) {
+    // 還沒輪到你：可以先選好，點下去立刻有反應；再點一次才說明為什麼還不能出
+    if (selCard === id) { fx.deny(el); sfx.deny(); showWhy(el, reasonFor()); return; }
+    selectCard(id, el);
+    return;
+  }
   if (!st.legal.includes(id)) { illegal(id); return; }
   if (selCard === id) { playCard(id); return; }   // 第二次點同一張 = 出牌
   selectCard(id, el);
@@ -623,11 +672,16 @@ handBox.addEventListener("pointermove", ev => {
   if (!fine || ev.pointerType !== "mouse") return;
   const el = (ev.target as HTMLElement).closest<HTMLElement>(".card");
   const id = el ? Number(el.dataset.id) : -1;
-  if (id !== hoverId) {
-    hoverId = id;
-    if (id >= 0) sfx.hover();
+  if (id === hoverWant) return;
+  hoverWant = id;
+  clearTimeout(hoverTimer);
+  // 滑鼠快速掃過一整排不會讓牌一直抖：停在一張牌上 45ms 才升起
+  hoverTimer = window.setTimeout(() => {
+    if (hoverWant === hoverId) return;
+    hoverId = hoverWant;
+    if (hoverId >= 0) sfx.hover();
     layoutHand();
-  }
+  }, 45);
 });
 const endDrag = (ev: PointerEvent) => {
   if (!drag || drag.pid !== ev.pointerId) return;
@@ -644,7 +698,7 @@ const endDrag = (ev: PointerEvent) => {
 };
 handBox.addEventListener("pointerup", endDrag);
 handBox.addEventListener("pointercancel", endDrag);
-handBox.addEventListener("pointerleave", () => { if (hoverId >= 0 && !drag) { hoverId = -1; layoutHand(); } });
+handBox.addEventListener("pointerleave", () => { hoverWant = -1; clearTimeout(hoverTimer); if (hoverId >= 0 && !drag) { hoverId = -1; layoutHand(); } });
 handBox.addEventListener("click", ev => {
   if (suppressClick) return;
   const el = (ev.target as HTMLElement).closest<HTMLElement>(".card");
@@ -723,7 +777,7 @@ function renderTurn() {
       hint = has ? `請跟出 ${sym}（有則必須跟牌）` : `你沒有 ${sym}，可以墊牌${s.phase === Phase.Play && bidStrain(s.highestBid) !== Strain.NoTrump ? "或出王牌" : ""}`;
     } else hint = s.phase === Phase.Draw ? `贏這墩拿明牌 ${s.faceUp >= 0 ? cardText(s.faceUp) : ""}` : "你先出，任何一張都可以";
   } else if (s.phase !== Phase.Bidding && !(s.leadCard >= 0 && s.followCard >= 0)) {
-    text = `等${oppName()}出牌…`;
+    text = selCard >= 0 ? `等${oppName()}出牌…（已先選 ${cardText(selCard)}）` : `等${oppName()}出牌…`;
   }
   const key = text + "|" + hint + "|" + mine;
   if (key === lastTurnText) return;
@@ -831,7 +885,9 @@ function renderBid(first = false) {
 
   // 你 vs 對手：雙方最後一次叫的
   const lastOf = (seat: number) => { for (let i = s.auctionCalls.length - 1; i >= 0; i--) if (s.auctionSeats[i] === seat) return s.auctionCalls[i]; return null; };
+  panel.style.setProperty("--tension", tension.toFixed(2));
   for (const [id, seat] of [["bidMeCard", s.seat], ["bidOppCard", 1 - s.seat]] as const) {
+    if (chipPending.has(seat)) continue;
     const b = $(id).querySelector("b") as HTMLElement;
     const c = lastOf(seat);
     b.textContent = c === null ? "—" : callText(c);
@@ -978,33 +1034,41 @@ async function showResult(instant: boolean) {
   // 一步一步亮出來：合約 → 目標 → 實得 → 判定 → 得分 → 明細 → 總分 → 勝利
   const steps = ["rsC", "rsN", "rsT", "resVerdict", "resBand", "resBody", "totMe", "totOpp", "resTotal"];
   for (const id of steps) $(id).classList.toggle("pending", !sig.skip);
-  const showStep = async (id: string, pause: number) => {
+  let beatNo = 0;
+  const showStep = async (id: string, pause: number, beat = true) => {
     const el = $(id);
     el.classList.remove("pending");
-    if (!sig.skip) { el.classList.remove("reveal"); void el.offsetWidth; el.classList.add("reveal"); sfx.select(); await fx.wait(fx.ms(pause)); }
+    if (!sig.skip) {
+      el.classList.remove("reveal"); void el.offsetWidth; el.classList.add("reveal");
+      if (beat) sfx.beat(beatNo++);
+      await fx.wait(fx.ms(pause));
+    }
   };
-  await showStep("rsC", 260);
-  await showStep("rsN", 260);
+  // 1～4：合約、目標、實得、判定——一項一拍，節奏清楚
+  await showStep("rsC", 320);
+  await showStep("rsN", 320);
   await showStep("rsT", 0);
-  await rollNumber($("rsTaken"), 0, r.tricksTaken, { dur: 520, signal: sig });
-  if (!sig.skip) await fx.wait(fx.ms(200));
+  await rollNumber($("rsTaken"), 0, r.tricksTaken, { dur: 360, signal: sig });
+  if (!sig.skip) await fx.wait(fx.ms(260));
   $("resVerdict").classList.remove("pending");
   if (!sig.skip) {
     const v = $("resVerdict").firstElementChild as HTMLElement;
     stamp(v, !r.made);
-    if (good) sfx.contract(true); else sfx.defeat();
-    await fx.wait(fx.ms(520));
+    setTimeout(() => { if (good) sfx.contract(true); else sfx.defeat(); }, fx.ms(180));
+    await fx.wait(fx.ms(560));
   }
-  await showStep("resBand", 0);
-  await rollNumber($("resPoints"), 0, r.points, { prefix: "+", hit: true, signal: sig });
-  if (!sig.skip && good) burstAt($("resPoints"), { count: 16, kinds: ["dust", "star"], speed: 200 });
-  await showStep("resBody", 300);
-  await showStep("totMe", 0);
-  await showStep("totOpp", 0);
+  // 5～6：得分開始加速（不重擊，留給總分）
+  await showStep("resBand", 0, false);
+  await rollNumber($("resPoints"), 0, r.points, { prefix: "+", dur: Math.min(520, 140 + r.points * 6), signal: sig });
+  await showStep("resBody", 160, false);
+  // 7：總分一次重擊收尾
+  await showStep("totMe", 0, false);
+  await showStep("totOpp", 0, false);
   await Promise.all([
-    rollNumber($("rtMe"), before[0], s.myScore, { hit: r.scorer === me, signal: sig }),
-    rollNumber($("rtOpp"), before[1], s.oppScore, { signal: sig }),
+    rollNumber($("rtMe"), before[0], s.myScore, { dur: 420, hit: r.scorer === me, signal: sig }),
+    rollNumber($("rtOpp"), before[1], s.oppScore, { dur: 420, hit: r.scorer !== me, signal: sig }),
   ]);
+  if (!sig.skip && good) { burstAt($(r.scorer === me ? "rtMe" : "rtOpp"), { count: 14, kinds: ["dust", "star"], speed: 200 }); fx.shockAt($(r.scorer === me ? "rtMe" : "rtOpp"), { size: 140 }); }
   await showStep("resTotal", 0);
   for (const id of steps) $(id).classList.remove("pending");
   $("skipHint").hidden = true;
@@ -1076,20 +1140,23 @@ function onEvent(e: GameEvent) {
       dealing = true;
       sfx.slide();
       sfx.resetStreak();
+      streak = 0; streakGlow($("felt"), 0);
+      tension = 0;
       fx.popup(e.value > 0 ? `第 ${e.value} 局 · 發牌！` : "發牌！", centerAnchor(), { size: 28, color: INK, flags: ["pop"], hold: 600 });
       tick(`第 ${e.value} 局開始，${me ? "你" : esc(oppName())}先出`);
       break;
 
-    case "CardPlayed":
-      flyPlayed(e);
+    case "CardPlayed": {
+      const landAt = flyPlayed(e);
       if (e.extra === 1) {
-        // 王吃：落桌那一刻才震
-        fx.popup("王吃！", side, { size: 58, color: GOLD, flags: ["pop", "shake"], hold: 800, delay: 260 });
-        setTimeout(() => { fx.shake($("felt"), 10, 300); sfx.ruff(); burstAt(side, { count: 14, kinds: ["star", "dust"], speed: 220 }); }, fx.ms(280));
+        // 王吃：字和聲音都在落桌那一瞬間；重的回饋留給贏墩（Level 2）
+        fx.popup("王吃！", side, { size: 54, color: GOLD, flags: ["pop", "shake"], hold: 800, delay: landAt });
+        sfx.ruff(fx.ms(landAt) / 1000);
         fx.buzz([30, 40, 70]);
         tick(`${who}用王牌 ${cardHtml(e.card)} 吃！`);
       } else tick(`${who}出了 ${cardHtml(e.card)}`);
       break;
+    }
 
     case "TrickWon": {
       const lv = st ? trickLevel(e, st) : { level: 1 as Level, text: "" };
@@ -1112,46 +1179,72 @@ function onEvent(e: GameEvent) {
       break;
 
     case "DrawPhaseOver":
-      fx.popup("搶牌結束 · 開始叫牌", centerAnchor(), { size: 26, color: INK, flags: ["pop", "wave"], hold: 1000, delay: 900 });
+      streak = 0; streakGlow($("felt"), 0); tension = 0;
+      // 放在上方的階段橫幅，不要蓋住等一下跳出來的叫牌面板
+      fx.popup("搶牌結束 · 開始叫牌", $("phaseChip"), { size: 20, color: GOLD, flags: ["pop"], hold: 900, delay: 700 });
       setTimeout(() => sfx.stamp(), fx.ms(900));
       fx.buzz(20);
       break;
 
     case "BidMade": {
+      // 叫牌逐級升溫：等級越高越重；雙方一直加碼，張力就一直疊上去
       const raise = !!st && st.highestBid >= 0;
-      fx.popup(raise ? `加碼 ${bidText(e.value)}` : bidText(e.value), side,
-        { size: 38, color: isRedBid(e.value) ? RED : INK, flags: raise ? ["pop", "shake"] : ["pop"] });
-      setTimeout(() => stamp($(me ? "bidMeCard" : "bidOppCard")), 0);
-      setTimeout(() => { const h = $("bidContract"); if (h) fx.punch(h, 0.12, 300); }, fx.ms(300));
-      fx.buzz(15);
+      const tier = bidTier(bidLevel(e.value));
+      tension = raise ? Math.min(1, tension + 0.16 + tier * 0.06) : tier * 0.12;
+      $("bidPanel").style.setProperty("--tension", tension.toFixed(2));
+      const target = $(me ? "bidMeCard" : "bidOppCard");
+      const visible = !$("bidPanel").hidden && target.getBoundingClientRect().width > 0;
+      if (raise) fx.popup("加碼！", side, { size: 20 + tier * 4, color: tier >= 2 ? GOLD : INK, flags: tier >= 2 ? ["pop", "shake"] : ["pop"], delay: 40 });
+      if (visible) {
+        chipPending.add(e.seat);
+        void bidChip(bidText(e.value), isRedBid(e.value), tier, side.getBoundingClientRect(), target, $("felt"), tension).then(() => {
+          chipPending.delete(e.seat);
+          if (st) renderBid();
+          fx.punch($("bidContract"), 0.08 + tier * 0.05, 300);
+        });
+      } else sfx.bid(tier, tension);
+      fx.buzz(10 + tier * 8);
       break;
     }
     case "Passed":
       fx.popup("Pass", side, { size: 26, color: MUTED });
       sfx.pass();
+      if (tension > 0.05) {
+        // Pass：張力釋放
+        tension *= 0.4;
+        $("bidPanel").style.setProperty("--tension", tension.toFixed(2));
+        setTimeout(() => sfx.release(), fx.ms(90));
+      }
       break;
 
     case "Doubled":
-      fx.popup("加倍！", side, { size: 50, color: me ? GOLD : BAD, flags: ["pop", "shake"], hold: 900 });
-      stamp($(me ? "bidMeCard" : "bidOppCard"), true);
-      fx.shake($("felt"), 7, 260);
+      // 加倍：紅色衝擊、低頻敲擊、短暫局部震動
+      tension = Math.min(1, tension + 0.3);
+      $("bidPanel").style.setProperty("--tension", tension.toFixed(2));
+      fx.popup("加倍！", side, { size: 50, color: "#F08A96", flags: ["pop", "shake"], hold: 900 });
+      doubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
       fx.buzz([40, 30, 40]);
       break;
 
     case "Redoubled":
-      fx.popup("再加倍！！", side, { size: 54, color: me ? GOLD : BAD, flags: ["pop", "shake"], hold: 1000 });
-      fx.stampIn($(me ? "bidMeCard" : "bidOppCard"));
-      sfx.double(3);
-      fx.shake($("felt"), 11, 320);
+      // 再加倍：雙重衝擊波、金紅粒子、短促亮光、更重的音效
+      tension = 1;
+      $("bidPanel").style.setProperty("--tension", "1");
+      fx.popup("再加倍！！", side, { size: 54, color: GOLD, flags: ["pop", "shake"], hold: 1000 });
+      redoubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
       fx.buzz([50, 30, 50, 30, 90]);
       break;
 
     case "ContractSet": {
+      // 合約確定：在牌桌中央蓋下去，再一次重擊定格到上方的合約欄（保留加倍狀態）
       const d = Math.max(0, e.extra);
-      fx.popup(`合約 ${contractText(e.value, d)}`, centerAnchor(),
-        { size: 40, color: GOLD, flags: d > 0 ? ["pop", "wave", "shake"] : ["pop", "wave"], hold: 1300 });
-      sfx.stamp();
-      setTimeout(() => sfx.slide(), fx.ms(400));
+      tension = 0;
+      const sub = `莊家 ${nameOf(e.seat)} · 目標 ${tricksNeeded(e.value)} 墩`;
+      setTimeout(() => {
+        const strip = $("infoStrip");
+        void contractSlam(contractText(e.value, d), isRedBid(e.value), sub, d, $("felt"), strip.hidden ? null : strip);
+      }, fx.ms(60));
+      setTimeout(() => sfx.slide(), fx.ms(900));
       const trump = bidStrain(e.value);
       tick(`${who}是莊家，要拿 ${tricksNeeded(e.value)} 墩${trump === Strain.NoTrump ? "（無王）" : `，${SUIT_SYMBOL[trump]} 是王牌`}`);
       break;
@@ -1178,6 +1271,8 @@ function onEvent(e: GameEvent) {
 
     case "Redeal":
       fx.popup("雙方都 Pass · 重發", centerAnchor(), { size: 26, color: MUTED, hold: 900 });
+      tension = 0;
+      sfx.release();
       sfx.slide();
       break;
   }
@@ -1198,8 +1293,9 @@ function newHandReset() {
   lastFaceUp = -1;
 }
 
-// 出牌：抽出 → 快速飛到牌桌（微轉、影子變化）→ 落桌壓扁回彈＋拍桌聲；對手的牌途中翻面
-function flyPlayed(e: GameEvent) {
+// 出牌三段節奏：抽牌（往上抽出一點）→ 飛行（微轉、影子變化）→ 落桌（壓到 93% 再彈回＋桌面小衝擊）
+// 拍桌聲用音訊時鐘排在落桌那一瞬間，不等動畫結束。回傳幾毫秒後落桌（給王吃的字和聲音對時）
+function flyPlayed(e: GameEvent): number {
   const me = e.seat === mySeat;
   const slot = $(me ? "mySlot" : "oppSlot");
   const to = slot.getBoundingClientRect();
@@ -1218,14 +1314,31 @@ function flyPlayed(e: GameEvent) {
     el = fx.backEl();
   }
   if (pulled === e.card) pulled = -1;
-  fx.fly(el, from, to, { dur: me ? 230 : 280, lift: me ? 18 : 30, flipAt: me ? undefined : () => fx.flipTo(el, e.card) }).then(f => {
+  const pull = fx.motionOn() ? fx.T.pull : 0;
+  const flight = me ? fx.T.fly : fx.T.fly + 50;
+  const landAt = pull + flight;
+  // 1. 抽牌
+  fx.pin(el, from);
+  const dy = me ? -20 : 10;
+  const pulledRect = new DOMRect(from.left, from.top + (fx.motionOn() ? dy : 0), from.width, from.height);
+  sfx.land(me ? 1 : 0.8, fx.ms(landAt) / 1000);
+  const go = () => fx.fly(el, pulledRect, to, { dur: flight, lift: me ? 16 : 26, flipAt: me ? undefined : () => fx.flipTo(el, e.card) }).then(f => {
+    // 3. 落桌
     inFlight.delete(e.card);
     f.remove();
-    sfx.land(me ? 1 : 0.8);
     if (st) renderTrick(e.card);
     const landed = slot.firstElementChild;
-    if (landed) burstAt(landed, { count: 4, kinds: ["dust"], speed: 70, life: 0.4, gravity: 40 });
+    if (landed) {
+      fx.land(landed);
+      fx.shockAt(landed, { size: 84, width: 1.2, dur: 260, color: "rgba(240,220,170,.55)" });
+      burstAt(landed, { count: 3, kinds: ["dust"], speed: 60, life: 0.35, gravity: 30 });
+    }
   });
+  if (pull) {
+    el.animate([{ translate: "0 0", scale: "1" }, { translate: `0 ${dy}px`, scale: me ? "1.06" : "1" }],
+      { duration: fx.ms(pull), easing: "cubic-bezier(.2,.9,.3,1)" }).finished.then(go, go);
+  } else void go();
+  return landAt;
 }
 
 // 收墩：勝方的牌放大發光 →（重要事件停一下）→ 兩張一起收向勝方；墩數跳動
@@ -1244,7 +1357,11 @@ async function collectTrick(e: GameEvent, level: Level, label: string) {
   }
   const winner = cards.find(c => c.win)?.card ?? null;
   const drawing = e.value < 0;
-  trickFeedback(drawing ? 1 : level, winnerMe, winner, felt);
+  // 連續贏墩：音高、回彈、桌面光暈遞增；輸一墩就恢復
+  streak = winnerMe ? streak + 1 : 0;
+  streakGlow(felt, streak);
+  trickFeedback(drawing ? 1 : level, winnerMe, winner, felt, streak);
+  if (winnerMe && streak >= 3) fx.popup(`連贏 ${streak} 墩`, myAnchor(), { size: 18 + Math.min(4, streak - 3) * 2, color: GOLD, flags: ["pop"], delay: 520 });
   if (!drawing) {
     const good = winnerMe;
     if (level === 3 && label) {

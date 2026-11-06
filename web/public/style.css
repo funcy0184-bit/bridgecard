@@ -286,7 +286,8 @@ input::placeholder { color: rgba(90,70,40,.45); }
 .hand { position: relative; height: calc(var(--cw) * 1.42 + 30px); --cw: 60px; margin: 2px 6px 0; touch-action: none; }
 .hand .card { position: absolute; left: 0; bottom: 12px; cursor: pointer; transform-origin: 50% 130%;
   transform: translate(var(--x, 0px), calc(var(--y, 0px) + var(--lift, 0px))) rotate(var(--r, 0deg)) scale(var(--s, 1));
-  transition: transform calc(.46s * var(--spd)) var(--spring), filter .2s, box-shadow .2s; will-change: transform; }
+  transition: transform calc(.28s * var(--spd)) cubic-bezier(.22,.8,.3,1), filter .2s, box-shadow .2s; will-change: transform; }
+.hand .card.sel, .hand .card.hover { transition: transform calc(.17s * var(--spd)) cubic-bezier(.3,1.75,.5,1), filter .2s, box-shadow .15s; }
 .hand .card.legal { --lift: -8px; box-shadow: inset 0 0 0 1px rgba(90,60,25,.3), inset 0 0 0 3px var(--paper-hi), inset 0 0 0 3.6px rgba(185,138,62,.5), 0 0 0 1.5px rgba(226,184,96,.75), 0 6px 10px rgba(0,0,0,.4); }
 .hand .card.hover { --lift: -13px; --s: 1.06; z-index: 30 !important; box-shadow: inset 0 0 0 1px rgba(90,60,25,.3), inset 0 0 0 3px var(--paper-hi), 0 0 0 2px rgba(240,200,110,.9), 0 12px 18px rgba(0,0,0,.45); }
 .hand .card.sel { --lift: -30px; --s: 1.07; z-index: 31 !important; box-shadow: inset 0 0 0 1px rgba(90,60,25,.3), inset 0 0 0 3px var(--paper-hi), 0 0 0 2.5px var(--gold-hi), 0 0 18px rgba(240,200,110,.6), 0 16px 22px rgba(0,0,0,.5); }
@@ -485,3 +486,38 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   #oppArea .who { min-width: 54px; }
   .ticker { padding: 0 68px; }
 }
+
+/* ---------------- v2：叫牌籌碼、衝擊波、合約定格、連勝光暈、競叫張力 ---------------- */
+.shock { position: fixed; translate: -50% -50%; border-radius: 50%; border: 2px solid rgba(240,200,110,.9); pointer-events: none;
+  box-shadow: 0 0 12px rgba(240,200,110,.45), inset 0 0 10px rgba(240,200,110,.3); }
+.bidchip { position: fixed; z-index: 6; pointer-events: none; display: grid; place-items: center; border-radius: 50%; font: 700 18px var(--display); color: var(--ink);
+  background: radial-gradient(circle at 40% 35%, var(--paper-hi), var(--paper) 60%, var(--paper-2));
+  box-shadow: inset 0 0 0 2px var(--gold), inset 0 0 0 4px var(--paper-hi), inset 0 0 0 5px rgba(185,138,62,.55), 0 6px 12px rgba(0,0,0,.45); }
+.bidchip.red { color: var(--red); }
+.bidchip.t1 { box-shadow: inset 0 0 0 2px var(--gold), inset 0 0 0 4px var(--paper-hi), inset 0 0 0 5px rgba(185,138,62,.7), 0 0 12px rgba(240,200,110,.35), 0 6px 12px rgba(0,0,0,.45); }
+.bidchip.t2 { box-shadow: inset 0 0 0 2.5px var(--gold-hi), inset 0 0 0 4.5px var(--paper-hi), inset 0 0 0 6px var(--gold), 0 0 18px rgba(240,200,110,.6), 0 8px 14px rgba(0,0,0,.5); }
+.bidchip.t3 { background: radial-gradient(circle at 40% 35%, #FFF6E0, var(--paper) 55%, #E6C98C);
+  box-shadow: inset 0 0 0 3px var(--wine), inset 0 0 0 5px var(--gold-hi), inset 0 0 0 6.5px var(--wine), 0 0 24px rgba(240,200,110,.8), 0 0 0 2px rgba(240,200,110,.5), 0 10px 16px rgba(0,0,0,.5); }
+.contractseal { position: fixed; z-index: 7; pointer-events: none; display: flex; flex-direction: column; align-items: center; padding: 10px 26px 8px; clip-path: var(--torn-b);
+  background-color: var(--paper); background-image: radial-gradient(ellipse at 50% 45%, rgba(255,250,235,.6), transparent 62%), var(--noise); color: var(--ink);
+  box-shadow: inset 0 0 0 4px transparent, inset 0 0 0 5px rgba(185,138,62,.8), inset 0 0 0 7px transparent, inset 0 0 0 7.6px rgba(185,138,62,.45); }
+.contractseal small { font-size: 11px; letter-spacing: .4em; color: var(--ink-soft); }
+.contractseal b { font: 700 40px/1.1 var(--display); letter-spacing: .06em; white-space: nowrap; }
+.contractseal b.red { color: var(--red); }
+.contractseal em { font-style: normal; font-size: 12px; letter-spacing: .15em; color: var(--ink-soft); white-space: nowrap; }
+.contractseal.dbl b { text-decoration: underline 3px rgba(184,35,58,.6); text-underline-offset: 6px; }
+/* 連勝：桌面光暈一點一點變亮（--streak 0..1） */
+.felt { --streak: 0; }
+.felt::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  box-shadow: inset 0 0 calc(10px + var(--streak) * 40px) calc(var(--streak) * 8px) rgba(240,200,110, calc(var(--streak) * .55));
+  transition: box-shadow calc(.5s * var(--spd)) ease-out; }
+/* 競叫張力：叫得越兇，契約紙的邊越熱（--tension 0..1） */
+.bidpanel { --tension: 0; }
+.bidpanel::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(184,35,58, calc(var(--tension) * .28)) 100%);
+  box-shadow: inset 0 0 calc(var(--tension) * 26px) rgba(226,150,70, calc(var(--tension) * .55)); transition: background .45s ease-out, box-shadow .45s ease-out; }
+.bidhead .x, .infostrip .x { display: inline-block; margin-left: 4px; padding: 0 6px; font-size: .85em; color: #B8233A; border: 1.5px solid #B8233A; border-radius: 3px; transform: rotate(-4deg); }
+/* 不能出的原因：出現在那張牌上面 */
+.why { position: fixed; z-index: 55; translate: -50% -100%; padding: 4px 10px; font-size: 12.5px; white-space: nowrap; color: var(--ink); pointer-events: none;
+  background-color: var(--paper); background-image: var(--noise); clip-path: var(--torn-b); box-shadow: inset 0 0 0 3px transparent, inset 0 0 0 4px rgba(184,35,58,.6); }
+.why b { color: var(--red); }

@@ -26,7 +26,7 @@ export const lowEnd = (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?
 export const settings: FxSettings = loadSettings();
 
 function loadSettings(): FxSettings {
-  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.3, muted: false };
+  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.15, muted: false };
   let s: FxSettings = def;
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
@@ -56,7 +56,8 @@ export const wait = (t: number) => new Promise<void>(r => setTimeout(r, t));
 
 // ---------------- MotionTokens：時長、曲線 ----------------
 
-export const T = { tap: 120, quick: 180, base: 240, fly: 260, land: 170, slow: 360, hitstop: 55 };
+// pull 抽牌、fly 飛行、land 落桌：出牌的三段節奏；hitstop 只給關鍵事件
+export const T = { tap: 120, quick: 180, base: 240, pull: 70, fly: 210, land: 180, slow: 360, hitstop: 80, hitstopBig: 100 };
 export const EASE = {
   out: "cubic-bezier(.2,.8,.25,1)",
   in: "cubic-bezier(.5,0,.8,.4)",
@@ -154,13 +155,29 @@ export async function fly(el: HTMLElement, from: DOMRect, to: DOMRect,
   return el;
 }
 
-// 落桌：短暫壓扁再回彈（有重量的感覺）
+// 落桌：壓縮到約 93% 再彈回 100%（有重量的感覺）
 export function land(el: Element, power = 1) {
   if (!motionOn()) return;
-  const k = 0.07 * power * Math.min(1.4, amp());
+  const k = Math.min(1.3, amp()) * power;
   el.animate([
-    { scale: "1 1" }, { scale: `${1 + k} ${1 - k * 1.2}`, offset: 0.3 }, { scale: `${1 - k * 0.4} ${1 + k * 0.5}`, offset: 0.65 }, { scale: "1 1" },
-  ], { duration: ms(T.land + 40), easing: "ease-out" });
+    { scale: "1 1" }, { scale: `${1 + 0.03 * k} ${1 - 0.07 * k}`, offset: 0.28 }, { scale: `${1 - 0.01 * k} ${1 + 0.025 * k}`, offset: 0.62 }, { scale: "1 1" },
+  ], { duration: ms(T.land), easing: "ease-out" });
+}
+
+// 衝擊波：一圈細細的光環往外擴（落桌、關鍵墩、叫牌、加倍）
+export function shockwave(x: number, y: number, o: { color?: string; size?: number; dur?: number; width?: number; delay?: number } = {}) {
+  if (!motionOn() || !layer) return;
+  const r = document.createElement("div");
+  r.className = "shock";
+  const size = (o.size ?? 120) * Math.min(1.3, 0.6 + amp() * 0.4);
+  Object.assign(r.style, { left: `${x}px`, top: `${y}px`, width: `${size}px`, height: `${size}px`, borderColor: o.color ?? "rgba(240,200,110,.9)", borderWidth: `${o.width ?? 2}px` });
+  layer.appendChild(r);
+  r.animate([{ scale: "0.15", opacity: 0.95 }, { scale: "1", opacity: 0 }], { duration: ms(o.dur ?? 380), delay: ms(o.delay ?? 0), easing: "cubic-bezier(.15,.7,.3,1)", fill: "both" })
+    .finished.then(() => r.remove()).catch(() => r.remove());
+}
+export function shockAt(el: Element, o: Parameters<typeof shockwave>[2] = {}) {
+  const b = el.getBoundingClientRect();
+  shockwave(b.left + b.width / 2, b.top + b.height / 2, o);
 }
 
 // 牌背翻成牌面（飛行途中換臉）；用獨立的 scale 屬性，才不會蓋掉飛行用的 transform
@@ -238,9 +255,10 @@ export function buzz(pattern: number | number[]) {
   try { navigator.vibrate?.(pattern); } catch { /* iPhone 不支援 */ }
 }
 
+// 翻面：用獨立的 rotate 屬性（y 軸），不會蓋掉手牌排版用的 transform
 export function flipIn(el: Element) {
   if (!motionOn()) return;
-  el.animate([{ transform: "rotateY(90deg)", filter: "brightness(1.4)" }, { transform: "rotateY(0deg)", filter: "brightness(1)" }],
+  el.animate([{ rotate: "y 90deg", filter: "brightness(1.4)" }, { rotate: "y 0deg", filter: "brightness(1)" }],
     { duration: ms(340), easing: "cubic-bezier(.2,1.4,.4,1)" });
 }
 
