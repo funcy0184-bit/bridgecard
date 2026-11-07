@@ -53,7 +53,7 @@ console.log("首頁");
 await page.goto(base + "/");
 check((await page.title()) === "來打橋牌", "網頁標題是「來打橋牌」");
 check((await text("#home h1")) === "來打橋牌", "首頁大標題是「來打橋牌」");
-check((await text("#storyCardSub")).includes("第一次玩"), "封面的故事篇章寫著「第一次玩？」");
+check((await text("#chapHead")).includes("第一次玩") && (await text("#storyCardSub")).includes("阿禾帶你打一場"), "封面寫著「第一次玩？」「沒玩過也沒關係，阿禾帶你打一場！」");
 check((await page.locator("#home .cv-btn").count()) === 3 && (await page.locator("#home .cv-card").count()) === 4, "封面：故事教學、人機對戰、朋友連線三顆按鈕＋四個篇章");
 check(await page.evaluate(() => getComputedStyle(document.getElementById("home")).backgroundImage.includes("gradient")), "封面是米白紙底");
 await page.locator("#solo").click();
@@ -63,11 +63,17 @@ await page.locator("#storyOffer a.btn").click();
 await page.waitForURL(/\/story\/$/);
 
 // ---------------- 第一幕 ----------------
-console.log("第一幕：雨停前，先搶一張牌");
+console.log("第一幕：先來搶牌");
 await page.waitForSelector("#sHand .card");
-check((await text("#title")) === "雨停前，先搶一張牌", "第一幕標題");
+check((await text("#title")) === "先來搶牌", "第一幕標題：先來搶牌");
 // 開場：旁白和阿禾一句一句講，最後一句是阿禾的問題
 check((await mode()) === "intro", "一進來先是開場對話（不是直接出題）");
+// 開場講到「先從最簡單的開始」時，多一顆「好啊，來吧！」可以按
+const letsGo = page.getByRole("button", { name: "好啊，來吧！" });
+for (let i = 0; i < 8 && !(await letsGo.isVisible()); i++) { await page.locator("#spoken").click(); await wait(60); }
+check(await letsGo.isVisible() && (await spoken()).includes("先從最簡單的開始"), "開場：阿禾說「來，先從最簡單的開始」，可以按「好啊，來吧！」");
+await letsGo.click(); await wait(80);
+check((await mode()) === "intro" && !(await letsGo.isVisible()), "按「好啊，來吧！」往下一句（還在開場、按鈕收起來）");
 let introLines = 0;
 for (let i = 0; i < 20 && (await mode()) === "intro"; i++) {
   const before = (await page.locator("#spoken").getAttribute("data-full")) ?? "";
@@ -75,9 +81,9 @@ for (let i = 0; i < 20 && (await mode()) === "intro"; i++) {
   if ((await page.locator("#spoken").getAttribute("data-full")) === before) { await page.locator("#spoken").click(); await wait(60); }   // 第二下：下一句
   introLines++;
 }
-check(introLines >= 4 && (await mode()) === "prompt", `開場一句一句講完（點了 ${introLines} 句）才輪到你`);
-check((await said()).includes("我是阿禾"), "阿禾自我介紹");
-check((await text("#sBoard")).includes("阿禾出的牌") && (await text("#sBoard")).includes("贏家拿的明牌"), "桌上分開標「阿禾出的牌」和「贏家拿的明牌」");
+check(introLines >= 3 && (await mode()) === "prompt", `開場一句一句講完（點了 ${introLines} 句）才輪到你`);
+check((await said()).includes("第一次來喔"), "阿禾開場：欸，第一次來喔？");
+check((await text("#sBoard")).includes("阿禾出的牌") && (await text("#sBoard")).includes("贏的人拿這張"), "桌上分開標「阿禾出的牌」和「贏的人拿這張」");
 const startHand = await handIds();
 check(JSON.stringify(startHand) === JSON.stringify([id("♣Q"), id("♣4")]), "手上是 ♣Q、♣4");
 await shot("02-act1");
@@ -106,22 +112,22 @@ await shot("04-act1-4-reload");
 // ---------------- 第二幕 ----------------
 console.log("第二幕：阿禾問，你敢拿幾墩？");
 await page.getByRole("button", { name: /下一幕/ }).click();
-check((await text("#skip")).includes("搶完 13 次牌"), "提示時間跳轉：搶完 13 次牌");
+check((await text("#skip")).includes("13 次牌搶完了"), "提示時間跳轉：13 次牌搶完了");
 check(await page.locator(".actcard").count() > 0, "換幕時牌桌上浮出「第二幕」紙條");
 check(await ready(), "第二幕：阿禾說完才輪到你");
 check((await page.locator("#sHand .card").count()) === 13, "手上 13 張");
 check((await page.locator("#sHand .card.hi").count()) === 6, "阿禾指著的六張紅心");
 await page.locator('#sBoard button[data-bid="13"]').click();   // 3♠
 check(await page.locator("#sCall").isHidden(), "點 3♠：先解釋、不能送出");
-check((await text("#feedback")).includes("先說 2♥"), "阿禾提醒先叫 2♥");
+check((await text("#feedback")).includes("你要叫 3♠，那就得拿到 9 墩") && (await text("#feedback")).includes("先叫 2♥"), "點 3♠：阿禾照 3♠ 算墩數，再提醒先叫 2♥");
 await page.locator('#sBoard button[data-bid="7"]').click();    // 2♥
-check((await text("#sMean")).includes("我選紅心當王牌，承諾至少贏 8 墩（6＋2）"), "送出前顯示「我選紅心當王牌，承諾至少贏 8 墩（6＋2）」");
+check((await text("#sMean")).includes("紅心當王牌，至少要贏 8 墩（6＋2）") && (await text("#feedback")).includes("你要叫 2♥，那就得拿到 8 墩喔"), "送出前顯示「紅心當王牌，至少要贏 8 墩」，阿禾：「喔？你要叫 2♥…」");
 await shot("05-act2-select");
 await page.locator("#sCall").click();
 await settleStory();
-check((await said()).includes("Pass，我不往上叫了。你說的八墩，就這麼定。"), "阿禾 Pass");
+check((await said()).includes("我 Pass，不往上叫了。") && (await said()).includes("好，合約定了。等等可要說到做到！"), "阿禾 Pass、合約定了");
 check(await page.evaluate(() => (globalThis.__hbFx || []).some(x => x.kind === "bid") && (globalThis.__hbFx || []).some(x => x.kind === "contractSet")), "叫牌用新的籌碼演出、合約蓋章定格");
-check((await text("#sBoard")).includes("目標 8 墩｜目前 0 墩"), "桌上顯示「目標 8 墩｜目前 0 墩」");
+check((await text("#sBoard")).includes("要贏 8 墩｜已贏 0 墩"), "桌上顯示「要贏 8 墩｜已贏 0 墩」");
 check((await text("#sBoard")).includes("由阿禾先出"), "由阿禾先出");
 check((await text("#feedback")).includes("合約") && (await text("#feedback")).includes("莊家"), "這時才介紹合約和莊家");
 await shot("06-act2-contract");
@@ -132,7 +138,7 @@ await page.getByRole("button", { name: /下一幕/ }).click();
 check(await ready(), "第三幕：阿禾說完才輪到你");
 await tap("♥2");
 await wait(400);
-check((await spoken()).includes("先看看手上的黑桃。你還跟得出來，這墩得跟。"), "有黑桃還出 ♥2：阿禾提醒要跟");
+check((await spoken()).includes("等等，你還有這個花色，要先跟牌喔。"), "有黑桃還出 ♥2：阿禾提醒要先跟牌");
 check(await page.locator(`#sHand .card[data-id="${id("♥2")}"]`).evaluate(e => e.classList.contains("dim")), "♥2 變暗（現在不能出）");
 check((await page.locator("#slotMe .card").count()) === 0, "不能出的牌沒有上桌");
 await shot("07-act3-illegal");
@@ -158,16 +164,16 @@ check((await text("#feedback")).includes("兩種你都試過了"), "王吃、墊
 // ---------------- 第四幕 ----------------
 console.log("第四幕：最後一墩，你來收桌");
 await page.getByRole("button", { name: /下一幕/ }).click();
-check((await text("#skip")).includes("跳到尾盤"), "明示「跳到尾盤，剩最後一墩」");
+check((await text("#skip")).includes("快轉到最後一墩"), "明示「快轉到最後一墩」");
 await ready();
 check((await text("#tally")).replace(/\s/g, "") === "7／8", "一開始 7／8");
 await tap("♣A");
 await settleStory();
 check((await text("#tally")).replace(/\s/g, "") === "8／8", "出 ♣A 之後 8／8");
-check((await text("#feedback")).includes("2♥、未加倍、剛好達成，本局 +20 分"), "顯示「2♥、未加倍、剛好達成，本局 +20 分」");
+check((await text("#feedback")).includes("2♥、沒有加倍、剛好打成，這局 +20 分"), "顯示「2♥、沒有加倍、剛好打成，這局 +20 分」");
 check((await text("#feedback")).includes("8 比 5"), "最後雙方 8 比 5");
-check((await said()).includes("你答應八墩，剛好八墩，這就叫打成。"), "阿禾：這就叫打成");
-check((await said()).includes("要不要真的跟我打一局"), "結尾：阿禾邀你真的打一局");
+check((await said()).includes("還真的被你打成了") && (await said()).includes("這就叫『打成』"), "阿禾：還真的被你打成了、這就叫打成");
+check((await said()).includes("要不要真的打一局") && (await text("#toSolo")).includes("來啊，開打") && (await page.getByRole("button", { name: "我想再練一下" }).count()) === 1, "結尾：阿禾邀你真的打一局，按鈕「來啊，開打！」「我想再練一下」");
 check((await page.locator("#contents .book.done").count()) === 4, "目錄四幕都打勾");
 await shot("09-act4-made");
 
@@ -189,7 +195,7 @@ while (Date.now() - t0 < 180000) {
   const panelMine = await page.locator("#bidPanel.mine").isVisible();
   if (panelMine) {
     const head = await text("#bidContract");
-    if (head.includes("輪到你叫牌")) {
+    if (head.includes("換你叫牌")) {
       await page.locator("#bidLevels button:not([disabled])").first().click();
       await page.locator("#bidStrains button:not([disabled])").first().click();
       await page.locator("#bidConfirm").click();
@@ -233,7 +239,7 @@ check(/合約 .+（.+是莊家）/.test(res) && /\+\d+ 分/.test(res), "結算�
 await shot("11-solo-result");
 await page.locator("#nextBtn").click();
 await page.waitForFunction(() => document.querySelector("#handNo")?.textContent === "第 2 局", null, { timeout: 10000 });
-check(true, "按「下一局」重新發牌：第 2 局");
+check(true, "按「再來一局！」重新發牌：第 2 局");
 
 // ---------------- 08 設定 ----------------
 console.log("設定");
@@ -249,8 +255,8 @@ check((await page.evaluate(() => document.documentElement.dataset.motion)) === "
 await page.goto(base + "/story/");
 check((await page.evaluate(() => document.documentElement.dataset.motion)) === "0", "故事頁也用同一份設定");
 await page.goto(base + "/");
-check((await text("#storyCardSub")).includes("四幕都完成了") && (await page.locator(".cv-card.done").count()) === 4, "封面四個篇章都打勾");
-check((await text("#soloSub")).includes("繼續"), "人機對戰按鈕提示可以繼續上次的牌局");
+check((await text("#storyCardSub")).includes("四幕都打完了") && (await page.locator(".cv-card.done").count()) === 4, "封面四個篇章都打勾");
+check((await text("#soloSub")).includes("繼續"), "「跟阿禾打」按鈕提示可以繼續上次那局");
 
 check(errors.length === 0, `主控台沒有錯誤${errors.length ? "：" + errors.join(" | ") : ""}`);
 await browser.close();

@@ -10,7 +10,7 @@ import { burstAt, shower } from "../client/particles";
 import { renderSettings } from "../client/settings-ui";
 import {
   ACTS, AHE, CONTRACT, LINES, ME, Outcome, STEPS, StepId, StepRun,
-  act, bidMeaning, firstStepOfAct, outcomeOf, replay, settle, start, TALK, Line,
+  act, bidMeaning, bidReaction, firstStepOfAct, outcomeOf, replay, settle, start, TALK, Line, trumpText,
 } from "./script";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -191,21 +191,21 @@ function renderTrickBoard(v: TableState) {
     pile.id = "pile";
     pile.append(fx.backEl(), fx.backEl());
     upBox.append(pile, slot("slotUp", upEv ? -1 : v.faceUp, { empty: upEv ? (upEv.seat === ME ? "→ 你" : "→ 阿禾") : "" }));
-    board.appendChild(figure(upEv ? `明牌 ${cardText(upEv.card)} ${upEv.seat === ME ? "歸你" : "歸阿禾"}` : "贏家拿的明牌", upBox, "up"));
+    board.appendChild(figure(upEv ? `明牌 ${cardText(upEv.card)} ${upEv.seat === ME ? "歸你" : "歸阿禾"}` : "贏的人拿這張", upBox, "up"));
     const rule = document.createElement("div");
     rule.className = "vrule";
     board.appendChild(rule);
   }
   board.appendChild(figure("阿禾出的牌", slot("slotOpp", lead, { won: won === AHE })));
-  board.appendChild(figure("你出的牌", slot("slotMe", mine, { won: won === ME, empty: "輪到你" })));
+  board.appendChild(figure("你出的牌", slot("slotMe", mine, { won: won === ME, empty: "換你" })));
 
   if (st.id === "last") {
     const need = tricksNeeded(v.highestBid);
     const tally = document.createElement("div");
     tally.className = "tally";
     tally.id = "tallyBox";
-    tally.innerHTML = `<span>你的墩數 ／ 目標</span><strong id="tally">${v.myTricks} ／ ${need}</strong><small>阿禾 ${v.oppTricks} 墩</small>` +
-      (run.done && v.result ? `<em class="pts">本局 +${v.result.points} 分</em>` : "");
+    tally.innerHTML = `<span>已贏 ／ 要贏幾墩</span><strong id="tally">${v.myTricks} ／ ${need}</strong><small>阿禾 ${v.oppTricks} 墩</small>` +
+      (run.done && v.result ? `<em class="pts">這局 +${v.result.points} 分</em>` : "");
     board.appendChild(tally);
   }
 }
@@ -233,16 +233,16 @@ function renderBidBoard(v: TableState) {
     const mean = document.createElement("p");
     mean.className = "smean";
     mean.id = "sMean";
-    mean.innerHTML = selBid >= 0 ? `叫 <b>${bidText(selBid)}</b>：${bidMeaning(selBid)}` : "點一個叫品，這裡會先說它的意思";
+    mean.innerHTML = selBid >= 0 ? `叫 <b>${bidText(selBid)}</b>：${bidMeaning(selBid)}` : "點一個叫牌，這裡會先告訴你它的意思";
     const call = document.createElement("button");
     call.type = "button";
     call.className = "btn gold";
     call.id = "sCall";
-    call.textContent = `叫 ${bidText(CONTRACT)}`;
+    call.textContent = `確定叫 ${bidText(CONTRACT)}`;
     call.hidden = selBid !== CONTRACT;
     const small = document.createElement("p");
     small.className = "smore";
-    small.textContent = "正式對局可以叫到 7 線；叫得越高，要贏的墩越多。";
+    small.textContent = "正式打的時候最多叫到 7 線；叫得越高，要贏的墩越多。";
     box.append(grid, mean, call, small);
     board.appendChild(box);
     return;
@@ -257,8 +257,8 @@ function renderBidBoard(v: TableState) {
     const need = tricksNeeded(v.highestBid);
     plate.innerHTML +=
       `<div class="big ${isRedBid(v.highestBid) ? "red" : ""}">${bidText(v.highestBid)}</div>` +
-      `<div class="who">合約 · ${v.declarer === ME ? "你" : "阿禾"}是莊家 · ${SUIT_SYMBOL[Suit.Hearts]} 是王牌</div>` +
-      `<div class="goal" id="goal">目標 ${need} 墩｜目前 ${v.myTricks} 墩</div>` +
+      `<div class="who">合約 · ${v.declarer === ME ? "你" : "阿禾"}是莊家 · ${trumpText(v.highestBid)}</div>` +
+      `<div class="goal" id="goal">要贏 ${need} 墩｜已贏 ${v.myTricks} 墩</div>` +
       `<div class="lead">由${v.leaderSeat === AHE ? "阿禾" : "你"}先出</div>`;
   }
   board.appendChild(plate);
@@ -266,8 +266,8 @@ function renderBidBoard(v: TableState) {
 
 function renderStat(v: TableState) {
   const st = step(), el = $("sStat");
-  if (st.id === "grab") el.innerHTML = "搶牌階段 · 沒有王牌，同花色比大小";
-  else if (st.id === "bid") el.innerHTML = run.done ? "" : "叫牌階段 · 你先叫";
+  if (st.id === "grab") el.innerHTML = "搶牌 · 沒有王牌，同花色比大小";
+  else if (st.id === "bid") el.innerHTML = run.done ? "" : "叫牌 · 你先叫";
   else if (st.id === "last") el.innerHTML = `合約 <b class="red">2♥</b> · 你是莊家 · 你 <b>${v.myTricks}</b> : <b>${v.oppTricks}</b> 阿禾`;
   else el.innerHTML = `合約 <b class="red">2♥</b> · 你是莊家 · 紅心是王牌`;
 }
@@ -286,12 +286,12 @@ function renderHand(v: TableState) {
     el.classList.toggle("dim", bad && triedIllegal);
     if (st.id === "bid" && suitOf(id) === Suit.Hearts) el.classList.add("hi");   // 阿禾指著的那排紅心
     if (fresh.has(id)) { el.classList.add("fresh"); fx.popIn(el, 60); }
-    el.setAttribute("aria-label", cardText(id) + (bad && triedIllegal ? "（現在不能出）" : ""));
+    el.setAttribute("aria-label", cardText(id) + (bad && triedIllegal ? "（還不能出）" : ""));
     return el;
   }));
   fresh.clear();
   layoutHand(box, v.hand.length);
-  $("handNote").textContent = canPlay ? (triedIllegal ? "變暗的牌現在不能出" : "點一張出牌") : `${v.hand.length} 張`;
+  $("handNote").textContent = canPlay ? (triedIllegal ? "變暗的牌還不能出" : "點一張出牌") : `${v.hand.length} 張`;
 }
 
 function layoutHand(box: HTMLElement, n: number) {
@@ -410,7 +410,7 @@ function renderNarrator() {
   clearTimeout(autoTimer);
   if (mode === "intro" || mode === "outro") {
     sayLine(lines[li]);
-    more.textContent = mode === "intro" ? "點一下對話繼續 ▸（點牌桌可以直接開始）" : "點一下對話繼續 ▸";
+    more.textContent = mode === "intro" ? "點一下繼續 ▸（點牌桌可以直接開始）" : "點一下繼續 ▸";
     more.className = "tapnext";
     fb.className = ""; fb.textContent = "";
   } else if (mode === "done" && run.done && o) {
@@ -427,17 +427,20 @@ function renderNarrator() {
     }
   } else if (retryLine) {
     sayLine({ who: "ahe", text: retryLine });
-    more.textContent = "改出另一張試試。";
+    more.textContent = "換另一張試試。";
     more.className = "hint";
     fb.className = "retry";
-    fb.textContent = `對方先出 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，你手上還有 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，這墩就要跟 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}。`;
+    fb.textContent = `阿禾先出 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，你手上還有 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}，所以這墩要先跟 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}。`;
   } else {
     sayLine({ who: "ahe", text: L.ask });
     more.textContent = L.hint;
     more.className = "hint";
-    if (st.kind === "bid" && selBid >= 0 && selBid !== CONTRACT && L.nudge) {
-      fb.className = "retry";
-      fb.textContent = `阿禾：${L.nudge}`;
+    if (st.kind === "bid" && selBid >= 0) {
+      // 你點了哪個叫牌，阿禾就照那個叫牌回你；不是 2♥ 再補一句，今天先叫 2♥
+      fb.className = selBid === CONTRACT ? "ok" : "retry";
+      const r = bidReaction(selBid);
+      fb.textContent = `阿禾：${selBid !== CONTRACT && L.nudge ? r.replace(/」$/, L.nudge + "」") : r}`;
+      more.textContent = "";          // 已經選了：操作提示收起來，讓阿禾的話和牌桌都看得到
     } else { fb.className = ""; fb.textContent = ""; }
   }
   void spoken;
@@ -458,6 +461,8 @@ function renderControls(o: Outcome | null) {
   const box = $("controls"), st = step(), L = LINES[st.id];
   box.replaceChildren();
   if (mode === "intro" || mode === "outro") {
+    const cta = lines[li]?.cta;
+    if (cta) box.appendChild(btn(cta, "s-emph", () => { finishTyping(); advance(); }));      // 例如開場的「好啊，來吧！」
     box.appendChild(btn(mode === "intro" ? "跳過，直接開始" : "跳過對話", "s-minor", skipTalk));
   } else if (run.done && o) {
     if (st.id === "last") {
@@ -465,7 +470,7 @@ function renderControls(o: Outcome | null) {
       a.className = "s-emph";
       a.href = "/?solo=new";        // 重新發牌，開一局正常的單機對戰
       a.id = "toSolo";
-      a.innerHTML = '自己跟電腦打一局 <span aria-hidden="true">→</span>';
+      a.innerHTML = '來啊，開打！ <span aria-hidden="true">→</span>';
       box.append(a, btn(L.retry, "s-minor", restartStory));
     } else {
       box.append(btn(L.next!, "s-emph", () => goto(progress.page + 1), true), btn(L.retry, "s-minor", retryStep));
@@ -510,7 +515,7 @@ async function onCardTap(id: number, el: HTMLElement) {
       sfx.deny();
       fx.buzz(50);
       fx.popup(`要先跟 ${SUIT_SYMBOL[suitOf(run.game.leadCard)]}！`, $("aMe"), { size: 24, color: BAD, flags: ["pop", "shake"], hold: 500 });
-      retryLine = LINES[step().id].illegal ?? "「這張現在不能出。」";
+      retryLine = LINES[step().id].illegal ?? "「這張還不能出喔。」";
       triedIllegal = true;
       renderHand(view());
       renderNarrator();
@@ -647,7 +652,7 @@ async function confirmBid() {
   renderTable();
   await fx.wait(fx.ms(420));
   // 合約定格：在牌桌中央蓋章，再落進合約欄
-  await contractSlam(bidText(CONTRACT), isRedBid(CONTRACT), "莊家 你 · 目標 8 墩", 0, $("stable"), document.querySelector("#sBoard .splate .big"));
+  await contractSlam(bidText(CONTRACT), isRedBid(CONTRACT), `莊家：你 · 要贏 ${tricksNeeded(CONTRACT)} 墩`, 0, $("stable"), document.querySelector("#sBoard .splate .big"));
   const g = document.getElementById("goal");
   if (g) fx.punch(g, 0.12, 320);
   await fx.wait(fx.ms(300));

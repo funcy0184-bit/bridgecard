@@ -51,6 +51,10 @@ await B.fill("#code", code.toLowerCase());     // 打小寫也要能進
 await B.click("#join");
 await Promise.all([A.waitForSelector("#table:not([hidden])"), B.waitForSelector("#table:not([hidden])")]);
 console.log("✓ 朋友輸入房號加入，兩邊都進到牌桌");
+// 房主真的等過人：朋友一坐下就說「人到齊啦」；朋友那邊沒等過，不會亂講
+await A.waitForFunction(() => document.getElementById("banner").textContent.includes("人到齊啦，準備開打！"), null, { timeout: 4000 });
+if ((await B.textContent("#banner")).includes("人到齊啦")) { console.error("✗ 朋友那邊不該出現「人到齊啦」"); process.exit(1); }
+console.log("✓ 房主看到「人到齊啦，準備開打！」");
 await sleep(900);
 await shot(A, "03-draw-phase-A");
 
@@ -72,7 +76,7 @@ async function step(page, me) {
       });
       if (!ok) errors.push(`[${me}] 叫牌按鈕 ${sel} 被切掉或擋住`);
     }
-    const none = !((await page.textContent("#bidContract")) ?? "").includes("目前");
+    const none = !((await page.textContent("#bidContract")) ?? "").includes("現在最高");
     if (none) {
       // 1♦：先點階數、再點花色、看試算、再確定
       await page.locator("#bidLevels button:not([disabled])").first().click(); await sleep(120);
@@ -88,7 +92,7 @@ async function step(page, me) {
     return "acted";
   }
   const legal = page.locator("#hand .card.legal");
-  if (await legal.count() > 0 && /輪到你(出|跟)牌/.test(turn)) {
+  if (await legal.count() > 0 && /換你出牌/.test(turn)) {
     // 手牌是疊在一起的，跟真人一樣點露出來的左邊那一條
     const id = await legal.first().getAttribute("data-id");
     const card = page.locator(`#hand .card[data-id="${id}"]`);   // 記住是哪一張，第二次點同一張
@@ -132,6 +136,16 @@ await sleep(500);
 const handAfter = await B.locator("#hand .card").count();
 console.log(`✓ 朋友重新整理網頁，直接回到牌桌（手上 ${handAfter} 張）`);
 await shot(B, "10-after-reload-B");
+
+// 朋友連線：對面是真人，畫面上不會冒出阿禾的名字、郵票或台詞
+for (const [P, n] of [[A, "房主"], [B, "朋友"]]) {
+  const ahe = await P.evaluate(() => ({
+    quip: document.getElementById("quip").textContent, name: document.getElementById("oppName").textContent,
+    stamp: document.getElementById("oppStamp").getAttribute("src"),
+  }));
+  if (ahe.quip || ahe.name === "阿禾" || ahe.stamp.includes("ahe")) { console.error(`✗ ${n}的畫面出現阿禾：`, ahe); process.exit(1); }
+}
+console.log("✓ 朋友連線時兩邊都看不到阿禾（名字、郵票、台詞都沒有）");
 
 await browser.close();
 if (errors.length) { console.error("✗ 頁面有錯誤：\n" + errors.join("\n")); process.exit(1); }

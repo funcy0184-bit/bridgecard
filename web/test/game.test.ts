@@ -52,7 +52,7 @@ describe("計分（規格範例原封不動）", () => {
     expect([r.scorer, r.undertricks, r.points]).toEqual([1, 1, 20]);
   });
   it("試算文字", () => {
-    expect(declarerPreview(H3, 1)).toBe("目標 9 墩｜打成 60 分｜每倒 1 墩對手得 20 分");
+    expect(declarerPreview(H3, 1)).toBe("要贏 9 墩｜打成拿 60 分｜每倒 1 墩，對手拿 20 分");
   });
   it.each([
     [1, Strain.Clubs, 0, 7, 0, 10], [1, Strain.NoTrump, 0, 13, 0, 22], [2, Strain.Hearts, 2, 9, 0, 82],
@@ -64,7 +64,7 @@ describe("計分（規格範例原封不動）", () => {
   });
   it("結算明細", () => {
     expect(breakdown(score(H3, 1, 0, 10), 0, "朋友")).toEqual([
-      "合約 3♥ 加倍（你是莊家）", "需要 9 墩，拿到 10 墩 → 打成，超 1 墩",
+      "合約 3♥ 加倍（你是莊家）", "要贏 9 墩，贏了 10 墩 → 打成，多 1 墩",
       "合約分：3 線 × 10 × 2 = 60", "超墩分：1 墩 × 2 = 2", "你 +62 分",
     ]);
   });

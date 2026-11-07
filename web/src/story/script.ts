@@ -3,7 +3,7 @@
 // 都跟連線版／單機版同一套程式算出來，故事裡沒有另外寫一份規則。
 //
 // 這個檔案不碰畫面（沒有 DOM），測試可以直接跑。
-import { Call, Strain, Suit, bidIndex, bidLevel, bidStrain, bidText, cardId, cardText, tricksNeeded } from "../game/cards";
+import { Call, Strain, Suit, bidIndex, bidLevel, bidStrain, bidText, cardId, cardText, suitOf, tricksNeeded } from "../game/cards";
 import { GameEvent, GameSnapshot, HoneymoonGame, Phase } from "../game/game";
 import { HandResult, doubledText } from "../game/scoring";
 
@@ -164,29 +164,40 @@ export function outcomeOf(run: StepRun): Outcome | null {
   }
 }
 
-// 「2♥、未加倍、剛好達成，本局 +20 分」—— 數字全部來自計分程式
+// 「2♥、沒有加倍、剛好打成，這局 +20 分」—— 數字全部來自計分程式
 export function resultLine(r: HandResult): string {
-  const how = r.made ? (r.overtricks > 0 ? `超 ${r.overtricks} 墩` : "剛好達成") : `倒 ${r.undertricks} 墩`;
-  const who = r.made ? "本局" : "對手";
-  return `${bidText(r.bidIndex)}、${r.doubled > 0 ? doubledText(r.doubled) : "未加倍"}、${how}，${who} +${r.points} 分`;
+  const how = r.made ? (r.overtricks > 0 ? `多 ${r.overtricks} 墩` : "剛好打成") : `倒 ${r.undertricks} 墩`;
+  const who = r.made ? "這局" : "對手";
+  return `${bidText(r.bidIndex)}、${r.doubled > 0 ? doubledText(r.doubled) : "沒有加倍"}、${how}，${who} +${r.points} 分`;
 }
 
 const SUIT_NAME = ["梅花", "方塊", "紅心", "黑桃"];
+// 「紅心當王牌」／「不設王牌（無王）」：無王時絕對不說成哪個花色當王
+export const trumpText = (i: number) => bidStrain(i) === Strain.NoTrump ? "不設王牌（無王）" : `${SUIT_NAME[bidStrain(i)]}當王牌`;
 
-// 叫品送出前的白話：「我選紅心當王牌，承諾至少贏 8 墩（6＋2）」
+// 叫牌送出前的白話：「紅心當王牌，至少要贏 8 墩（6＋2）」
 export function bidMeaning(i: number): string {
-  const s = bidStrain(i), lv = bidLevel(i);
-  const trump = s === Strain.NoTrump ? "我不設王牌（無王）" : `我選${SUIT_NAME[s]}當王牌`;
-  return `${trump}，承諾至少贏 ${tricksNeeded(i)} 墩（6＋${lv}）`;
+  return `${trumpText(i)}，至少要贏 ${tricksNeeded(i)} 墩（6＋${bidLevel(i)}）`;
+}
+
+// 你點了某個叫牌，阿禾的反應：叫品、墩數都從規則算
+export const bidReaction = (i: number) => `「喔？你要叫 ${bidText(i)}，那就得拿到 ${tricksNeeded(i)} 墩喔！」`;
+
+// 這一手能不能王吃：手上沒有對方先出的花色、而且有合約的王牌（用來決定阿禾要不要提示王吃）
+export function canRuff(run: StepRun): boolean {
+  const g = run.game;
+  if (g.leadCard < 0 || g.trump === Strain.NoTrump) return false;
+  const hand = g.hands[ME], lead = suitOf(g.leadCard);
+  return !hand.some(x => suitOf(x) === lead) && hand.some(x => suitOf(x) === (g.trump as number));
 }
 
 // ---------------- 四幕 ----------------
 
 export const ACTS = [
-  { no: "第一幕", title: "雨停前，先搶一張牌", sub: "搶牌 · 什麼是一墩", symbol: "♦" },
-  { no: "第二幕", title: "阿禾問，你敢拿幾墩？", sub: "叫牌 · 合約與莊家", symbol: "♥" },
-  { no: "第三幕", title: "那張小紅心，該現在用嗎？", sub: "跟牌 · 王吃", symbol: "♠" },
-  { no: "第四幕", title: "最後一墩，你來收桌", sub: "打成 · 計分", symbol: "♣" },
+  { no: "第一幕", title: "先來搶牌", sub: "搶牌 · 什麼是一墩", symbol: "♦" },
+  { no: "第二幕", title: "你敢叫幾墩？", sub: "叫牌 · 合約與莊家", symbol: "♥" },
+  { no: "第三幕", title: "王牌派上用場", sub: "跟牌 · 王吃", symbol: "♠" },
+  { no: "第四幕", title: "說到做到", sub: "打成 · 計分", symbol: "♣" },
 ] as const;
 
 export const firstStepOfAct = (act: number) => STEPS.findIndex(s => s.act === act);
@@ -212,59 +223,63 @@ export interface Lines {
 }
 
 const ct = cardText;
+const NEED = tricksNeeded(CONTRACT);
+
+// 你從牌堆摸到的那張暗牌（只有你輸掉這墩才會有）
+const myDraw = (run: StepRun) => run.events.find(e => e.type === "CardDrawn" && e.seat === ME && e.card >= 0);
 
 export const LINES: Record<StepId, Lines> = {
   grab: {
     place: "台南 · 下雨的騎樓",
-    table: "搶牌 · 這一墩沒有王牌",
-    setting: "雨落在台南的騎樓。你走進巷口的小牌店躲雨，店主阿禾把茶杯往旁邊挪，空出一個位子。他從牌堆翻開 ♦K，又從自己手裡出了 ♣9。",
-    ask: "「這張方塊 K，贏的人帶走。我出了梅花 9。你想花哪張牌來搶？」",
-    hint: "點你手上的一張牌，放上桌。",
-    reply: () => "「我們各出一張、比出一次輸贏，這就叫一墩。」",
-    more: () => "「剛才這墩決定誰拿哪張牌。出一張、補一張，手上張數一樣。」",
+    table: "搶牌 · 這段沒有王牌",
+    setting: "外面下著雨。你走進巷口的小牌店躲雨，店主阿禾把茶杯挪開，空出一個位子。他翻開 ♦K，又出了 ♣9。",
+    ask: "「明牌是 ♦K，這墩贏的人拿走。我出了 ♣9，來，換你出一張試試！」",
+    hint: "點手上一張牌，放上桌。",
+    reply: o => o === "win" ? "「漂亮！這張明牌是你的了。」" : "「嘿，這張被我拿走啦。」",
+    more: () => "「一人出一張、比一次大小，這就叫一墩。」",
     explain: (run, o) => {
       const t = run.trick!;
       const up = run.events.find(e => e.type === "FaceUpTaken")!;
-      const drew = run.events.find(e => e.type === "CardDrawn");
+      const drew = myDraw(run);
       const n = run.game.hands[ME].length;
       return o === "win"
-        ? `你的 ${ct(t.follow)} 比 ${ct(t.lead)} 大，這墩歸你：明牌 ${ct(up.card)} 進了你的手牌。阿禾從牌堆摸一張暗牌，只有他看得到。你手上還是 ${n} 張。`
-        : `你的 ${ct(t.follow)} 比 ${ct(t.lead)} 小，這墩歸阿禾：明牌 ${ct(up.card)} 被他拿走。你從牌堆摸到暗牌 ${drew && drew.card >= 0 ? ct(drew.card) : "一張"}，${ct(c(CL, 12))} 還留在你手上。你手上還是 ${n} 張。`;
+        ? `你的 ${ct(t.follow)} 比 ${ct(t.lead)} 大，這墩是你的：明牌 ${ct(up.card)} 進了你的手牌。阿禾輸了，從牌堆摸一張暗牌（只有他看得到）。你手上還是 ${n} 張。`
+        : `你的 ${ct(t.follow)} 比 ${ct(t.lead)} 小，這墩被阿禾拿走：明牌 ${ct(up.card)} 歸他。你從牌堆摸到暗牌 ${drew ? ct(drew.card) : "一張"}，${ct(c(CL, 12))} 還留在你手上。你手上還是 ${n} 張。`;
     },
     tried: seen => seen.length >= 2
-      ? "兩種出法你都看過了：花大牌搶明牌，或把大牌留著、讓阿禾拿。正式對局要這樣搶 13 墩，這些墩數不算進後半場的合約。"
-      : "兩種出法都合法。按「換一張試試」，看看另一種結果。正式對局要這樣搶 13 墩，這些墩數不算進後半場的合約。",
-    next: "下一幕：說個目標",
+      ? "兩種出法你都看過了：出大牌搶明牌，或留著大牌、讓阿禾拿。正式打的時候要這樣搶 13 墩，這段不算分。"
+      : "兩種出法都可以。按「換一張試試」，看看另一種結果。正式打的時候要這樣搶 13 墩，這段不算分。",
+    next: "下一幕：你敢叫幾墩？",
     retry: "換一張試試",
   },
   bid: {
     place: "巷口牌店 · 茶涼了一點",
-    table: "叫牌 · 說出你的目標",
-    skip: "⏩ 搶完 13 次牌，你們手上各有 13 張。",
-    setting: "茶杯裡的熱氣淡了些。阿禾把你的手牌攤開，指了指排在一起的紅心。",
-    ask: "「接下來的 13 墩，你打算拿幾墩？你可以先說個目標。」",
-    hint: "點桌上的 2♥，送出前會先告訴你它代表什麼。",
-    nudge: "「這手紅心最多張。今天先說 2♥ 就好。」",
-    reply: () => "「Pass，我不往上叫了。你說的八墩，就這麼定。」",
+    table: "叫牌 · 你打算贏幾墩？",
+    skip: "⏩ 快轉：13 次牌搶完了，你們手上各有 13 張。",
+    setting: "茶杯裡的熱氣淡了些。阿禾看了一眼你的手牌，指了指那一排紅心。",
+    ask: "「來，你想叫幾線？」",
+    hint: "點桌上的 2♥ 試試，送出前會先告訴你它的意思。",
+    nudge: "不過這手紅心最多，今天先叫 2♥ 吧。",   // 接在阿禾的反應後面，同一句話
+    reply: () => "「我 Pass，不往上叫了。」",
     explain: run => {
-      const g = run.game;
-      return `${bidText(g.highestBid)} 成了這局的「合約」：紅心當王牌，你要贏到 ${tricksNeeded(g.highestBid)} 墩。` +
-        `說出合約、負責完成它的人叫「莊家」——就是你。接下來由${g.leader === AHE ? "阿禾" : "你"}先出第一張。`;
+      const g = run.game, bid = g.highestBid >= 0 ? g.highestBid : CONTRACT;
+      return `${bidText(bid)} 就是這局的「合約」：${trumpText(bid)}，你要贏到 ${tricksNeeded(bid)} 墩。` +
+        `負責打成合約的人叫「莊家」，就是你；接下來由${g.leader === AHE ? "阿禾" : "你"}先出第一張。`;
     },
-    next: "下一幕：出牌",
+    next: "下一幕：王牌派上用場",
     retry: "重新叫一次",
   },
   follow: {
     place: "巷口牌店 · 紅心是王",
     table: "合約 2♥ · 紅心是王牌",
-    setting: "合約仍是 2♥。阿禾先出了 ♠A，你手上剩 ♠3 和 ♥2。",
-    ask: "「我出黑桃 A，換你。」",
+    setting: "合約是 2♥。阿禾先出了 ♠A，你手上剩 ♠3 和 ♥2。",
+    ask: "「我出 ♠A，換你。」",
     hint: "點一張牌出牌。",
-    illegal: "「先看看手上的黑桃。你還跟得出來，這墩得跟。」",
-    reply: () => "「有黑桃就出黑桃。這墩我收下了。」",
+    illegal: "「等等，你還有這個花色，要先跟牌喔。」",
+    reply: () => "「有黑桃就要出黑桃。這墩我收下啦。」",
     explain: run => {
       const t = run.trick!;
-      return `${ct(t.lead)} 比 ${ct(t.follow)} 大，阿禾拿走這墩。對方先出什麼花色，你手上有就一定要跟——這時紅心王牌也不能拿出來吃。`;
+      return `${ct(t.lead)} 比 ${ct(t.follow)} 大，阿禾拿走這墩。對方先出什麼花色，你手上有就一定要跟，這時候紅心王牌也不能拿出來吃。`;
     },
     next: "換一手試試",
     retry: "重來這手",
@@ -273,105 +288,120 @@ export const LINES: Record<StepId, Lines> = {
     place: "巷口牌店 · 紅心是王",
     table: "合約 2♥ · 紅心是王牌",
     skip: "↻ 換一手試試",
-    setting: "同一個 2♥ 合約，阿禾仍先出 ♠A。這次你手裡換成 ♥2 和 ♣3，一張黑桃都沒有。",
-    ask: "「這次你沒有黑桃。想現在拿這墩，還是把紅心留著？」",
+    setting: "還是 2♥ 合約，阿禾一樣先出 ♠A。這次你手上是 ♥2 和 ♣3，一張黑桃都沒有。",
+    ask: "「欸，機會來了！你沒有黑桃，可以試試看出王牌。」",
     hint: "兩張都能出，點一張試試。",
-    reply: o => o === "ruff"
-      ? "「王吃！紅心是我們說好的王牌，最小的 ♥2 也壓得過 ♠A。」"
-      : "「這墩讓給我。你的 ♥2 還留著，等更需要的時候再用。」",
+    reply: o => o === "ruff" ? "「對！就是這樣！」" : "「這墩讓給我啦。你的 ♥2 還留著，等更需要的時候再用。」",
     explain: (run, o) => {
       const t = run.trick!;
       return o === "ruff"
-        ? `你沒有黑桃，可以改出別的花色。用王牌壓過別的花色叫「王吃」：${ct(t.follow)} 贏了 ${ct(t.lead)}，這墩歸你。`
-        : `你沒有黑桃，出了別的花色（叫「墊牌」）。墊牌贏不了，阿禾拿這墩；你的王牌 ${ct(c(HE, 2))} 還在手上。`;
+        ? `你沒有黑桃，就能改出別的花色。用王牌壓過別的花色，叫「王吃」：${ct(t.follow)} 贏了 ${ct(t.lead)}，這墩是你的。`
+        : `你沒有黑桃，出了別的花色，這叫「墊牌」。墊牌贏不了，阿禾拿走這墩；你的王牌 ${ct(c(HE, 2))} 還在手上。`;
     },
     tried: seen => seen.length >= 2
-      ? "兩種你都試過了：現在王吃拿下這墩，或先把王牌留著。"
+      ? "兩種你都試過了：現在就王吃拿下這墩，或先把王牌留著。"
       : "兩種都可以。按「換一張試試」比比看。",
-    next: "下一幕：最後一墩",
+    next: "下一幕：說到做到",
     retry: "換一張試試",
   },
   last: {
     place: "巷口牌店 · 雨停了",
     table: "合約 2♥ · 最後一墩",
-    skip: "⏩ 跳到尾盤，剩最後一墩。",
-    setting: "窗外的雨停了。同一個 2♥ 合約，你已經贏了 7 墩，阿禾贏了 5 墩。阿禾把 ♣K 放在桌上。",
-    ask: "「你還差一墩，就剩這兩張。換你了。」",
+    skip: "⏩ 快轉到最後一墩。",
+    setting: "窗外的雨停了。還是 2♥ 合約，你已經贏了 7 墩，阿禾贏了 5 墩。阿禾把 ♣K 放上桌。",
+    ask: "「就差一墩了，加油！換你。」",
     hint: "點你最後一張牌。",
-    reply: o => o === "made" ? "「你答應八墩，剛好八墩，這就叫打成。」" : "「差了一點，這叫倒約。」",
+    reply: o => o === "made" ? "「喔！還真的被你打成了！」" : "「哎呀，這局沒打成。」",
     explain: run => {
       const g = run.game, r = g.lastResult!;
       return `${resultLine(r)}。最後是 ${g.tricksWon[ME]} 比 ${g.tricksWon[AHE]}。` +
         `（打成的分數 = 線數 × 10，這手 ${bidLevel(r.bidIndex)} 線就是 ${r.contractPoints} 分；每多贏 1 墩再加 2 分。）`;
     },
-    retry: "再練一次",
+    retry: "我想再練一下",
   },
 };
 
 // ---------------- 一句一句講：開場、每一幕的前情、出牌後的反應、結尾 ----------------
 // 每個畫面先由旁白和阿禾一句一句帶進來，最後一句就是阿禾的問題（輪到你出牌）；
-// 你出牌之後，阿禾再一句一句說明剛才發生了什麼。
+// 你出牌之後，阿禾再一句一句說明剛才發生了什麼。台詞只講真的發生的事。
 
-export interface Line { who: "ahe" | "narr"; text: string; }
-const A = (text: string): Line => ({ who: "ahe", text });
+export interface Line { who: "ahe" | "narr"; text: string; cta?: string; }   // cta：這句講完多一顆「回答」按鈕
+const A = (text: string, cta?: string): Line => (cta ? { who: "ahe", text, cta } : { who: "ahe", text });
 const N = (text: string): Line => ({ who: "narr", text });
 
 export const TALK: Record<StepId, { intro: Line[]; outro: (o: Outcome, run: StepRun) => Line[] }> = {
   grab: {
     intro: [
-      N("雨落在台南的騎樓。你收起傘，走進巷口一間小小的牌店。"),
-      A("「下這麼大，先進來坐吧。」"),
-      N("店主阿禾把茶杯往旁邊挪，空出一個位子。"),
-      A("「我是阿禾。來這裡的人都打蜜月橋牌——兩個人就能玩的橋牌。」"),
-      A("「會看撲克牌就夠了。我們直接打一手，邊打邊說。」"),
-      N("他從牌堆翻開 ♦K，又從自己手裡出了 ♣9。"),
+      N("外面下著雨。你收起傘，走進巷口一間小小的牌店。"),
+      A("「欸，第一次來喔？要不要打場橋牌？不會也沒關係，我教你。」"),
+      A("「規則聽起來有點多，但打一場就懂了。來，先從最簡單的開始。」", "好啊，來吧！"),
+      N("店主阿禾把茶杯挪開，從牌堆翻開一張 ♦K，又從手裡出了 ♣9。"),
+      A("「你看，桌上有張翻開的牌。這張叫明牌，這一墩贏的人，就能把它拿走。」"),
+      A("「輸的人則是從牌堆摸一張暗牌，摸到什麼就看運氣啦。」"),
+      A("「所以前半場，我們要想辦法搶到想要的牌。」"),
       A(LINES.grab.ask),
     ],
-    outro: o => [
-      A(LINES.grab.reply(o)),
-      A(LINES.grab.more!(o)),
-      A(o === "win" ? "「♦K 是你的了。我摸的那張暗牌，只有我看得到。」" : "「♦K 歸我。你摸到的暗牌是 ♠6，你的 ♣Q 還留著。」"),
-      A("「正式對局要這樣搶 13 墩。這段的墩數不算分，搶的是好牌。」"),
-    ],
+    outro: (o, run) => {
+      const drew = myDraw(run);
+      return [
+        A(LINES.grab.reply(o)),
+        A(LINES.grab.more!(o)),
+        A(o === "win"
+          ? "「這墩我輸了，所以換我從牌堆摸一張暗牌，只有我看得到喔。」"
+          : `「沒事，你還能摸一張暗牌。${drew ? `你摸到的是 ${ct(drew.card)}，` : ""}${ct(c(CL, 12))} 也還留著。」`),
+        A("「正式打的時候要這樣搶 13 墩，這段不算分，搶的是好牌。」"),
+        A("「好，搶牌大概就是這樣！接下來要決定這局你想叫多大。」"),
+      ];
+    },
   },
   bid: {
     intro: [
-      N("時間往前跳：搶完 13 次牌，你們手上各有 13 張。"),
-      N("茶杯裡的熱氣淡了些。"),
-      A("「搶牌結束。接下來的 13 墩，才是真正比輸贏的時候。」"),
-      N("阿禾把你的手牌攤開，指了指排在一起的紅心。"),
-      A("「你的紅心有六張，這是好消息。」"),
+      N("快轉一下：13 次牌搶完了，你們手上各有 13 張。"),
+      A("「現在換叫牌了。簡單說，就是先講好你這局打算贏幾墩。」"),
+      A(`「像 2♥，就是紅心當王牌，而且你至少要贏 ${NEED} 墩。王牌是什麼，等等教你。」`),
+      A("「叫得高，成功的話分數比較多；但沒做到，對手就有分數拿。」"),
+      N("阿禾看了一眼你的手牌，指了指那一排紅心。"),
+      A("「你紅心有六張，不錯喔。先看看手上的牌，再決定要叫多高。」"),
       A(LINES.bid.ask),
     ],
-    outro: () => [
-      A(LINES.bid.reply("contract")),
-      A("「你叫的 2♥，就是這局的『合約』：紅心當王牌，你要贏到 8 墩。」"),
-      A("「說出合約、負責完成它的人叫『莊家』——就是你。我是防守方，由我先出第一張。」"),
-    ],
+    outro: (_o, run) => {
+      const g = run.game, bid = g.highestBid >= 0 ? g.highestBid : CONTRACT;
+      const iDecl = g.declarer === ME || g.declarer < 0;
+      return [
+        A(LINES.bid.reply("contract")),
+        A("「好，合約定了。等等可要說到做到！」"),
+        A(`「你叫的 ${bidText(bid)} 就是這局的『合約』：${trumpText(bid)}，你要贏到 ${tricksNeeded(bid)} 墩。」`),
+        A(iDecl
+          ? `「負責打成合約的人叫『莊家』，就是你；我是『防守方』，${g.leader === ME ? "由你先出第一張" : "由我先出第一張"}。」`
+          : "「這局我是莊家，你是防守方。」"),
+      ];
+    },
   },
   follow: {
     intro: [
-      N("開始出牌。合約是 2♥，紅心是王牌。"),
-      A("「防守方先出。我出——」"),
+      N("開始出牌了。合約是 2♥，紅心是王牌。"),
+      A("「接下來教你一個很好用的東西，就是王牌！」"),
+      A("「不過先記得：平常要跟著先出的花色出牌。」"),
       N("阿禾放下 ♠A。你手上剩 ♠3 和 ♥2。"),
       A(LINES.follow.ask),
     ],
     outro: () => [
       A(LINES.follow.reply("followed")),
       A("「對方先出什麼花色，你手上有，就一定要跟。」"),
-      A("「紅心王牌很厲害，但你還跟得出黑桃的時候，還輪不到它。」"),
+      A("「王牌很強沒錯，但你還有黑桃的時候，還輪不到它出場。」"),
     ],
   },
   ruff: {
     intro: [
       A("「同一張 ♠A，我們換一手牌看看。」"),
-      N("這次你手裡是 ♥2 和 ♣3，一張黑桃都沒有。"),
+      N("這次你手上是 ♥2 和 ♣3，一張黑桃都沒有。"),
+      A("「如果你沒有那個花色，就可以用王牌搶這一墩。這就叫王吃。」"),
       A(LINES.ruff.ask),
     ],
     outro: o => o === "ruff" ? [
       A(LINES.ruff.reply("ruff")),
-      A("「手上沒有對方出的花色時，用王牌壓過去，就叫『王吃』。」"),
-      A("「再小的王牌，也比別的花色的 A 大。」"),
+      A("「手上沒有對方出的花色，用王牌壓過去，這就是『王吃』。再小的王牌，也比別的花色的 A 大。」"),
+      A("「學會王吃之後，局面就更有意思了。」"),
     ] : [
       A(LINES.ruff.reply("discard")),
       A("「沒有那個花色時出別的牌，叫『墊牌』。墊牌贏不了，但王牌保住了。」"),
@@ -380,18 +410,29 @@ export const TALK: Record<StepId, { intro: Line[]; outro: (o: Outcome, run: Step
   },
   last: {
     intro: [
-      N("時間跳到尾盤。窗外的雨停了。"),
-      A("「你已經拿了 7 墩，我 5 墩。」"),
-      A("「你答應的是 8 墩——還差一墩。」"),
-      N("阿禾把 ♣K 放在桌上，看著你。"),
+      N("快轉到最後。窗外的雨停了。"),
+      A(`「還記得你剛剛叫的合約嗎？${bidText(CONTRACT)}，要贏 ${NEED} 墩。現在就看你能不能打成！」`),
+      A("「只要贏到目標墩數，就算成功。你已經拿了 7 墩，我 5 墩。」"),
+      N("阿禾把 ♣K 放上桌，看著你。"),
       A(LINES.last.ask),
     ],
-    outro: (o, run) => [
-      A(LINES.last.reply(o)),
-      A(`「打成的分數是線數乘 10：這手 2 線，就是 ${run.game.lastResult?.contractPoints ?? 0} 分。多贏一墩再加 2 分。」`),
-      A("「今天就教到這裡。搶牌、叫牌、跟牌、王吃、打成，你都碰過了。」"),
-      N("阿禾把牌收齊，重新洗了一次。"),
-      A("「要不要真的跟我打一局？這次，我可不會讓你喔。」"),
-    ],
+    outro: (o, run) => {
+      const r = run.game.lastResult;
+      const won = run.game.tricksWon[ME];
+      if (o === "down") return [
+        A(LINES.last.reply("down")),
+        A(r ? `「你說要 ${r.tricksNeeded} 墩，結果差了 ${r.undertricks} 墩，這叫『倒約』，分數會給對手。」` : "「沒拿到說好的墩數，這叫『倒約』，分數會給對手。」"),
+        A("「沒關係，再來一次就好。」"),
+      ];
+      return [
+        A(LINES.last.reply("made")),
+        ...(r && r.overtricks > 0 ? [A("「還多贏了幾墩，可以喔！」")] : []),
+        A(`「你說要 ${r?.tricksNeeded ?? NEED} 墩，就真的拿到 ${r ? won : NEED} 墩，這就叫『打成』。」`),
+        A(`「分數是線數乘 10：這手 ${bidLevel(r?.bidIndex ?? CONTRACT)} 線，就是 ${r?.contractPoints ?? 0} 分。多贏一墩再加 2 分。」`),
+        A("「好啦，基本上就是這樣！」"),
+        N("阿禾把牌收齊，重新洗了一次。"),
+        A("「你已經可以自己打一場了。來，要不要真的打一局？這次我可不會放水喔。」"),
+      ];
+    },
   },
 };

@@ -19,14 +19,14 @@ export function forgetRoom(code: string) {
 
 export async function createRoom(): Promise<string> {
   const res = await fetch("/api/rooms", { method: "POST" });
-  if (!res.ok) throw new Error("開房失敗，請再試一次");
+  if (!res.ok) throw new Error("開桌沒成功，再試一次看看。");
   return (await res.json()).code;
 }
 
 export async function roomInfo(code: string): Promise<{ exists: boolean; seats?: boolean[]; started?: boolean }> {
   const res = await fetch(`/api/rooms/${encodeURIComponent(code)}`);
   if (res.status === 404) return { exists: false };
-  if (!res.ok) throw new Error("連不上伺服器");
+  if (!res.ok) throw new Error("連不上伺服器，等一下再試試。");
   return res.json();
 }
 

@@ -94,7 +94,7 @@ for (const [name, w, h] of SIZES) {
   while (Date.now() - t0 < 120000 && !(await p.locator("#result").isVisible())) {
     if (await p.locator("#bidPanel.mine").isVisible()) {
       if (!saw.bid) { await check("牌桌：叫牌", ["#bidPanel", "#bidConfirm", "#bidPass", "#bidDouble", "#bidLevels", "#bidStrains"]); saw.bid = true; }
-      if ((await p.textContent("#bidContract")).includes("輪到你叫牌")) { await p.locator("#bidLevels button:not([disabled])").first().click(); await p.locator("#bidStrains button:not([disabled])").first().click(); await p.click("#bidConfirm"); }
+      if ((await p.textContent("#bidContract")).includes("換你叫牌")) { await p.locator("#bidLevels button:not([disabled])").first().click(); await p.locator("#bidStrains button:not([disabled])").first().click(); await p.click("#bidConfirm"); }
       else await p.click("#bidPass");
       await p.waitForTimeout(200); continue;
     }

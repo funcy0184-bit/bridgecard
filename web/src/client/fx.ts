@@ -15,7 +15,7 @@ export interface FxSettings {
   music: number;          // 背景音樂音量 0..1
   muted: boolean;         // 一鍵靜音
 }
-export const INTENSITY_LABELS = ["關閉", "低", "標準", "強"];
+export const INTENSITY_LABELS = ["關閉", "簡化", "標準", "強"];
 const KEY = "hb-web-settings";
 export const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 type NavExtra = Navigator & { deviceMemory?: number; userActivation?: { hasBeenActive: boolean } };

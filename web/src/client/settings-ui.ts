@@ -14,7 +14,7 @@ export function reportText(): string {
     `頁面：${location.pathname}${location.search}`,
     `畫面大小：${innerWidth}×${innerHeight}（像素比 ${devicePixelRatio}）`,
     `裝置：${navigator.userAgent}`,
-    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋快速" : ""}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}`,
+    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}`,
   ].join("\n");
 }
 
@@ -70,7 +70,7 @@ export function renderSettings(box: HTMLElement) {
   const seg = document.createElement("div");
   seg.className = "setting";
   const sl = document.createElement("span");
-  sl.textContent = "動畫強度";
+  sl.textContent = "動畫效果";
   const group = document.createElement("div");
   group.className = "seg";
   fx.INTENSITY_LABELS.forEach((l, i) => {
@@ -90,10 +90,10 @@ export function renderSettings(box: HTMLElement) {
 
   box.append(
     seg,
-    toggle("快速動畫模式", () => s.fast, v => { s.fast = v; }),
+    toggle("加快動畫", () => s.fast, v => { s.fast = v; }),
     toggle("畫面震動", () => s.shake, v => { s.shake = v; }, () => { if (s.shake) fx.shake(box, 5, 220); }),
-    toggle("粒子效果", () => s.particles, v => { s.particles = v; }),
-    slider("音效音量", () => s.sfx, v => { s.sfx = v; }, () => sfx.select()),
+    toggle("粒子特效", () => s.particles, v => { s.particles = v; }),
+    slider("音效", () => s.sfx, v => { s.sfx = v; }, () => sfx.select()),
     slider("背景音樂", () => s.music, v => { s.music = v; }, () => {}),
     toggle("手機震動", () => s.vibrate, v => { s.vibrate = v; }, () => fx.buzz(30)),
   );
@@ -103,16 +103,17 @@ export function renderSettings(box: HTMLElement) {
   const ver = document.createElement("small");
   ver.textContent = `版本 ${BUILD.sha}${BUILD.at ? ` · ${BUILD.at}` : ""}`;
   const copy = document.createElement("button");
-  copy.type = "button"; copy.className = "btn paper small"; copy.textContent = "複製回報資訊";
+  copy.type = "button"; copy.className = "btn paper small"; copy.textContent = "遇到問題？告訴我們";
+  copy.title = "複製這支手機的版本、畫面大小和設定，連同截圖一起傳過來";
   copy.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(reportText()); copy.textContent = "已複製，貼給 Claude 就好"; }
-    catch { copy.textContent = "這個瀏覽器不能複製，請截圖這一頁"; }
+    try { await navigator.clipboard.writeText(reportText()); copy.textContent = "回報資訊複製好了，連同截圖傳過來"; }
+    catch { copy.textContent = "這個瀏覽器不能複製，截圖這一頁就好"; }
     sfx.select();
   });
   const reset = document.createElement("button");
   reset.type = "button"; reset.className = "btn ghost small"; reset.textContent = "重設這支手機的進度";
   reset.addEventListener("click", () => {
-    if (!confirm("清除這支手機上的故事進度、跟電腦的存檔和「第一次玩」提示？（設定會保留，連線房間不受影響）")) return;
+    if (!confirm("要清掉這支手機上的教學進度、跟阿禾打到一半的那局，還有「第一次玩」的提示嗎？（設定會留著，朋友的牌桌不受影響）")) return;
     for (const k of ["hb.story.v2", "hb-solo-v1", "hb-story-offered", "hb-news-seen"]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
     location.href = "/";
   });
@@ -121,7 +122,7 @@ export function renderSettings(box: HTMLElement) {
   if (fx.reduced) {
     const note = document.createElement("p");
     note.className = "setnote";
-    note.textContent = "你的手機開了「減少動態效果」，預設用低強度、不震動；想要的話可以在這裡打開。";
+    note.textContent = "你的手機開了「減少動態效果」，所以先用簡化動畫、不震動；想要的話可以在這裡打開。";
     box.appendChild(note);
   }
 }

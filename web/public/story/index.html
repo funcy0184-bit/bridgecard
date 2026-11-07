@@ -18,12 +18,12 @@
 <header class="sbar">
   <a class="brand" href="/" aria-label="回到來打橋牌首頁"><span aria-hidden="true">‹</span><b>來打橋牌</b></a>
   <nav class="snav" aria-label="遊戲模式">
-    <a class="on" href="/story/" aria-current="page">故事入門</a>
+    <a class="on" href="/story/" aria-current="page">跟阿禾學</a>
     <a href="#contentsBox" id="navChapters">章節</a>
-    <a href="/?solo=1">單機對戰</a>
+    <a href="/?solo=1">跟阿禾打</a>
   </nav>
   <button class="notes" id="setBtn" type="button" aria-label="設定">⚙</button>
-  <button class="notes" id="notesBtn" type="button">速查</button>
+  <button class="notes" id="notesBtn" type="button" aria-label="規則小抄">小抄</button>
 </header>
 
 <main class="smain">
@@ -65,24 +65,24 @@
   </div>
 
   <section class="itinerary" id="contentsBox" aria-label="故事目錄">
-    <div class="ihead"><span>故事目錄 · 章節練習</span><button id="restart" type="button">↻ 從頭開始</button><button id="closeChapters" class="ch-close" type="button">關閉</button></div>
+    <div class="ihead"><span>四個章節 · 想練哪幕點哪幕</span><button id="restart" type="button">↻ 從頭開始</button><button id="closeChapters" class="ch-close" type="button">關閉</button></div>
     <div id="contents"></div>
-    <p class="inote">每一幕都可以點進去單獨重玩；重新整理會回到上次那一頁。</p>
+    <p class="inote">每一幕都能點進去重玩；重新整理會回到上次那一頁。</p>
   </section>
 </main>
 
 <dialog id="notes" aria-labelledby="notesTitle">
-  <div class="dhead"><h2 id="notesTitle">牌桌速查</h2><button id="notesClose" type="button" aria-label="關閉速查">×</button></div>
+  <div class="dhead"><h2 id="notesTitle">規則小抄</h2><button id="notesClose" type="button" aria-label="關閉規則小抄">×</button></div>
   <h3>前半場：搶牌</h3>
-  <p>兩人各 13 張。牌堆翻開一張明牌，這一墩贏的人拿明牌，輸的人摸一張暗牌。出一張、補一張，搶 13 墩。這段沒有王牌，墩數不算分。</p>
+  <p>一人 13 張。牌堆翻開一張明牌，這一墩贏的人拿走明牌，輸的人摸一張暗牌。出一張、補一張，總共搶 13 墩。這段沒有王牌，也不算分。</p>
   <h3>一墩</h3>
-  <p>兩人各出一張、比一次輸贏。先出的人決定花色；贏的人先出下一墩。</p>
+  <p>一人出一張、比一次大小，這就是一墩。先出的人決定花色；贏的人下一墩先出。</p>
   <h3>叫牌</h3>
-  <p>叫「數字＋花色」：花色是王牌（NT＝無王），數字加 6 是要贏的墩數，例如 2♥＝紅心當王、贏 8 墩。後叫的要比前面大；一方叫了、另一方 Pass 就定約。雙方一開始都 Pass 就重發。防守方可以加倍，莊家可以再加倍。</p>
+  <p>叫「幾線＋王牌」：花色就是王牌（NT＝無王），線數加 6 是要贏的墩數，例如 2♥＝紅心當王牌、要贏 8 墩。後叫的要比前面高；一個人叫了、另一個人 Pass，合約就定了。兩個人一開始都不叫就重新發牌。防守方可以加倍，莊家可以再加倍。</p>
   <h3>後半場：出牌</h3>
   <p>莊家的對手先出。對方先出的花色你手上有，就一定要跟；沒有才可以墊別的牌，或出王牌「王吃」。</p>
   <h3>打成與計分</h3>
-  <p>莊家拿到目標墩數叫「打成」：線數 × 10 分，每多一墩 +2。少幾墩叫「倒幾墩」，對手每墩得 10 分。加倍 ×2、再加倍 ×4。先到 100 分贏。</p>
+  <p>莊家贏到說好的墩數叫「打成」：線數 × 10 分，每多一墩 +2。少拿幾墩就叫「倒約」，對手每墩拿 10 分。加倍 ×2、再加倍 ×4。先到 100 分的人贏。</p>
 </dialog>
 <dialog id="setDlg" aria-labelledby="setTitle">
   <div class="dhead"><h2 id="setTitle">設定</h2><button id="setClose" type="button" aria-label="關閉設定">×</button></div>

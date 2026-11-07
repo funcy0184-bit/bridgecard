@@ -58,10 +58,10 @@ export const doubledText = (d: number) => d >= 2 ? "再加倍" : d === 1 ? "加�
 export const contractText = (bid: number, d: number) => d > 0 ? `${bidText(bid)} ${doubledText(d)}` : bidText(bid);
 
 export const declarerPreview = (bid: number, d: number) =>
-  `目標 ${tricksNeeded(bid)} 墩｜打成 ${madePoints(bid, d)} 分｜每倒 1 墩對手得 ${pointsPerUndertrick(d)} 分`;
+  `要贏 ${tricksNeeded(bid)} 墩｜打成拿 ${madePoints(bid, d)} 分｜每倒 1 墩，對手拿 ${pointsPerUndertrick(d)} 分`;
 
 export const defenderPreview = (bid: number, d: number, name: string) =>
-  `${name}目標 ${tricksNeeded(bid)} 墩｜打成${name}得 ${madePoints(bid, d)} 分｜每倒 1 墩你得 ${pointsPerUndertrick(d)} 分`;
+  `${name}要贏 ${tricksNeeded(bid)} 墩｜打成${name}拿 ${madePoints(bid, d)} 分｜每倒 1 墩，你拿 ${pointsPerUndertrick(d)} 分`;
 
 export function breakdown(r: HandResult, mySeat: number, oppName: string): string[] {
   const name = (s: number) => s === mySeat ? "你" : oppName;
@@ -70,8 +70,8 @@ export function breakdown(r: HandResult, mySeat: number, oppName: string): strin
   const lines = [
     `合約 ${contractText(r.bidIndex, r.doubled)}（${name(r.declarer)}是莊家）`,
     r.made
-      ? `需要 ${r.tricksNeeded} 墩，拿到 ${r.tricksTaken} 墩 → 打成` + (r.overtricks > 0 ? `，超 ${r.overtricks} 墩` : "")
-      : `需要 ${r.tricksNeeded} 墩，拿到 ${r.tricksTaken} 墩 → 倒 ${r.undertricks} 墩`,
+      ? `要贏 ${r.tricksNeeded} 墩，贏了 ${r.tricksTaken} 墩 → 打成` + (r.overtricks > 0 ? `，多 ${r.overtricks} 墩` : "")
+      : `要贏 ${r.tricksNeeded} 墩，贏了 ${r.tricksTaken} 墩 → 倒 ${r.undertricks} 墩`,
   ];
   if (r.made) {
     lines.push(`合約分：${bidLevel(r.bidIndex)} 線 × ${PER_LEVEL}${m} = ${r.contractPoints}`);
