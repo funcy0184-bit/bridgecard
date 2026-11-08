@@ -14,11 +14,9 @@ import { drone, sfx } from "./sound";
 
 const clamp = (n: number, a = 0, b = 1) => Math.max(a, Math.min(b, n));
 
-// 合約風險：線數越高、加倍越多越危險（0..1）
-export function risk(bid: number, doubled: number): number {
-  if (bid < 0) return 0;
-  return clamp(((bidLevel(bid) - 1) / 6) * 0.6 + [0, 0.22, 0.4][Math.min(2, doubled)]);
-}
+// 合約風險：線數越高、加倍越多越危險（0..1）—— 跟 Impact 系統共用同一個算法
+import { contractRisk as risk } from "./impact";
+export { risk };
 
 // 打牌時的懸念：只看公開的墩數。雙方都還有機會、又接近終點 → 壓力高；已經確定 → 放鬆
 export function suspense(s: TableState): number {

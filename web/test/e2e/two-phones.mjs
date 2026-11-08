@@ -125,6 +125,12 @@ const sA = [await A.textContent("#myScore"), await A.textContent("#oppScore")];
 const sB = [await B.textContent("#myScore"), await B.textContent("#oppScore")];
 if (sA[0] !== sB[1] || sA[1] !== sB[0]) { console.error("✗ 兩邊分數不一致", sA, sB); process.exit(1); }
 console.log(`✓ 兩邊分數一致：阿明 ${sA[0]} · 小美 ${sA[1]}`);
+// 局勢衝擊：兩支手機看同一個伺服器確認的結果 → 每一墩的衝擊種類一樣、贏的一方相反、同一墩不會演兩次
+const impacts = async P => P.evaluate(() => (globalThis.__hbFx || []).filter(x => x.kind === "impact").map(x => ({ tier: x.tier, what: x.what, mine: x.mine })));
+const [ia, ib] = [await impacts(A), await impacts(B)];
+const same = ia.length === ib.length && ia.every((x, k) => x.what === ib[k].what && x.tier === ib[k].tier && x.mine !== ib[k].mine);
+if (!same || ia.length !== 26) { console.error("✗ 兩邊的局勢衝擊不一致或有重播", ia.length, ib.length); process.exit(1); }
+console.log(`✓ 兩邊的局勢衝擊一致：26 墩各演一次（Tier ${[0, 1, 2, 3, 4].map(t => ia.filter(x => x.tier === t).length).join("/")}），贏的一方剛好相反`);
 
 // --- 下一局、重新整理也回得來 ---
 await B.click("#nextBtn");

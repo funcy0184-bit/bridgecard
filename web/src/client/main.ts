@@ -15,9 +15,10 @@ import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken
 import { Link, LocalTable, hasUnfinishedSolo } from "./solo";
 import { sfx } from "./sound";
 import {
-  Level, bidChip, bidTier, contractFeedback, contractSlam, doubleFx, flipNumber, hitstop, redoubleFx, rollNumber, stamp, streakGlow,
-  trickFeedback, victory,
+  bidChip, bidTier, contractFeedback, contractSlam, doubleFx, flipNumber, redoubleFx, rollNumber, stamp, streakGlow, victory,
 } from "./feedback";
+import { ImpactGate, evaluateTrick, playWeight, trickKey, type Impact } from "./impact";
+import { PLAY_T, contact, flightMs, presentImpact, pullUp, slamFly } from "./impactfx";
 import { burstAt } from "./particles";
 import { BUILD, renderSettings } from "./settings-ui";
 import { emo, risk as riskOf } from "./tension";
@@ -47,7 +48,8 @@ const inFlight = new Set<number>();
 const freshCards = new Set<number>();
 let resultSig = { skip: false };
 let streak = 0;            // 你連續贏了幾墩（輸一墩、換階段、新的一局就歸零）
-let sawEmptySeat = false, oppWasOffline = false;   // 連線提示：真的等過人、對方真的斷過線才講
+let sawEmptySeat = false, oppWasOffline = false;
+let impactGate = new ImpactGate();           // 同一墩的結果只演一次   // 連線提示：真的等過人、對方真的斷過線才講
 const chipPending = new Set<number>();   // 叫牌籌碼還在飛：那一邊的叫牌紙卡先不換字
 let hoverWant = -1, hoverTimer = 0;
 
@@ -213,6 +215,7 @@ function resetTable() {
   $("plateOpp").classList.remove("in");
   sawEmptySeat = oppWasOffline = false;
   oppStreak = 0; handOnce.clear(); hideQuip();
+  impactGate = new ImpactGate();
   sfx.resetStreak();
 }
 
@@ -1218,7 +1221,7 @@ function aheSay(text: string, o: { key?: boolean; chance?: number; delay?: numbe
 function hideQuip() { clearTimeout(quipTimer); $("quip").hidden = true; }
 
 // 收一墩之後阿禾要不要講話：一墩最多一句，重要的先講
-function trickQuip(e: GameEvent, s: TableState, level: Level, label: string) {
+function trickQuip(e: GameEvent, s: TableState, im: Impact) {
   if (!conn?.solo || s.phase !== Phase.Play || s.declarer < 0) return;
   const winnerMe = e.seat === s.seat;
   const iDecl = s.declarer === s.seat;
@@ -1228,9 +1231,9 @@ function trickQuip(e: GameEvent, s: TableState, level: Level, label: string) {
   const defAfter = (iDecl ? s.oppTricks : s.myTricks) + (e.seat === s.declarer ? 0 : 1);
   const stillOpen = defAfter < 14 - need;                          // 防守方還沒把合約打倒
   const delay = 520;
-  if (label === "合約擊破") { aheSay(winnerMe ? "好啦，這局算你厲害。" : "哎呀，差一點。", { key: true, delay }); return; }
-  if (label === "合約達成") return;                                // 打成的大場面交給特效和結算單
-  if (label === "關鍵一墩") { aheSay(winnerMe ? "喔？這樣也行！" : "好險，差點就被你翻了。", { key: true, delay }); return; }
+  if (im.outcome === "set") { aheSay(winnerMe ? "好啦，這局算你厲害。" : "哎呀，差一點。", { key: true, delay }); return; }
+  if (im.outcome === "made") return;                               // 打成的大場面交給特效和結算單
+  if (im.kind === "pivot") { aheSay(winnerMe ? "喔？這樣也行！" : "好險，差點就被你翻了。", { key: true, delay }); return; }
   if (e.extra === 1) { aheSay(winnerMe ? "哇，這樣也能搶！" : "嘿，沒想到吧！", { chance: 0.75, delay }); return; }
   if (stillOpen && need - declAfter === 1) { aheSay(iDecl ? "再一墩就夠了。" : "就快了喔。", { once: "near", delay }); return; }
   if (winnerMe && streak >= 3) { aheSay("欸，你今天手感不錯喔。", { once: "streakMe", delay }); return; }
@@ -1240,21 +1243,6 @@ function trickQuip(e: GameEvent, s: TableState, level: Level, label: string) {
   else if (!winnerMe) aheSay("這墩我收下啦。", { chance: 0.2, delay });
 }
 
-// 這一墩算幾級：只看真的發生的事
-function trickLevel(e: GameEvent, s: TableState): { level: Level; text: string } {
-  if (s.phase !== Phase.Play || s.declarer < 0) return { level: 1, text: "" };
-  const need = tricksNeeded(s.highestBid);
-  const setAt = 14 - need;                        // 防守方拿到這麼多墩，合約就倒了
-  const winnerDecl = e.seat === s.declarer;
-  const playedBefore = s.myTricks + s.oppTricks;  // 狀態還沒更新，是這墩之前的數字
-  const left = 13 - playedBefore;                 // 包含這一墩
-  const declBefore = s.declarer === s.seat ? s.myTricks : s.oppTricks;
-  if (winnerDecl && e.value === need) return { level: 3, text: "合約達成" };
-  if (!winnerDecl && e.value === setAt) return { level: 3, text: "合約擊破" };
-  if (winnerDecl && need - declBefore === left) return { level: 2, text: "關鍵一墩" };   // 一墩都不能丟還是拿下來了
-  if (e.extra === 1) return { level: 2, text: "王吃" };
-  return { level: 1, text: "" };
-}
 
 function onEvent(e: GameEvent) {
   const me = e.seat === mySeat;
@@ -1268,28 +1256,25 @@ function onEvent(e: GameEvent) {
       sfx.resetStreak();
       streak = 0; oppStreak = 0; streakGlow($("felt"), 0);
       handOnce.clear(); hideQuip();
+      impactGate = new ImpactGate();
       emo.clear();
       fx.popup(e.value > 0 ? `第 ${e.value} 局 · 發牌！` : "發牌！", centerAnchor(), { size: 28, color: INK, flags: ["pop"], hold: 600 });
       tick(`第 ${e.value} 局開始，${me ? "你" : esc(oppName())}先出`);
       if (!me) aheSay("那我先來囉。", { chance: 0.5, delay: 1100 });
       break;
 
-    case "CardPlayed": {
-      const landAt = flyPlayed(e);
-      if (e.extra === 1) {
-        // 王吃：字和聲音都在落桌那一瞬間；重的回饋留給贏墩（Level 2）
-        fx.popup("王吃！", side, { size: 54, color: GOLD, flags: ["pop", "shake"], hold: 800, delay: landAt });
-        sfx.ruff(fx.ms(landAt) / 1000);
-        fx.buzz([30, 40, 70]);
-        tick(`${who}出王牌 ${cardHtml(e.card)}，王吃！`);
-      } else tick(`${who}出了 ${cardHtml(e.card)}`);
+    case "CardPlayed":
+      // Layer A：每一張牌都重重拍在桌上（王牌稍微重一點）。結果還沒確認，所以這裡不放「王吃」的大特效
+      flyPlayed(e);
+      tick(e.extra === 1 ? `${who}出王牌 ${cardHtml(e.card)}` : `${who}出了 ${cardHtml(e.card)}`);
       break;
-    }
 
     case "TrickWon": {
-      const lv = st ? trickLevel(e, st) : { level: 1 as Level, text: "" };
-      void collectTrick(e, lv.level, lv.text);
-      if (st) trickQuip(e, st, lv.level, lv.text);
+      // Layer B：規則已經確認誰贏這墩，才依局勢決定衝擊等級；同一墩只演一次
+      if (!st || !impactGate.once(trickKey(st))) break;
+      const im = evaluateTrick(e, st);
+      void collectTrick(e, im);
+      trickQuip(e, st, im);
       break;
     }
 
@@ -1447,35 +1432,31 @@ function flyPlayed(e: GameEvent): number {
     el = fx.backEl();
   }
   if (pulled === e.card) pulled = -1;
-  const pull = fx.motionOn() ? fx.T.pull : 0;
-  const flight = me ? fx.T.fly : fx.T.fly + 50;
-  const landAt = pull + flight;
-  // 1. 抽牌
+  // 重量：大牌、王牌、高風險合約稍微重一點（只影響手感，跟這墩會不會贏無關）
+  const weight = playWeight(e.card, e.extra === 1, st);
+  const pull = fx.motionOn() ? fx.ms(PLAY_T.pull) : 0;
+  const flightBase = me ? PLAY_T.fly : PLAY_T.fly + 40;
+  const landAt = pull + flightMs(flightBase, weight);
+  // 1. 抽離手牌（紙張摩擦聲）
   fx.pin(el, from);
   const dy = me ? -20 : 10;
   const pulledRect = new DOMRect(from.left, from.top + (fx.motionOn() ? dy : 0), from.width, from.height);
-  sfx.land(me ? 1 : 0.8, fx.ms(landAt) / 1000);
-  const go = () => fx.fly(el, pulledRect, to, { dur: flight, lift: me ? 16 : 26, flipAt: me ? undefined : () => fx.flipTo(el, e.card) }).then(f => {
-    // 3. 落桌
+  sfx.slap(weight, landAt / 1000);                 // 拍桌聲跟落桌排在同一個時鐘上
+  const go = () => slamFly(el, pulledRect, to, { dur: flightBase, weight, lift: me ? 16 : 26, flipAt: me ? undefined : () => fx.flipTo(el, e.card) }).then(f => {
+    // 3. 落桌：壓扁 → 陰影擴散 → 回彈
     inFlight.delete(e.card);
     f.remove();
     if (st) renderTrick(e.card);
     const landed = slot.firstElementChild;
-    if (landed) {
-      fx.land(landed);
-      fx.shockAt(landed, { size: 84, width: 1.2, dur: 260, color: "rgba(240,220,170,.55)" });
-      burstAt(landed, { count: 3, kinds: ["dust"], speed: 60, life: 0.35, gravity: 30 });
-    }
+    if (landed) contact(landed, $("felt"), weight);
   });
-  if (pull) {
-    el.animate([{ translate: "0 0", scale: "1" }, { translate: `0 ${dy}px`, scale: me ? "1.06" : "1" }],
-      { duration: fx.ms(pull), easing: "cubic-bezier(.2,.9,.3,1)" }).finished.then(go, go);
-  } else void go();
+  // 2. 加速飛向牌桌
+  void pullUp(el, dy, me, weight).then(go);
   return landAt;
 }
 
 // 收墩：勝方的牌放大發光 →（重要事件停一下）→ 兩張一起收向勝方；墩數跳動
-async function collectTrick(e: GameEvent, level: Level, label: string) {
+async function collectTrick(e: GameEvent, im: Impact) {
   const winnerMe = e.seat === mySeat;
   const felt = $("felt");
   const cards: { card: HTMLElement; r: DOMRect; win: boolean }[] = [];
@@ -1489,27 +1470,38 @@ async function collectTrick(e: GameEvent, level: Level, label: string) {
     cards.push({ card: clone, r, win: Number(card.dataset.id) === e.card });
   }
   const winner = cards.find(c => c.win)?.card ?? null;
+  const loser = cards.find(c => !c.win)?.card ?? null;
   const drawing = e.value < 0;
   // 連續贏墩：音高、回彈、桌面光暈遞增；輸一墩就恢復
   streak = winnerMe ? streak + 1 : 0;
   oppStreak = winnerMe ? 0 : oppStreak + 1;
   streakGlow(felt, streak);
-  trickFeedback(drawing ? 1 : level, winnerMe, winner, felt, streak);
+  // Layer B：依 Impact 等級演出（壓痕、裂痕、下沉、定格…），回傳要定格多久
+  const hold = presentImpact(im, { felt, winner, loser, markers: [$("infoStrip"), $("tallyPanel")], streak: winnerMe ? streak : 0 });
+  const hs = hold > 0 ? hold : 0;
+  const msBase = (t: number) => (fx.motionOn() ? t : 0);
   if (winnerMe && streak >= 3) fx.popup(`連贏 ${streak} 墩`, myAnchor(), { size: 18 + Math.min(4, streak - 3) * 2, color: GOLD, flags: ["pop"], delay: 520 });
   if (!drawing) {
-    const good = winnerMe;
-    if (level === 3 && label) {
-      const text = label === "合約達成" ? (winnerMe ? "打成了！" : `${oppName()}打成了`) : (winnerMe ? `${oppName()}倒約了！` : "倒約了…");
+    const good = im.good;
+    if (im.outcome) {
+      // 合約定案（Tier 3／4）：先重擊、定格，接著把叫牌以來累積的壓力釋放出來（沉重的一方只收掉壓力）
+      const made = im.outcome === "made";
+      const text = im.kind === "match" && good ? (im.comeback ? "逆轉！" : "決勝一墩！")
+        : made ? (winnerMe ? "打成了！" : `${oppName()}打成了`) : (winnerMe ? `${oppName()}倒約了！` : "倒約了…");
       const r0 = riskOf(st?.highestBid ?? -1, st?.doubled ?? 0);
-      fx.popup(text, centerAnchor(), { size: good ? 40 + Math.round(r0 * 12) : 28, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1100, delay: good ? 380 : 240 });
-      setTimeout(() => void emo.release(good, r0, centerAnchor(), felt), fx.ms(200));
-    } else if (level === 2 && label && label !== "王吃") {
-      fx.popup(winnerMe ? `${label}！` : label, centerAnchor(), { size: 30, color: winnerMe ? GOLD : MUTED, flags: ["pop"], delay: 200 });
+      const power = im.tier === 4 ? Math.max(r0, 0.85) : r0;
+      fx.popup(text, centerAnchor(), { size: good ? 40 + Math.round(power * 14) : 28, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1100, delay: (good ? 380 : 240) + msBase(im.hitstop) });
+      setTimeout(() => void emo.release(good, power, centerAnchor(), felt), fx.ms(200) + hs);
+    } else if (im.tier === 2 && im.label) {
+      // 王吃、關鍵一墩、加倍局再一墩：結果確認了才亮字
+      const ruff = im.kind === "ruff";
+      fx.popup(im.label.endsWith("！") ? im.label : (winnerMe ? `${im.label}！` : im.label), ruff ? (winnerMe ? myAnchor() : oppAnchor()) : centerAnchor(),
+        { size: ruff ? (winnerMe ? 50 : 34) : 30, color: winnerMe ? GOLD : MUTED, flags: winnerMe ? ["pop", "shake"] : ["pop"], hold: ruff ? 800 : 600, delay: 120 + msBase(im.hitstop) });
     }
     fx.popup(winnerMe ? "+1 墩" : `${oppName()} +1 墩`, winnerMe ? myAnchor() : oppAnchor(),
-      { size: winnerMe ? 24 : 20, color: winnerMe ? GOOD : MUTED, delay: 300 });
+      { size: winnerMe ? 24 : 20, color: winnerMe ? GOOD : MUTED, delay: 300 + msBase(im.hitstop) });
   }
-  if (!drawing && level >= 2) await hitstop(level);
+  if (hs) await fx.wait(hs + fx.ms(30));          // 定格：等壓到底的那一下停完，再把牌收走
   const dest = (winnerMe ? handBox : $("oppFan")).getBoundingClientRect();
   const c = fx.center(dest);
   const target = fx.rectAt(c.x, winnerMe ? dest.top + 20 : c.y, 30, 42);
@@ -1592,7 +1584,7 @@ for (const m of ["menu", "auctionPop", "rulesModal", "storyOffer", "homeMenu", "
 // 按鈕：按下去像厚紙卡（音效＋手機輕震）
 document.addEventListener("pointerdown", ev => {
   const b = (ev.target as HTMLElement).closest<HTMLElement>(".btn, .strip, .icon, .back, .cv-btn, .cv-card, .cv-icon");
-  if (b && !(b as HTMLButtonElement).disabled) { sfx.press(); fx.buzz(6); }
+  if (b && !(b as HTMLButtonElement).disabled) { const w = b.closest("#bidPanel") ? emo.pressure : 0; sfx.press(w); fx.buzz(6 + Math.round(w * 14)); }
 }, { passive: true });
 
 // ---------------- 小工具 ----------------

@@ -45,6 +45,29 @@ function applyVolumes() {
 }
 onSettings(applyVolumes);
 
+// ---------------- 可替換的音效素材 ----------------
+// 目前全部是合成音。想換成錄好的音效檔：把檔案放到 public/sfx/，在這裡填網址就好（沒填就用合成音，不會多發任何請求）
+export type SampleName = "swish" | "slap" | "boom" | "crack" | "resonance";
+export const SAMPLE_URLS: Partial<Record<SampleName, string>> = {};
+const buffers = new Map<SampleName, AudioBuffer>();
+function loadSamples() {
+  for (const [name, url] of Object.entries(SAMPLE_URLS) as [SampleName, string][]) {
+    fetch(url).then(r => r.arrayBuffer()).then(b => ctx!.decodeAudioData(b)).then(buf => { buffers.set(name, buf); }).catch(() => { /* 讀不到就繼續用合成音 */ });
+  }
+}
+function sample(name: SampleName, at: number, vol: number): boolean {
+  const b = buffers.get(name);
+  if (!b || !ctx) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = b;
+  const g = ctx.createGain();
+  g.gain.value = vol;
+  src.connect(g); g.connect(sfxBus);
+  track(src);
+  src.start(ctx.currentTime + at);
+  return true;
+}
+
 // 第一次點畫面時解鎖（iPhone 一定要這樣）
 let unlocked = false;
 export function unlockAudio() {
@@ -57,6 +80,7 @@ export function unlockAudio() {
   const s = c.createBufferSource();
   s.buffer = b; s.connect(c.destination); s.start(0);
   applyVolumes();
+  if (Object.keys(SAMPLE_URLS).length) loadSamples();
   drone.refresh();
 }
 if (typeof window !== "undefined") {
@@ -151,6 +175,51 @@ export const sfx = {
     hiss({ at, dur: 0.06, vol: 0.34 * power, type: "lowpass", freq: 1500, q: 0.5 });
     thump(at, 150, 0.32 * power, 0.1);
     hiss({ at, dur: 0.012, vol: 0.12 * power, freq: 3200, q: 2 });
+  },
+  // ---- 出牌重量（Layer A）：抽離的摩擦 → 落桌的高頻拍擊＋低頻重量（weight 越重低頻越多，不是單純變大聲） ----
+  swish(weight = 1) {
+    if (!ok("swish", 40)) return;
+    if (sample("swish", 0, 0.6)) return;
+    hiss({ dur: 0.075, vol: 0.075 + 0.04 * Math.max(0, weight - 1), freq: 2700, sweepTo: 1250, q: 0.8 });
+  },
+  slap(weight = 1, at = 0) {
+    if (!ok("slap", 30)) return;
+    const w = Math.max(0.8, Math.min(1.5, weight));
+    if (sample("slap", at, 0.7 * w)) return;
+    hiss({ at, dur: 0.011, vol: 0.15 * w, freq: 3700, q: 2.2 });                  // 拍：紙邊打到桌面
+    hiss({ at, dur: 0.065, vol: 0.3 * w, type: "lowpass", freq: 1450, q: 0.5 });  // 紙面
+    thump(at, 165 - 40 * (w - 1), 0.3 * w, 0.1);                                  // 桌子的重量
+    if (w > 1.08) thump(at + 0.004, 76, 0.5 * (w - 1), 0.17);                     // 重的牌：再沉一點
+  },
+  // ---- 牌局結果（Layer B） ----
+  // 低頻重擊：關鍵墩、合約定案
+  boom(power = 1, at = 0) {
+    if (!ok("boom", 90)) return;
+    if (sample("boom", at, power)) return;
+    thump(at, 68, 0.5 * power, 0.32);
+    thump(at, 122, 0.22 * power, 0.13);
+    hiss({ at, dur: 0.22, vol: 0.15 * power, type: "lowpass", freq: 520 });
+  },
+  // 桌面壓裂：幾下細碎的劈啪；金色裂紋多一點亮音
+  crack(kind: "hairline" | "ink" | "gold", at = 0) {
+    if (!ok("crack", 120)) return;
+    if (sample("crack", at, kind === "hairline" ? 0.4 : 0.8)) return;
+    const n = kind === "hairline" ? 3 : kind === "ink" ? 6 : 8;
+    for (let i = 0; i < n; i++)
+      hiss({ at: at + i * 0.013 + Math.random() * 0.01, dur: 0.008 + Math.random() * 0.012, vol: (kind === "hairline" ? 0.05 : 0.085) * (1 - (i / n) * 0.5), type: "highpass", freq: 2600 + Math.random() * 2600, q: 1 });
+    if (kind === "gold") { bell(at + 0.03, 2637, 0.045, 0.6); bell(at + 0.06, 3520, 0.03, 0.7); }
+  },
+  // 成功的回響：長尾的和聲（Tier 4 打成）
+  resonance(at = 0) {
+    if (!ok("resonance", 400)) return;
+    if (sample("resonance", at, 0.8)) return;
+    [523, 784, 1047, 1568].forEach((f, i) => bell(at + i * 0.025, f, 0.045, 1.5));
+  },
+  // 沉重的失落：往下掉的低音（合約被打倒、對方決勝）——不是歡慶
+  sinkDown(power = 1) {
+    if (!ok("sinkDown", 300)) return;
+    tone({ freq: 196, dur: 0.55, vol: 0.1 * power, type: "triangle", drop: 0.68 });
+    thump(0.02, 58, 0.34 * power, 0.42);
   },
   // 贏墩：紙牌收攏＋金屬 Click；連贏時（streak）音高一點一點升、聲音一點一點亮
   win(mine: boolean, run = 0) {
@@ -273,7 +342,13 @@ export const sfx = {
     [349, 294, 233].forEach((f, i) => tone({ at: i * 0.16, freq: f, dur: 0.38, vol: 0.08, type: "triangle" }));
   },
   // 按鈕：厚紙卡按下去／放開
-  press() { if (ok("press", 30)) { hiss({ dur: 0.03, vol: 0.12, type: "lowpass", freq: 1800 }); thump(0, 180, 0.08, 0.05); } },
+  // 按鈕：厚紙卡按下去。weight（叫牌壓力 0..1）越高，越低、越沉
+  press(weight = 0) {
+    if (!ok("press", 30)) return;
+    const w = Math.max(0, Math.min(1, weight));
+    hiss({ dur: 0.03, vol: 0.12, type: "lowpass", freq: 1800 - 600 * w });
+    thump(0, 180 - 70 * w, 0.08 + 0.1 * w, 0.05 + 0.07 * w);
+  },
   toggle(on: boolean) { if (ok("toggle", 40)) tone({ freq: on ? 1320 : 880, dur: 0.04, vol: 0.06, type: "triangle" }); },
   slide() { if (ok("slide", 120)) hiss({ dur: 0.2, vol: 0.08, freq: 1800, sweepTo: 3200, q: 0.6 }); },
   join() { if (!ok("join", 150)) return; thump(0, 120, 0.3, 0.1); bell(0.05, 1175, 0.1, 0.35); bell(0.12, 1568, 0.09, 0.4); },

@@ -5,7 +5,9 @@ import { SUIT_SYMBOL, bidText, cardText, isRedBid, suitOf, tricksNeeded, Suit } 
 import { GameEvent, TableState } from "../game/game";
 import * as fx from "../client/fx";
 import { sfx } from "../client/sound";
-import { bidChip, bidTier, contractFeedback, contractSlam, trickFeedback } from "../client/feedback";
+import { bidChip, bidTier, contractFeedback, contractSlam } from "../client/feedback";
+import { evaluateTrick, playWeight } from "../client/impact";
+import { PLAY_T, contact, flightMs, presentImpact, pullUp, slamFly } from "../client/impactfx";
 import { burstAt, shower } from "../client/particles";
 import { renderSettings } from "../client/settings-ui";
 import {
@@ -528,28 +530,28 @@ async function onCardTap(id: number, el: HTMLElement) {
   fx.bounce(el);
   fx.buzz(10);
   renderNarrator();
-  // 1. 從手上飛到「你出的牌」
+  // 1. 從手上抽離 → 加速拍到「你出的牌」：落桌壓扁、陰影擴散、回彈（跟正式牌桌同一套重量感）
+  const ruff = r.events.some(e => e.type === "CardPlayed" && e.extra === 1);
+  const before = view();                       // 這一墩結算「之前」的牌桌：拿來判斷這墩有多重要
+  const weight = playWeight(id, ruff, before);
   const from = el.getBoundingClientRect();
   const to = $("slotMe").getBoundingClientRect();
   el.style.visibility = "hidden";
   const flying = fx.cardEl(id);
-  sfx.lift();
-  await fx.fly(flying, from, to, { dur: 260, lift: 20 });
-  sfx.land();
+  fx.pin(flying, from);
+  const pulledRect = new DOMRect(from.left, from.top - (fx.motionOn() ? 18 : 0), from.width, from.height);
+  sfx.slap(weight, ((fx.motionOn() ? fx.ms(PLAY_T.pull) : 0) + flightMs(PLAY_T.fly + 30, weight)) / 1000);
+  await pullUp(flying, -18, true, weight);
+  await slamFly(flying, pulledRect, to, { dur: PLAY_T.fly + 30, weight, lift: 18 });
   renderTable();
   flying.remove();
   const mine = $("slotMe").firstElementChild;
-  if (mine) fx.land(mine);
-  const ruff = r.events.some(e => e.type === "CardPlayed" && e.extra === 1);
-  if (ruff) {
-    fx.popup("王吃！", $("aMe"), { size: 60, color: GOLD, flags: ["pop", "shake"], hold: 800, delay: 120 });
-    setTimeout(() => { fx.shakeScreen(12, 320); sfx.ruff(); burstAt($("aMe"), { count: 14, kinds: ["star", "dust"], speed: 220 }); }, fx.ms(180));
-    fx.buzz([30, 40, 70]);
-  }
-  await fx.wait(fx.ms(ruff ? 900 : 600));
-  // 2. 結算這一墩
+  if (mine) contact(mine, $("stable"), weight);
+  // 結果還沒確認：王吃的大字和重擊留給結算這一墩的時候
+  await fx.wait(fx.ms(ruff ? 700 : 600));
+  // 2. 結算這一墩（規則確認了誰贏，才依局勢決定衝擊等級）
   const evs = settle(run);
-  await animateSettle(evs);
+  await animateSettle(evs, before);
   record();
   busy = false;
   startOutro();
@@ -557,12 +559,17 @@ async function onCardTap(id: number, el: HTMLElement) {
   revealNarrator();
 }
 
-async function animateSettle(evs: GameEvent[]) {
+async function animateSettle(evs: GameEvent[], before: TableState) {
   const won = evs.find(e => e.type === "TrickWon");
+  let hold = 0;
   if (won) {
     const card = $(won.seat === ME ? "slotMe" : "slotOpp").firstElementChild as HTMLElement | null;
-    const level = evs.some(e => e.type === "GameOver") ? 3 : won.extra === 1 ? 2 : 1;
-    trickFeedback(level === 3 ? 2 : level, won.seat === ME, card, $("stable"));
+    const other = $(won.seat === ME ? "slotOpp" : "slotMe").firstElementChild as HTMLElement | null;
+    const im = evaluateTrick(won, before);
+    hold = presentImpact(im, { felt: $("stable"), winner: card, loser: other, markers: [document.getElementById("tallyBox")] });
+    if (im.kind === "ruff" || (won.extra === 1 && im.tier >= 2))
+      fx.popup("王吃！", anchor(won.seat), { size: won.seat === ME ? 60 : 36, color: won.seat === ME ? GOLD : MUTED, flags: ["pop", "shake"], hold: 800, delay: 80 + (fx.motionOn() ? im.hitstop : 0) });
+    if (hold) await fx.wait(hold);
   }
   const up = evs.find(e => e.type === "FaceUpTaken");
   if (up) {

@@ -18,6 +18,10 @@ await p.addInitScript(() => {
   let last = performance.now();
   const loop = t => { window.__frames.push(t - last); last = t; requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
+  // 裂痕：記下每一次出現的種類（驗收「只有重要的牌才會裂」）
+  window.__cracks = [];
+  addEventListener("DOMContentLoaded", () => new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains("crack")) window.__cracks.push(n.getAttribute("class")); })
+    .observe(document.body, { childList: true, subtree: true }));
 });
 await p.goto(base + "/?solo=new"); await p.waitForSelector("#hand .card");
 
@@ -56,7 +60,9 @@ while (Date.now() - t0 < 170000 && !(await p.locator("#result").isVisible())) {
   if (mine && await p.locator("#hand .card.legal").count()) {
     const id = await p.locator("#hand .card.legal").first().getAttribute("data-id");
     const c = p.locator(`#hand .card[data-id="${id}"]`);
-    await c.click({ position: { x: 10, y: 34 } }); await p.click("#playBtn");
+    // 手牌疊在一起：被另一張選起來的牌擋住時，改用「提示」選牌（一樣是真的點畫面）
+    try { await c.click({ position: { x: 10, y: 34 }, timeout: 2000 }); } catch { await p.click("#hintBtn"); }
+    await p.click("#playBtn");
   }
   await p.waitForTimeout(90);
 }
@@ -72,6 +78,18 @@ console.log(`   這一局：一般 ${lv(1)} 墩、關鍵 ${lv(2)} 墩、合約�
 ok(lv(1) >= tricks.length * 0.6, "大部分是一般贏墩（不會每一墩都在爆炸）");
 ok(lv(3) <= 2, "合約級特效一局最多兩次（合約達成或擊破）");
 ok(!log.some(x => x.kind === "victory"), "沒有整場勝利時不放勝利特效");
+// 動態出牌重量感與局勢衝擊（Impact Tier 0–4）
+const plays = log.filter(x => x.kind === "play"), impacts = log.filter(x => x.kind === "impact");
+const tier = n => impacts.filter(x => x.tier === n).length;
+const cracks = await p.evaluate(() => window.__cracks);
+await p.waitForTimeout(1200);
+const leftover = await p.evaluate(() => document.querySelectorAll(".impactlayer > *").length);
+console.log(`   出牌落桌 ${plays.length} 次；結果衝擊 Tier0 ${tier(0)}、Tier1 ${tier(1)}、Tier2 ${tier(2)}、Tier3 ${tier(3)}、Tier4 ${tier(4)}；裂痕 ${cracks.length} 次（${[...new Set(cracks)].join("／") || "無"}）`);
+ok(plays.length >= 50, "每一張牌落桌都有基本重量（Tier 0 拍桌）");
+ok(tier(2) + tier(3) + tier(4) <= impacts.length * 0.2, "Tier 2 以上是少數（不會每張牌都爆炸）");
+ok(tier(3) + tier(4) <= 2, "合約定案級（Tier 3／4）一手最多兩次");
+ok(cracks.length <= tier(2) + tier(3) + tier(4), "裂痕只出現在 Tier 2 以上的牌");
+ok(leftover === 0, "特效演完就收掉，桌上不會累積裂痕或陰影");
 
 console.log("4. 效能");
 const frames = (await p.evaluate(() => window.__frames)).slice(30).sort((a, b) => a - b);

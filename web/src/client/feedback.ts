@@ -12,8 +12,9 @@ import { sfx } from "./sound";
 export type Level = 1 | 2 | 3;
 
 // 測試用：記下每一次回饋是被什麼事件、用哪一級觸發（只放在記憶體，不影響遊戲）
-export const fxLog: { kind: string; level?: number; mine?: boolean; extra?: number; t: number }[] = [];
-function log(kind: string, d: { level?: number; mine?: boolean; extra?: number } = {}) {
+export const fxLog: { kind: string; level?: number; mine?: boolean; extra?: number; tier?: number; what?: string; t: number }[] = [];
+export function logFx(kind: string, d: { level?: number; mine?: boolean; extra?: number; tier?: number; what?: string } = {}) { log(kind, d); }
+function log(kind: string, d: { level?: number; mine?: boolean; extra?: number; tier?: number; what?: string } = {}) {
   fxLog.push({ kind, ...d, t: Math.round(performance.now()) });
   if (fxLog.length > 400) fxLog.shift();
 }
