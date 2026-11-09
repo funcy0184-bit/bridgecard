@@ -181,7 +181,7 @@ export async function contractSlam(contract: string, red: boolean, sub: string, 
       { duration: fx.ms(300), easing: "cubic-bezier(.55,0,.85,.4)", fill: "forwards" }).finished.catch(() => {});
     sfx.impactAt(0, 0.5);
     fx.punch(target, 0.14, 320);
-    fx.glow(target, 600);
+    fx.glow(target, 600, false);
   }
   seal.remove();
 }

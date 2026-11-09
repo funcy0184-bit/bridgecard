@@ -102,7 +102,7 @@ for (const [name, w, h] of SIZES) {
     const mine = (await p.getAttribute("#turnLine", "class"))?.includes("mine");
     if (mine && await p.locator("#hand .card.legal").count()) {
       const phase = await p.textContent("#phaseText");
-      if (phase.includes("後半") && !saw.play) { await check("牌桌：出牌", ["#hand", "#actions", "#trumpPanel", "#tallyPanel", "#infoStrip"]); saw.play = true; }
+      if (phase.includes("後半") && !saw.play) { await check("牌桌：出牌", ["#hand", "#actions", "#keyInfo", "#suitCount", "#turnLine"]); saw.play = true; }
       await p.click("#hintBtn"); await p.click("#playBtn");   // 用「提示」選牌再按「出牌」
     }
     await p.waitForTimeout(80);

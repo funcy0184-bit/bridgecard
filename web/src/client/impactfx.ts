@@ -183,7 +183,7 @@ export function presentImpact(im: Impact, t: ImpactTargets): number {
     if (im.tier >= 3 && t.loser) t.loser.animate([{ rotate: "0deg" }, { rotate: "-2.4deg" }, { rotate: "1.6deg" }, { rotate: "-0.6deg" }, { rotate: "0deg" }], { duration: fx.ms(280), delay: fx.ms(60) });
   }
   // 決勝：合約欄、墩數亮起來
-  if (im.tier === 4 && good) for (const m of t.markers ?? []) if (m) { setTimeout(() => { fx.glow(m, 900); fx.punch(m, 0.12, 360); }, fx.ms(hs + 80)); }
+  if (im.tier === 4 && good) for (const m of t.markers ?? []) if (m) { setTimeout(() => { fx.glow(m, 900, false); fx.punch(m, 0.12, 360); }, fx.ms(hs + 80)); }
   return hs;
 }
 

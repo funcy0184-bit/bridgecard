@@ -174,7 +174,7 @@ await page.waitForSelector("#hand .card");
 await page.evaluate(() => { window.__coach = []; new MutationObserver(() => { const t = document.getElementById("coachTitle").textContent; if (t && window.__coach.at(-1) !== t) window.__coach.push(t); }).observe(document.getElementById("coach"), { subtree: true, childList: true, characterData: true, attributes: true }); });
 await wait(600);
 check((await text("#coachTitle")).includes("搶牌開始"), "練習局：搶牌開始的提示");
-check((await text("#phaseChip")).includes("搶牌") && (await page.locator("#phaseChip li.now").innerText()) === "搶牌", "整局流程：現在在「搶牌」");
+check((await text("#phaseChip")).includes("搶牌") && (await page.locator("#phaseChip li.now").innerText()).includes("搶牌"), "整局流程：現在在「搶牌」");
 let turns = 0, sawLast = false, sawOrder = false, sawReason = false;
 const t0 = Date.now();
 while (Date.now() - t0 < 180000 && !(await page.locator("#result").isVisible())) {
@@ -184,21 +184,24 @@ while (Date.now() - t0 < 180000 && !(await page.locator("#result").isVisible()))
     await wait(300); continue;
   }
   const tl = await page.locator("#turnLine").innerText();
-  if (/①.*→.*②/.test(tl)) sawOrder = true;
-  if (/贏這墩/.test(tl) && /下一墩|最後一墩|搶牌結束/.test(tl)) sawReason = true;
-  if (!sawLast && !(await page.locator("#lastTrickBtn").isHidden())) {
-    await page.locator("#lastTrickBtn").click(); await wait(250);
-    sawLast = (await text("#ltWhy")).includes("贏") && (await text("#ltSuit")).length > 0 && (await page.locator("#ltLead .card").count()) === 1;
-    await page.locator("#lastTrickPop [data-close]").click(); await wait(150);
+  const labels = await page.evaluate(() => [document.getElementById("oppSlot").dataset.label, document.getElementById("mySlot").dataset.label].join("|"));
+  if (/①先出/.test(labels) && /②後出/.test(labels)) sawOrder = true;
+  if (/這墩.*贏/.test(tl) && /下一墩|接著/.test(tl)) sawReason = true;
+  if (!sawLast && await page.locator("#mySlot .card, #oppSlot .card").count() === 0 && (await page.evaluate(() => (JSON.parse(sessionStorage.getItem("hb-trick-log") ?? "{}").list ?? []).length)) > 0) {
+    await page.locator("#recordBtn").click(); await wait(250);
+    await page.locator('#recordPop [data-tab="tricks"]').click(); await wait(150);
+    const row = page.locator("#recBody .recrow").first();
+    sawLast = (await row.locator(".card").count()) === 2 && /領出/.test(await row.locator(".rw").innerText()) && /贏/.test(await row.locator(".rh").innerText());
+    await page.locator("#recordPop [data-rclose]").click(); await wait(150);
   }
   const mine = ((await page.locator("#turnLine").getAttribute("class")) ?? "").includes("mine") && (await page.locator("#hand .card.legal").count()) > 0;
   if (mine) { await page.locator("#hintBtn").click(); await page.locator("#playBtn").click(); turns++; await wait(250); continue; }
   await wait(150);
 }
 check(await page.locator("#result").isVisible(), `打完一整局（你出了 ${turns} 張）`);
-check(sawOrder, "每墩顯示「① 誰先出 → ② 換誰」");
-check(sawReason, "每墩結束顯示誰贏、為什麼、下一墩誰先出");
-check(sawLast, "「上一墩」可以回看：雙方出牌、領出花色、原因");
+check(sawOrder, "出牌格標出「① 誰先出、② 誰後出」");
+check(sawReason, "每墩結束用一句話說誰贏、下一墩誰先出（原因在「?」和紀錄裡）");
+check(sawLast, "牌局紀錄可以回看每一墩：雙方出牌、先後、領出花色、誰贏、原因");
 const coachSeen = await page.evaluate(() => window.__coach);
 check(["搶牌結束，開始叫牌", "合約成立", "第一墩結束"].every(t => coachSeen.includes(t)), `對局提示依階段出現（${coachSeen.join("、")}）`);
 check(!(await page.locator("#resCoach").isHidden()), "結算單裡有「結算怎麼算」的提示");

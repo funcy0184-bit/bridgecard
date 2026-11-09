@@ -24,7 +24,7 @@ export interface TableState {
   hand: number[]; legal: number[]; oppCount: number;
   faceUp: number; stockCount: number;
   leadCard: number; followCard: number; leaderSeat: number; currentSeat: number;
-  myTricks: number; oppTricks: number; oppTakenFaceUp: number[];
+  myTricks: number; oppTricks: number; oppTakenFaceUp: number[]; myTakenFaceUp: number[];   // 兩邊搶走的明牌（公開資訊）
   highestBid: number; highestBidder: number; declarer: number; minBid: number;
   doubled: number; canDouble: boolean; canRedouble: boolean;
   auctionSeats: number[]; auctionCalls: number[];
@@ -266,7 +266,7 @@ export class HoneymoonGame {
       leadCard: this.leadCard, followCard: this.followCard,
       leaderSeat: this.leader, currentSeat: this.currentPlayer,
       myTricks: this.tricksWon[s], oppTricks: this.tricksWon[o],
-      oppTakenFaceUp: this.takenFaceUp[o].slice(),
+      oppTakenFaceUp: this.takenFaceUp[o].slice(), myTakenFaceUp: this.takenFaceUp[s].slice(),
       highestBid: this.highestBid, highestBidder: this.highestBidder, declarer: this.declarer,
       minBid: this.minBidIndex, doubled: this.doubled,
       canDouble: myBidTurn && this.canDouble(s), canRedouble: myBidTurn && this.canRedouble(s),

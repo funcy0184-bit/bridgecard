@@ -101,48 +101,63 @@
   </section>
 
   <!-- ============ 02～04 牌桌：搶牌／叫牌／出牌 ============ -->
+  <!-- 常駐只留：現在哪個階段、輪到誰、這階段最重要的一兩個數字、比分、手牌和必要按鈕；其他點開才看 -->
   <section id="table" class="screen" hidden>
     <header class="topbar">
-      <span class="chip" id="roomChip"></span>
-      <div class="score" aria-live="polite">
-        <span id="handNo" class="hn"></span>
-        <span>你 <b id="myScore">0</b><small class="u">分</small></span>
-        <span class="sep">·</span>
-        <span><span id="oppNameTop"></span> <b id="oppScore">0</b><small class="u">分</small></span>
-        <small class="tg">累積先到 <span id="target">100</span> 分</small>
-      </div>
-      <button id="muteBtn" class="icon" type="button" aria-label="靜音"></button>
-      <button id="menuBtn" class="icon" type="button" aria-label="選單">⋯</button>
-    </header>
-
-    <div class="phasebar">
-      <ol class="flow" id="phaseChip" aria-label="整局流程"><li data-i="0">搶牌</li><li data-i="1">叫牌</li><li data-i="2">出牌</li><li data-i="3">結算</li></ol>
+      <ol class="flow" id="phaseChip" aria-label="整局流程（點一下看這個階段在做什麼）">
+        <li data-i="0"><button type="button" data-stage="0"><i>1</i><span>搶牌</span></button></li>
+        <li data-i="1"><button type="button" data-stage="1"><i>2</i><span>叫牌</span></button></li>
+        <li data-i="2"><button type="button" data-stage="2"><i>3</i><span>出牌</span></button></li>
+        <li data-i="3"><button type="button" data-stage="3"><i>4</i><span>結算</span></button></li>
+      </ol>
       <span class="sr-only" id="phaseText"></span>
-      <span class="pchip small" id="trickChip"></span>
+      <button id="muteBtn" class="icon brass" type="button" aria-label="靜音" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="horn" d="M2.6 10.4h2.6c3.4 0 6.4-2 9-5.6v14.4c-2.6-3.6-5.6-5.6-9-5.6H2.6z"/>
+          <path class="engr" d="M5.4 12h5.8M6 11.2c2.8-.3 5.2-1.6 7.2-3.8M6 12.8c2.8.3 5.2 1.6 7.2 3.8"/>
+          <ellipse class="lip" cx="14.4" cy="12" rx="1.5" ry="7.4"/>
+          <g class="on"><path d="M17.6 9.2c1.2 1.6 1.2 4 0 5.6"/><path d="M19.9 7.2c2.3 2.8 2.3 6.8 0 9.6"/></g>
+          <g class="off"><path d="M17.4 9.4l4.2 5.2M21.6 9.4l-4.2 5.2"/></g>
+        </svg>
+      </button>
+      <button id="menuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
+    </header>
+    <div class="keybar">
+      <div class="keyinfo" id="keyInfo" aria-live="polite"></div>
+      <div class="score" aria-label="累積分數">
+        <span class="sc me"><small>你</small><b id="myScore">0</b><small class="u">分</small></span>
+        <span class="sc opp"><small id="oppNameTop"></small><b id="oppScore">0</b><small class="u">分</small></span>
+      </div>
     </div>
-    <div class="infostrip" id="infoStrip" hidden></div>
+    <div class="stagepop" id="stagePop" hidden role="dialog" aria-labelledby="stageTitle">
+      <button class="px" type="button" data-pclose aria-label="關閉">✕</button>
+      <b id="stageTitle"></b><p id="stageText"></p>
+    </div>
 
     <div class="opp" id="oppArea">
-      <div class="who"><img src="/art/stamp-ahe.svg" alt="" class="oppstamp" id="oppStamp"><b id="oppName"></b><span class="dot" id="oppDot"></span><span id="oppCount" class="cnt"></span></div>
+      <div class="who"><img src="/art/stamp-ahe.svg" alt="" class="oppstamp" id="oppStamp"><div class="nm"><b id="oppName"></b><span class="dot" id="oppDot"></span><span id="oppCount" class="cnt"></span></div></div>
       <div class="fan" id="oppFan"></div>
-      <div class="memo" id="memo" title="對手搶走的明牌"></div>
+      <button id="recordBtn" class="recbtn" type="button" aria-expanded="false" aria-controls="recordPop"><span id="recordLbl">牌局紀錄</span><i aria-hidden="true">▾</i></button>
       <div class="coach" id="coach" hidden role="status" aria-live="polite"><b id="coachTitle"></b><span id="coachText"></span><button id="coachOk" class="link" type="button">知道了</button></div>
       <p class="quip" id="quip" role="status" aria-live="polite" hidden></p>
     </div>
 
-    <div class="status"><span id="statusText"></span><button id="lastTrickBtn" class="link" type="button" hidden>上一墩</button><button id="auctionBtn" class="link" type="button" hidden>叫牌紀錄</button></div>
+    <!-- 牌局紀錄：預設收合；只放公開過的牌（雙方搶走的明牌、每墩打出來的兩張、叫牌） -->
+    <div class="recpop" id="recordPop" hidden role="dialog" aria-label="牌局紀錄">
+      <div class="rechead"><b>牌局紀錄</b><small><span id="handNo"></span> · 先到 <span id="target">100</span> 分的人贏</small><button class="px" type="button" data-rclose aria-label="關閉">✕</button></div>
+      <div class="rectabs" role="tablist">
+        <button type="button" role="tab" data-tab="mine">你的明牌 <i id="cntMine">0</i></button>
+        <button type="button" role="tab" data-tab="opp"><span id="recOppName">阿禾</span>的明牌 <i id="cntOpp">0</i></button>
+        <button type="button" role="tab" data-tab="tricks">出牌紀錄</button>
+        <button type="button" role="tab" data-tab="auction">叫牌</button>
+      </div>
+      <div class="recbody" id="recBody" role="tabpanel"></div>
+    </div>
 
     <div class="felt" id="felt">
       <i class="fc tl"></i><i class="fc tr"></i><i class="fc bl"></i><i class="fc br"></i>
       <div class="stock" id="stock"></div>
-      <div class="hidpile" id="hidPile" hidden><span class="lbl">暗牌</span><div class="pilestack"></div></div>
-      <div class="sidepanel left" id="trumpPanel" hidden><small>王牌</small><b id="trumpSuit"></b><img src="/art/seal.svg" alt=""></div>
-      <div class="sidepanel right" id="tallyPanel" hidden>
-        <small id="tallyLabel">已贏墩數</small>
-        <div class="tally"><b id="tallyBig">0</b><span>/</span><span id="tallyNeed">8</span></div>
-        <small class="tline" id="tallyLine"></small>
-      </div>
-      <div class="leadbadge" id="leadBadge" hidden aria-live="polite"></div>
+      <div class="hidpile" id="hidPile" hidden><span class="lbl">暗牌</span><div class="pilestack"></div><small class="sub">輸的摸</small></div>
       <div class="trick">
         <div class="slot" id="oppSlot" data-label=""></div>
         <div class="anchor" id="centerAnchor"></div>
@@ -150,8 +165,7 @@
       </div>
       <div class="anchor" id="oppAnchor"></div>
       <div class="anchor" id="myAnchor"></div>
-      <div class="ticker" id="ticker" aria-live="polite"></div>
-      <div class="rulenote" id="ruleNote" hidden>贏了拿明牌<i>｜</i>輸了摸暗牌</div>
+      <div class="sr-only" id="ticker" aria-live="polite"></div>
 
       <!-- 03 叫牌 -->
       <div class="bidpanel" id="bidPanel" hidden>
@@ -174,11 +188,15 @@
           <button id="bidPass" class="btn paper" type="button" aria-label="不叫（Pass）">不叫 Pass</button>
           <button id="bidDouble" class="btn paper dbl" type="button">加倍</button>
         </div>
-        <small class="bidnote">被加倍的人，可以再加倍回去</small>
       </div>
     </div>
 
     <div class="turn" id="turnLine"></div>
+    <div class="tippop" id="tipPop" hidden role="dialog" aria-labelledby="tipTitle">
+      <button class="px" type="button" data-tclose aria-label="關閉">✕</button>
+      <b id="tipTitle"></b><p id="tipText"></p>
+    </div>
+    <div class="suitcount" id="suitCount" aria-label="你手上每種花色的張數"></div>
     <div class="hand" id="hand" aria-label="你的手牌"></div>
     <div class="actions" id="actions">
       <button id="hintBtn" class="btn paper" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3 a5 5 0 0 1 3 9 v2 h-6 v-2 a5 5 0 0 1 3 -9z M8 16 h4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 0 v1.5 M3 3 l1 1 M17 3 l-1 1 M0 9 h1.5 M18.5 9 h1.5" stroke="currentColor"/></svg>提示</button>
@@ -202,7 +220,7 @@
       </div>
       <div class="verdict" id="resVerdict"></div>
       <div class="pointsband" id="resBand"><span id="resPtsLabel">這局得分</span><b id="resPoints"></b></div>
-      <div class="breakdown" id="resBody"></div>
+      <details class="resmore" id="resMore"><summary>計分明細</summary><div class="breakdown" id="resBody"></div></details>
       <div class="totals">
         <div class="tot me" id="totMe"><small>你</small><b id="rtMe">0</b></div>
         <div class="tot opp" id="totOpp"><small id="rtOppName">阿禾</small><b id="rtOpp">0</b></div>
@@ -216,29 +234,10 @@
     </div>
   </div>
 
-  <!-- 上一墩回看 -->
-  <div id="lastTrickPop" class="modal" hidden>
-    <div class="sheet lasttrick">
-      <h3 id="ltTitle">上一墩</h3>
-      <div class="ltcards"><figure id="ltLead"></figure><figure id="ltFollow"></figure></div>
-      <dl class="ltinfo"><dt>領出花色</dt><dd id="ltSuit"></dd><dt>王牌</dt><dd id="ltTrump"></dd><dt>結果</dt><dd id="ltWhy"></dd><dt>接下來</dt><dd id="ltNext"></dd></dl>
-      <button class="btn paper close" data-close type="button">關閉</button>
-    </div>
-  </div>
-
-  <!-- 叫牌紀錄（打牌中回看） -->
-  <div id="auctionPop" class="modal" hidden>
-    <div class="sheet">
-      <h3>叫牌紀錄</h3>
-      <ol id="auctionList" class="alist"></ol>
-      <button class="btn paper close" data-close type="button">關閉</button>
-    </div>
-  </div>
-
   <!-- 08 設定（牌桌選單、首頁共用） -->
   <div id="menu" class="modal" hidden>
     <div class="sheet">
-      <h3 id="menuTitle">設定</h3>
+      <h3><span id="menuTitle">設定</span> <span class="chip" id="roomChip" hidden></span></h3>
       <div id="settingsBox" class="settings"></div>
       <div class="row">
         <button class="btn paper close" data-close type="button">關閉</button>
@@ -264,6 +263,8 @@
     <div class="sheet rules">
       <h3>最新消息</h3>
       <ul>
+        <li><b>牌桌變清爽</b>：上面只留現在的階段、最重要的數字和比分；流程每一格點一下就有說明，規則按提示旁的「?」，搶到的明牌和每一墩的紀錄按「牌局紀錄」再看。</li>
+        <li><b>花色張數</b>：手牌上方直接寫你每種花色有幾張，打出去或摸到牌會馬上更新。</li>
         <li><b>出牌更安全</b>：點牌只是選起來（再點一下放下），手指左右滑可以一張一張挑；往上拖到桌上是「預覽」，按「確認出牌」才會真的出。點兩下不會再誤出牌了。</li>
         <li><b>手機橫拿也能打</b>：牌桌在左、手牌在右，整個畫面固定不會捲動。</li>
         <li><b>大家講話變自然了</b>：選單、牌桌、阿禾的台詞都換成平常講話的樣子。</li>

@@ -8,7 +8,7 @@ const ME = 0, OPP = 1;
 function st(p: Partial<TableState>): TableState {
   return {
     seat: ME, phase: Phase.Play, hand: [], legal: [], oppCount: 0, faceUp: -1, stockCount: 0,
-    leadCard: -1, followCard: -1, leaderSeat: ME, currentSeat: ME, myTricks: 0, oppTricks: 0, oppTakenFaceUp: [],
+    leadCard: -1, followCard: -1, leaderSeat: ME, currentSeat: ME, myTricks: 0, oppTricks: 0, oppTakenFaceUp: [], myTakenFaceUp: [],
     highestBid: bidIndex(2, Strain.Hearts), highestBidder: ME, declarer: ME, minBid: 0,
     doubled: 0, canDouble: false, canRedouble: false, auctionSeats: [], auctionCalls: [],
     myScore: 0, oppScore: 0, targetScore: 100, handNumber: 1, hasResult: false, result: null, matchWinner: -1,

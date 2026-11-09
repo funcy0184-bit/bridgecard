@@ -222,12 +222,14 @@ export function punch(el: Element, amount = 0.14, dur = 260) {
     { duration: ms(dur), easing: "ease-out" });
 }
 
-export function glow(el: Element, dur = 520) {
+// keep：亮完留一圈淡金邊（牌用）；常駐的資訊列用 false，亮完就退掉，不留框
+export function glow(el: Element, dur = 520, keep = true) {
   el.animate([
     { boxShadow: "0 0 0 0 rgba(232,190,100,0)", filter: "brightness(1)" },
     { boxShadow: "0 0 0 3px rgba(240,200,110,.95), 0 0 26px 8px rgba(230,180,80,.7)", filter: "brightness(1.12)", offset: 0.35 },
-    { boxShadow: "0 0 0 2px rgba(240,200,110,.55), 0 0 12px 2px rgba(230,180,80,.25)", filter: "brightness(1)" },
-  ], { duration: ms(dur), fill: "forwards" });
+    keep ? { boxShadow: "0 0 0 2px rgba(240,200,110,.55), 0 0 12px 2px rgba(230,180,80,.25)", filter: "brightness(1)" }
+      : { boxShadow: "0 0 0 0 rgba(232,190,100,0)", filter: "brightness(1)" },
+  ], { duration: ms(dur), fill: keep ? "forwards" : "none" });
 }
 
 // 不能出：輕輕左右擺一下（不要太兇）

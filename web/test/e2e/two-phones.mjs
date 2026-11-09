@@ -92,7 +92,7 @@ async function step(page, me) {
     return "acted";
   }
   const legal = page.locator("#hand .card.legal");
-  if (await legal.count() > 0 && /你先出牌|換你跟牌/.test(turn)) {
+  if (await legal.count() > 0 && /換你出牌|換你跟牌/.test(turn)) {
     // 手牌是疊在一起的，跟真人一樣點露出來的左邊那一條
     const id = await legal.first().getAttribute("data-id");
     const card = page.locator(`#hand .card[data-id="${id}"]`);   // 記住是哪一張，第二次點同一張

@@ -28,7 +28,7 @@ async function open(settings, snap) {
   await sleep(500);
   return { ctx, p, errs };
 }
-const felt = p => p.evaluate(() => ({ heat: document.getElementById("felt").dataset.heat, tone: document.getElementById("felt").dataset.tone, mult: document.querySelector("#infoStrip .mult")?.textContent ?? "" }));
+const felt = p => p.evaluate(() => ({ heat: document.getElementById("felt").dataset.heat, tone: document.getElementById("felt").dataset.tone, mult: document.querySelector("#keyInfo .mult")?.textContent ?? "" }));
 async function playOut(p, maxMs = 120000) {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs && !(await p.locator("#result").isVisible())) {
@@ -101,9 +101,9 @@ console.log("連續贏墩：我方暗金、對方酒紅、中斷就退去；不�
 console.log("精簡品質：常駐氣氛靜態、沒有裝飾粒子，局面仍看得懂");
 {
   const { ctx, p, errs } = await open({ fast: true, quality: "lite" }, save(2));
-  const r = await p.evaluate(() => ({ q: document.documentElement.dataset.q, anim: getComputedStyle(document.querySelector(".aura .ag")).animationName, run: getComputedStyle(document.querySelector(".aura .ar")).display, heat: document.getElementById("felt").dataset.heat, turn: document.getElementById("turnLine").innerText, lead: document.getElementById("statusText").innerText, mult: document.querySelector("#infoStrip .mult")?.textContent }));
+  const r = await p.evaluate(() => ({ q: document.documentElement.dataset.q, anim: getComputedStyle(document.querySelector(".aura .ag")).animationName, run: getComputedStyle(document.querySelector(".aura .ar")).display, heat: document.getElementById("felt").dataset.heat, turn: document.getElementById("turnLine").innerText, lead: document.getElementById("oppSlot").dataset.label + "|" + (document.querySelector("#oppSlot .card") ? "card" : ""), mult: document.querySelector("#keyInfo .mult")?.textContent }));
   ok(r.q === "lite" && r.anim === "none" && r.run === "none", `精簡：桌緣靜態（${r.anim}／${r.run}）`);
-  ok(r.heat === "2" && r.mult === "×4" && /換你跟牌/.test(r.turn) && /本墩領出/.test(r.lead), "精簡：倍率、輪到誰、領出花色都還在");
+  ok(r.heat === "2" && r.mult === "×4" && /換你跟牌/.test(r.turn) && /①先出\|card/.test(r.lead), "精簡：倍率、輪到誰、領出花色都還在");
   await playOut(p);
   ok(await p.locator("#result").isVisible() && (await p.locator("#resTitle").innerText()).length > 0, "精簡：勝負與計分照常顯示");
   ok(errs.length === 0, "沒有錯誤");

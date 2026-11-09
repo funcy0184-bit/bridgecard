@@ -16,6 +16,32 @@ function finishDraw(g: HoneymoonGame) {
   }
 }
 
+describe("搶走的明牌紀錄（牌局紀錄面板用）", () => {
+  it("兩邊看到的都只是翻開過的明牌：自己的、對手的各一份，不含暗牌", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const g = new HoneymoonGame(seededRng(seed));
+      g.startNew();
+      const shown: number[] = [];
+      const took: [number[], number[]] = [[], []];
+      while (g.phase === Phase.Draw) {
+        if (g.trickComplete) {
+          const up = g.faceUp; shown.push(up);
+          g.resolveTrick();
+          const w = g.viewFor(0).myTakenFaceUp.includes(up) ? 0 : 1;
+          took[w].push(up);
+        } else g.playCard(g.currentPlayer, chooseCard(g, g.currentPlayer));
+        for (const s of [0, 1]) {
+          const v = g.viewFor(s);
+          expect(v.myTakenFaceUp).toEqual(took[s]);
+          expect(v.oppTakenFaceUp).toEqual(took[1 - s]);
+          for (const c of [...v.myTakenFaceUp, ...v.oppTakenFaceUp]) expect(shown).toContain(c);
+        }
+      }
+      expect(took[0].length + took[1].length).toBe(13);
+    }
+  });
+});
+
 describe("牌與規則", () => {
   it("52 張牌編號來回一致、洗牌不重複", () => {
     const d = newShuffledDeck(seededRng(1));
