@@ -98,7 +98,7 @@ async function step(page, me) {
     const card = page.locator(`#hand .card[data-id="${id}"]`);   // 記住是哪一張，第二次點同一張
     await card.click({ position: { x: 10, y: 34 } }); await sleep(120);
     if (!seen.has("select")) { seen.add("select"); await shot(page, `04-card-selected-${me}`); }
-    await card.click({ position: { x: 10, y: 34 }, force: true });
+    await page.click("#playBtn");                         // 選好之後按「確認出牌」才送出
     plays++;
     if (plays === 31 && !seen.has("play")) { seen.add("play"); await sleep(250); await shot(page, `08-play-phase-${me}`); }
     return "acted";

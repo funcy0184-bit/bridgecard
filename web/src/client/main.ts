@@ -535,11 +535,8 @@ function renderHand(first = false) {
   // 還沒輪到你也可以先選好；輪到你時，先選的牌如果不能出，就放下並說明原因
   if (s.phase !== Phase.Draw && s.phase !== Phase.Play) selCard = -1;
   else if (selCard >= 0 && !ids.includes(selCard)) selCard = -1;
-  else if (canPlay && selCard >= 0 && !legal.has(selCard)) {
-    const old = selCard;
-    selCard = -1;
-    setTimeout(() => { const el = handEl(old); if (el) showWhy(el, reasonFor()); }, 0);
-  }
+  // 出牌預覽：牌不在手上了、或已經不能出（而且不是正在送出的那張），就收回手上
+  if (staged >= 0 && (!ids.includes(staged) || (!canPlayNow() && pulled !== staged))) staged = -1;
 
   ids.forEach((id, i) => {
     let el = handEl(id);
@@ -554,6 +551,7 @@ function renderHand(first = false) {
     el.classList.toggle("sel", selCard === id);
     el.classList.toggle("dim", canPlay && !legal.has(id));
     el.classList.toggle("pulled", pulled === id);
+    el.classList.toggle("staged", staged === id);
     if (isNew && !first) {
       if (dealing) fx.popIn(el, i * 45);
       else if (freshCards.has(id)) {
@@ -572,7 +570,8 @@ function renderHand(first = false) {
   dealing = false;
 }
 
-// 扇形排列；滑鼠移到哪張，右邊的牌往旁邊讓位，避免重疊難選
+// 扇形排列；選起來（或滑鼠停住）的那張，左右的牌自然讓位
+let baseX: number[] = [];   // 每張牌沒讓位時的位置：滑動選牌用這個對位，才不會跟著讓位抖來抖去
 function layoutHand() {
   const cards = Array.from(handBox.children) as HTMLElement[];
   const n = cards.length;
@@ -583,34 +582,58 @@ function layoutHand() {
   const x0 = (W - (cw + step * Math.max(0, n - 1))) / 2;
   const half = (n - 1) / 2;
   const maxRot = Math.min(9, 2 + n * 0.55) * Math.min(1.2, Math.max(0.4, fx.amp()));
-  const hi = cards.findIndex(c => Number(c.dataset.id) === hoverId);
-  const room = hi >= 0 ? Math.max(0, cw * 0.6 - step) : 0;
+  const idx = (id: number) => cards.findIndex(c => Number(c.dataset.id) === id);
+  const si = selCard >= 0 && selCard !== staged ? idx(selCard) : -1;
+  const focus = si >= 0 ? si : idx(hoverId);
+  const room = focus >= 0 ? Math.max(0, cw * 0.62 - step) : 0;
+  baseX = [];
   cards.forEach((el, i) => {
     const id = Number(el.dataset.id);
     const t = half ? (i - half) / half : 0;
     let x = x0 + i * step;
-    if (hi >= 0 && i > hi) x += room;
-    else if (hi >= 0 && i < hi) x -= room * 0.35;
+    baseX.push(x);
+    el.style.zIndex = String(i + 1);
+    if (id === staged) { placeStaged(el, cw); return; }
+    if (focus >= 0 && i > focus) x += room * 0.5;
+    else if (focus >= 0 && i < focus) x -= room * 0.5;
     let r = t * maxRot;
-    if (id === selCard) r = (id % 2 ? 3 : -3);
+    if (id === selCard) r *= 0.25;
     else if (id === hoverId) r *= 0.3;
     el.style.setProperty("--x", `${x.toFixed(1)}px`);
     el.style.setProperty("--y", `${(t * t * 7).toFixed(1)}px`);
     el.style.setProperty("--r", `${r.toFixed(2)}deg`);
-    el.style.zIndex = String(i + 1);
+    el.style.removeProperty("--s");
     el.classList.toggle("hover", id === hoverId && id !== selCard);
   });
 }
 
-function selectCard(id: number, el: HTMLElement) {
+// 出牌預覽：牌停在桌上「你出的牌」那一格（還沒送出，畫面上標「預覽」）
+function placeStaged(el: HTMLElement, cw: number) {
+  const hb = handBox.getBoundingClientRect(), slot = $("mySlot").getBoundingClientRect();
+  const ch = cw * 1.42;
+  const cx = slot.left - hb.left + slot.width / 2, cy = slot.top - hb.top + slot.height / 2;
+  el.style.setProperty("--x", `${(cx - cw / 2).toFixed(1)}px`);
+  el.style.setProperty("--y", `${(cy - (hb.height - 12 - ch) - ch / 2).toFixed(1)}px`);
+  el.style.setProperty("--r", "0deg");
+  el.style.setProperty("--s", (slot.width / cw).toFixed(3));
+  el.classList.remove("hover");
+}
+
+function selectCard(id: number, el: HTMLElement, light = false) {
+  if (staged >= 0 && staged !== id) staged = -1;      // 換牌：原本預覽的那張收回手上
   selCard = id;
   hoverId = -1; hoverWant = -1;
-  sfx.select();
-  fx.buzz(8);
+  if (light) { sfx.hover(); fx.buzz(4); }            // 手指滑過去：柔和地一張一張升起，不放大型動畫
+  else { sfx.select(); fx.buzz(8); }
   renderHand();
-  fx.bounce(el);
+  if (!light) fx.bounce(el);
   renderTurn();
   renderActions();
+}
+function deselect() {
+  selCard = -1; staged = -1;
+  sfx.hover();
+  renderHand(); renderTurn(); renderActions();
 }
 
 function playCard(id: number) {
@@ -664,84 +687,202 @@ function illegal(id: number) {
   if (st) for (const c of st.legal) { const e = handEl(c); if (e) fx.glow(e, 520); }
 }
 
+// ---------------- 選牌與出牌：兩個分開的狀態 ----------------
+// 點一下：選起來（再點同一張放下、點別張就換過去）；手指左右滑：跟著手指一張一張選；
+// 往上拖：牌貼著手指走，拖到桌上放開 = 出牌預覽（還沒出）；往下拉回或放在別處 = 收回。
+// 只有按「確認出牌」才會真的送出。滑動、雙擊、快速連點都不會出牌。
+let staged = -1;                       // 出牌預覽中的牌（還沒送出）
+
+function canSelectNow() {
+  return !!st && !!conn && (st.phase === Phase.Draw || st.phase === Phase.Play) && !waiting && pulled < 0;
+}
+
 function onCardTap(id: number, el: HTMLElement) {
   if (!st || !conn) return;
   if (st.phase !== Phase.Draw && st.phase !== Phase.Play) return;
-  if (waiting || pulled >= 0) { fx.bounce(el); return; }      // 正在出牌：有反應，但不重複送出
-  if (!myTurn()) {
-    // 還沒輪到你：可以先選好，點下去立刻有反應；再點一次才說明為什麼還不能出
-    if (selCard === id) { fx.deny(el); sfx.deny(); showWhy(el, reasonFor()); return; }
-    selectCard(id, el);
-    return;
-  }
-  if (!st.legal.includes(id)) { illegal(id); return; }
-  if (selCard === id) { playCard(id); return; }   // 第二次點同一張 = 出牌
+  if (waiting || pulled >= 0) { fx.bounce(el); return; }     // 正在送出：有反應，但什麼都不改
+  if (staged === id) { unstage(); return; }                  // 點預覽中的牌：收回手上（還是選著）
+  if (selCard === id) { deselect(); return; }                // 再點同一張：放下
   selectCard(id, el);
+  // 不能出的牌也可以選起來看，但說清楚為什麼現在不能出
+  if (myTurn() && !st.legal.includes(id)) showWhy(el, reasonFor());
 }
 
-// 拖曳：把牌往上拖超過一段距離放開 = 出牌；沒拖夠就彈回去
-let drag: { id: number; el: HTMLElement; x0: number; y0: number; lx: number; on: boolean; pid: number } | null = null;
-let suppressClick = false;
+function stage(id: number) {
+  staged = id; selCard = id;
+  sfx.slap(0.7, 0);
+  fx.buzz(10);
+  renderHand(); renderTurn(); renderActions();
+}
+function unstage(sound = true) {
+  if (staged < 0) return;
+  staged = -1;
+  if (sound) { sfx.lift(); fx.buzz(6); }
+  if (st) { renderHand(); renderTurn(); renderActions(); }
+}
+
+// 按「確認出牌」：唯一會送出的地方
+function confirmPlay() {
+  if (!st || waiting || pulled >= 0) return;                 // 已經送出：不重複送
+  const id = staged >= 0 ? staged : selCard;
+  if (id < 0) return;
+  const el = handEl(id);
+  if (!canPlayNow()) { if (el) showWhy(el, reasonFor()); fx.deny($("playBtn")); sfx.deny(); return; }
+  if (!st.legal.includes(id)) { illegal(id); return; }
+  playCard(id);
+}
+
+// ---- 手勢：點擊／水平選牌／往上拖曳／拖曳取消 ----
+type Gesture = {
+  pid: number; touch: boolean; id: number; el: HTMLElement;
+  x0: number; y0: number; t0: number; lx: number; lt: number;
+  mode: "idle" | "scrub" | "drag"; vx: number; rot: number; raf: number; over: boolean; wasStaged: boolean;
+};
+let gest: Gesture | null = null;
+const SLOP = { touch: 10, mouse: 5 };          // 手指輕微晃動不算移動
+const felt = () => $("felt");
+
+// 手指的 x 對到哪一張牌（用沒讓位的位置，才穩定）
+function cardAtX(clientX: number): HTMLElement | null {
+  const cards = Array.from(handBox.children) as HTMLElement[];
+  if (!cards.length || baseX.length !== cards.length) return null;
+  const x = clientX - handBox.getBoundingClientRect().left;
+  let k = 0;
+  for (let i = 0; i < baseX.length; i++) if (x >= baseX[i]) k = i;
+  return cards[k];
+}
+
 handBox.addEventListener("pointerdown", ev => {
+  if (gest || (ev.pointerType === "mouse" && ev.button !== 0)) return;
   const el = (ev.target as HTMLElement).closest<HTMLElement>(".card");
   if (!el || !st) return;
-  drag = { id: Number(el.dataset.id), el, x0: ev.clientX, y0: ev.clientY, lx: ev.clientX, on: false, pid: ev.pointerId };
+  ev.preventDefault();                                     // 不選取文字、不拖曳圖片、不捲動頁面
+  try { handBox.setPointerCapture(ev.pointerId); } catch { /* 有些瀏覽器不支援 */ }
+  const now = performance.now();
+  gest = { pid: ev.pointerId, touch: ev.pointerType !== "mouse", id: Number(el.dataset.id), el, x0: ev.clientX, y0: ev.clientY, t0: now,
+    lx: ev.clientX, lt: now, mode: "idle", vx: 0, rot: 0, raf: 0, over: false, wasStaged: staged === Number(el.dataset.id) };
 });
+
 handBox.addEventListener("pointermove", ev => {
-  if (drag && drag.pid === ev.pointerId) {
-    const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
-    if (!drag.on && Math.hypot(dx, dy) > 9 && canPlayNow() && st!.legal.includes(drag.id)) {
-      drag.on = true;
-      drag.el.classList.add("dragging");
-      try { drag.el.setPointerCapture(ev.pointerId); } catch { /* 有些瀏覽器不支援 */ }
-      sfx.lift();
+  const g = gest;
+  if (g && g.pid === ev.pointerId) {
+    const dx = ev.clientX - g.x0, dy = ev.clientY - g.y0;
+    const slop = g.touch ? SLOP.touch : SLOP.mouse;
+    const now = performance.now();
+    const dt = Math.max(1, now - g.lt);
+    g.vx = g.vx * 0.6 + ((ev.clientX - g.lx) / dt) * 0.4;   // 手指速度（px/ms），拿來做一點慣性旋轉
+    g.lx = ev.clientX; g.lt = now;
+    if (g.mode === "idle" && Math.hypot(dx, dy) > slop && canSelectNow()) {
+      if (g.wasStaged || (-dy > slop && -dy > Math.abs(dx) * 0.9)) startDrag(g, g.el);
+      else if (Math.abs(dx) > Math.abs(dy) * 1.1) { g.mode = "scrub"; g.y0 = ev.clientY; }
     }
-    if (drag.on) {
-      const vx = ev.clientX - drag.lx;
-      drag.lx = ev.clientX;
-      drag.el.style.translate = `${dx}px ${Math.min(30, dy)}px`;
-      drag.el.style.rotate = `${Math.max(-12, Math.min(12, vx * 1.2))}deg`;
-      return;
-    }
+    if (g.mode === "scrub") {
+      // 滑到哪張選哪張；手指往上抬一段 → 直接把選中的牌拖起來
+      const el = cardAtX(ev.clientX);
+      if (el && Number(el.dataset.id) !== selCard) selectCard(Number(el.dataset.id), el, true);
+      if (g.y0 - ev.clientY > 28 && selCard >= 0) {
+        const sel = handEl(selCard);
+        if (sel) { startDrag(g, sel); g.x0 = ev.clientX; g.y0 = ev.clientY; }
+      }
+    } else if (g.mode === "drag") moveDrag(g, ev.clientX, ev.clientY);
+    return;
   }
+  // 桌機滑鼠：停在一張牌上 45ms 才升起（快速掃過不會一直抖）
   if (!fine || ev.pointerType !== "mouse") return;
   const el = (ev.target as HTMLElement).closest<HTMLElement>(".card");
-  const id = el ? Number(el.dataset.id) : -1;
+  const id = el && Number(el.dataset.id) !== staged ? Number(el.dataset.id) : -1;
   if (id === hoverWant) return;
   hoverWant = id;
   clearTimeout(hoverTimer);
-  // 滑鼠快速掃過一整排不會讓牌一直抖：停在一張牌上 45ms 才升起
   hoverTimer = window.setTimeout(() => {
     if (hoverWant === hoverId) return;
     hoverId = hoverWant;
-    if (hoverId >= 0) sfx.hover();
+    if (hoverId >= 0 && hoverId !== selCard) sfx.hover();
     layoutHand();
   }, 45);
 });
-const endDrag = (ev: PointerEvent) => {
-  if (!drag || drag.pid !== ev.pointerId) return;
-  const d = drag;
-  drag = null;
-  if (!d.on) return;
-  suppressClick = true;
-  setTimeout(() => { suppressClick = false; }, 0);
-  const dy = ev.clientY - d.y0;
-  d.el.classList.remove("dragging");
-  d.el.style.translate = "";
-  d.el.style.rotate = "";
-  if (ev.type === "pointerup" && dy < -55) playCard(d.id);
+
+function startDrag(g: Gesture, el: HTMLElement) {
+  g.mode = "drag";
+  g.el = el; g.id = Number(el.dataset.id);
+  if (selCard !== g.id && !g.wasStaged) selectCard(g.id, el, true);
+  el.classList.add("dragging");
+  sfx.lift();
+  fx.buzz(6);
+  $("mySlot").classList.add("drop");
+  const tick = () => {                                     // 拖曳時的慣性旋轉：跟著手指速度微微傾斜，停下來就慢慢回正
+    if (gest !== g || g.mode !== "drag") return;
+    const want = Math.max(-10, Math.min(10, g.vx * 9));
+    g.rot += (want - g.rot) * 0.22;
+    g.vx *= 0.9;
+    g.el.style.rotate = `${g.rot.toFixed(2)}deg`;
+    g.raf = requestAnimationFrame(tick);
+  };
+  g.raf = requestAnimationFrame(tick);
+}
+function overTable(x: number, y: number) {
+  const r = felt().getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom - 6;
+}
+function moveDrag(g: Gesture, x: number, y: number) {
+  g.el.style.translate = `${(x - g.x0).toFixed(1)}px ${(y - g.y0).toFixed(1)}px`;     // 牌貼著手指走
+  const over = overTable(x, y);
+  if (over !== g.over) { g.over = over; $("mySlot").classList.toggle("over", over); if (over) fx.buzz(5); }
+}
+function endDrag(g: Gesture, x: number, y: number, cancelled: boolean) {
+  cancelAnimationFrame(g.raf);
+  $("mySlot").classList.remove("drop", "over");
+  const el = g.el, id = g.id;
+  el.classList.remove("dragging");
+  // 清掉拖曳位移：牌會用彈簧動畫回到該去的位置（預覽格或手牌）
+  el.style.translate = "";
+  el.style.rotate = "";
+  const wantStage = !cancelled && overTable(x, y);
+  if (wantStage) {
+    if (!canPlayNow() || !st!.legal.includes(id)) {         // 不能出：放開後退回手上，說清楚原因
+      if (staged === id) staged = -1;
+      if (st!.legal.includes(id) || !myTurn()) { showWhy(el, reasonFor()); fx.deny(el); sfx.deny(); } else illegal(id);
+      renderHand(); renderTurn(); renderActions();
+      return;
+    }
+    if (staged !== id) stage(id); else renderHand();
+  } else if (staged === id) unstage();                       // 預覽的牌往下拉回手上
+  else renderHand();
+}
+
+let lastPointerEnd = -1e9;
+const pointerEnd = (ev: PointerEvent) => {
+  const g = gest;
+  if (!g || g.pid !== ev.pointerId) return;
+  gest = null;
+  lastPointerEnd = performance.now();
+  try { handBox.releasePointerCapture(ev.pointerId); } catch { /* 已經放掉了 */ }
+  if (g.mode === "drag") endDrag(g, ev.clientX, ev.clientY, ev.type === "pointercancel");
+  else if (g.mode === "idle" && ev.type === "pointerup") onCardTap(g.id, g.el);   // 沒移動 = 點擊
+  // 水平選牌放開：停在最後選到的那張
 };
-handBox.addEventListener("pointerup", endDrag);
-handBox.addEventListener("pointercancel", endDrag);
-handBox.addEventListener("pointerleave", () => { hoverWant = -1; clearTimeout(hoverTimer); if (hoverId >= 0 && !drag) { hoverId = -1; layoutHand(); } });
+handBox.addEventListener("pointerup", pointerEnd);
+handBox.addEventListener("pointercancel", pointerEnd);
+handBox.addEventListener("lostpointercapture", ev => { if (gest && gest.pid === ev.pointerId) pointerEnd(new PointerEvent("pointercancel", { pointerId: ev.pointerId, clientX: gest.lx, clientY: gest.y0 })); });
+handBox.addEventListener("pointerleave", () => { hoverWant = -1; clearTimeout(hoverTimer); if (hoverId >= 0 && !gest) { hoverId = -1; layoutHand(); } });
+handBox.addEventListener("contextmenu", ev => ev.preventDefault());   // 長按不要跳出選單
+// 只有「沒有經過按壓手勢」的點擊才在這裡處理（例如讀螢幕軟體、輔助工具）；手指／滑鼠的點擊已經在放開時處理過了
 handBox.addEventListener("click", ev => {
-  if (suppressClick) return;
+  if (ev.detail > 0 || performance.now() - lastPointerEnd < 80) return;    // 真的手指／滑鼠點擊 detail ≥ 1，已經處理過
   const el = (ev.target as HTMLElement).closest<HTMLElement>(".card");
   if (el) onCardTap(Number(el.dataset.id), el);
 });
+handBox.addEventListener("dragstart", ev => ev.preventDefault());
+// 鍵盤：Enter／空白鍵選牌、左右鍵換牌；送出一樣要按「確認出牌」
 handBox.addEventListener("keydown", ev => {
   const el = (ev.target as HTMLElement).closest<HTMLElement>(".card");
-  if (el && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); onCardTap(Number(el.dataset.id), el); }
+  if (!el) return;
+  if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onCardTap(Number(el.dataset.id), el); }
+  else if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+    ev.preventDefault();
+    const sib = (ev.key === "ArrowLeft" ? el.previousElementSibling : el.nextElementSibling) as HTMLElement | null;
+    if (sib) { sib.focus(); if (canSelectNow()) selectCard(Number(sib.dataset.id), sib, true); }
+  }
 });
 window.addEventListener("resize", () => { if (st) layoutHand(); });
 
@@ -781,16 +922,19 @@ $("hintBtn").addEventListener("click", () => {
   el.classList.remove("hinted"); void el.offsetWidth; el.classList.add("hinted");
   burstAt(el, { count: 6, kinds: ["dust"], speed: 90, life: 0.6 });
 });
-$("playBtn").addEventListener("click", () => { if (selCard >= 0) playCard(selCard); });
+$("playBtn").addEventListener("click", confirmPlay);
 
 function renderActions() {
   const s = st;
   const ok = !!s && canPlayNow();
   $<HTMLButtonElement>("hintBtn").disabled = !ok;
   const pb = $<HTMLButtonElement>("playBtn");
-  pb.disabled = !ok || selCard < 0;
-  pb.textContent = selCard >= 0 ? `出 ${cardText(selCard)}` : "出牌";
-  pb.classList.toggle("glint", ok && selCard >= 0);
+  const pick = staged >= 0 ? staged : selCard;
+  const legalPick = !!s && pick >= 0 && s.legal.includes(pick);
+  pb.disabled = !ok || !legalPick;                         // 不能出的牌、不是你的回合：按不下去
+  pb.textContent = pick >= 0 ? `確認出牌 ${cardText(pick)}` : "確認出牌";
+  pb.classList.toggle("glint", ok && legalPick);
+  pb.classList.toggle("ready", ok && legalPick && staged >= 0);
 }
 
 // ---------------- 輪到誰 ----------------
@@ -804,7 +948,8 @@ function renderTurn() {
     mine = true;
     text = "換你出牌";
     const following = s.leaderSeat !== s.seat && s.leadCard >= 0;
-    if (selCard >= 0) hint = `再點一次 ${cardText(selCard)}，或按「出牌」`;
+    if (staged >= 0) hint = "預覽中：按「確認出牌」送出，點牌收回";
+    else if (selCard >= 0) hint = s.legal.includes(selCard) ? "按「確認出牌」送出，或拖到桌上預覽" : `${cardText(selCard)} 現在不能出，換一張吧`;
     else if (following) {
       const su = suitOf(s.leadCard);
       const has = s.hand.some(c => suitOf(c) === su);
@@ -1384,6 +1529,7 @@ function onEvent(e: GameEvent) {
 
     case "Illegal":
       setWaiting(false);
+      staged = -1;
       unpull();
       illegal(e.card);
       break;

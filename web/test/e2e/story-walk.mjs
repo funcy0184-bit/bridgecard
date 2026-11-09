@@ -219,8 +219,8 @@ while (Date.now() - t0 < 180000) {
     // 手牌會疊在一起：點每張牌露出來的左上角（跟真人一樣）
     const pick = Number(await legal.first().getAttribute("data-id"));
     const c = page.locator(`#hand .card[data-id="${pick}"]`);
-    await c.click({ position: { x: 10, y: 34 } });
-    await c.click({ position: { x: 10, y: 34 } });
+    await c.click({ position: { x: 10, y: 34 } });          // 選牌
+    await page.locator("#playBtn").click();                  // 確認出牌
     tricks++;
     await wait(250);
     continue;
