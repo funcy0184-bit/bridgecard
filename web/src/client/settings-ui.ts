@@ -3,6 +3,7 @@ import * as fx from "./fx";
 import { sfx } from "./sound";
 
 declare const __BUILD__: { sha: string; at: string } | undefined;
+export const COACH_KEY = "hb-coach-seen";
 export const BUILD = typeof __BUILD__ !== "undefined" && __BUILD__ ? __BUILD__ : { sha: "dev", at: "" };
 
 // 回報問題時貼給 Claude 的資訊：版本、網址、裝置、螢幕、設定（不含任何個人資料或牌局內容）
@@ -14,7 +15,7 @@ export function reportText(): string {
     `頁面：${location.pathname}${location.search}`,
     `畫面大小：${innerWidth}×${innerHeight}（像素比 ${devicePixelRatio}）`,
     `裝置：${navigator.userAgent}`,
-    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}`,
+    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、品質 ${s.quality}→${fx.quality()}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}`,
   ].join("\n");
 }
 
@@ -88,15 +89,51 @@ export function renderSettings(box: HTMLElement) {
   });
   seg.append(sl, group);
 
+  // 特效品質：自動／精簡／標準／完整（自動會依實際幀時間升降）
+  const qrow = document.createElement("div");
+  qrow.className = "setting";
+  const ql = document.createElement("span");
+  const auto = () => s.quality === "auto" ? `（現在：${fx.QUALITY_LABELS.find(x => x[0] === fx.quality())![1]}）` : "";
+  ql.textContent = `特效品質${auto()}`;
+  const qg = document.createElement("div");
+  qg.className = "seg";
+  for (const [val, label] of fx.QUALITY_LABELS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.setAttribute("aria-pressed", String(s.quality === val));
+    b.addEventListener("click", () => {
+      s.quality = val; fx.saveSettings();
+      for (const x of Array.from(qg.children)) x.setAttribute("aria-pressed", String(x === b));
+      ql.textContent = `特效品質${auto()}`;
+      sfx.select();
+    });
+    qg.appendChild(b);
+  }
+  qrow.append(ql, qg);
+
   box.append(
     seg,
+    qrow,
     toggle("加快動畫", () => s.fast, v => { s.fast = v; }),
     toggle("畫面震動", () => s.shake, v => { s.shake = v; }, () => { if (s.shake) fx.shake(box, 5, 220); }),
     toggle("粒子特效", () => s.particles, v => { s.particles = v; }),
     slider("音效", () => s.sfx, v => { s.sfx = v; }, () => sfx.select()),
     slider("背景音樂", () => s.music, v => { s.music = v; }, () => {}),
     toggle("手機震動", () => s.vibrate, v => { s.vibrate = v; }, () => fx.buzz(30)),
+    toggle("對局提示", () => s.coach, v => { s.coach = v; }),
   );
+  // 重看對局提示：清掉「已經看過」的紀錄，下次到那個階段會再出現
+  const again = document.createElement("button");
+  again.type = "button"; again.className = "btn ghost small"; again.textContent = "重看對局提示";
+  again.addEventListener("click", () => {
+    try { localStorage.removeItem(COACH_KEY); } catch { /* 無痕模式 */ }
+    s.coach = true; fx.saveSettings();
+    again.textContent = "好，下一個階段會再提示";
+    sfx.select();
+    window.dispatchEvent(new Event("hb-coach-reset"));
+  });
+  box.append(again);
   // 版本、回報、重設
   const foot = document.createElement("div");
   foot.className = "setfoot";
@@ -114,7 +151,7 @@ export function renderSettings(box: HTMLElement) {
   reset.type = "button"; reset.className = "btn ghost small"; reset.textContent = "重設這支手機的進度";
   reset.addEventListener("click", () => {
     if (!confirm("要清掉這支手機上的教學進度、跟阿禾打到一半的那局，還有「第一次玩」的提示嗎？（設定會留著，朋友的牌桌不受影響）")) return;
-    for (const k of ["hb.story.v2", "hb-solo-v1", "hb-story-offered", "hb-news-seen"]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
+    for (const k of ["hb.story.v3", "hb.story.v2", "hb-solo-v1", "hb-story-offered", "hb-news-seen", COACH_KEY]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
     location.href = "/";
   });
   foot.append(ver, copy, reset);

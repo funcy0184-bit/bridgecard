@@ -19,7 +19,7 @@ const probe = (keys) => {
   if (document.documentElement.scrollWidth > W + 1) issues.push(`頁面可以橫向捲動（${document.documentElement.scrollWidth}/${W}）`);
   for (const el of document.querySelectorAll("body *")) {
     if (el.closest("#fx, .sr-only, [hidden]") || el.matches("canvas, svg *, option")) continue;
-    if (el.closest(".cup, .cv-branch, .frame, .fc, .tc-ace, .seal, .stamp, .clip, .particles, .flash, .shock, .popup, .card.flying, .impactlayer")) continue;
+    if (el.closest(".cup, .cv-branch, .frame, .fc, .tc-ace, .seal, .stamp, .clip, .particles, .flash, .shock, .popup, .card.flying, .impactlayer, .aura")) continue;
     const cs = getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden") continue;
     const r = el.getBoundingClientRect();
@@ -81,9 +81,10 @@ for (const [name, w, h] of SIZES) {
   // 故事：開場 → 輪到你 → 出牌後的說明 → 完成；叫牌；章節抽屜；設定
   await p.goto(base + "/story/"); await p.waitForTimeout(200); await check("故事開場（第一幕紙條）", ["#narrator", "#spoken", "#sHand"]);
   await story(); await check("故事：輪到你", ["#narrator", "#sHand", "#controls"]);
-  await p.locator("#sHand .card").first().click(); await p.waitForTimeout(2500); await check("故事：阿禾說明", ["#narrator", "#spoken"]);
+  await p.locator("#sHand .card").first().click(); await p.waitForTimeout(200); await check("故事：選好牌、準備確認", ["#narrator", "#sConfirm", "#sHand"]);
+  await p.locator("#sConfirm").click(); await p.waitForTimeout(2500); await check("故事：阿禾說明", ["#narrator", "#spoken"]);
   await story(); await check("故事：完成這一步", ["#narrator", "#controls .s-emph"]);
-  await p.locator("#controls .s-emph").click(); await p.waitForTimeout(300); await story(); await check("故事：叫牌", ["#narrator", "#sBoard .sgrid", "#sHand"]);
+  await p.goto(base + "/story/?act=2"); await p.waitForTimeout(300); await story(); await check("故事：叫牌", ["#narrator", "#sBoard .sgrid", "#sHand"]);
   await p.locator('#sBoard button[data-bid="7"]').click(); await check("故事：選好 2♥、準備叫", ["#sCall", "#sBoard .sgrid", "#sHand", "#narrator"]);
   await p.click("#navChapters"); await check("故事：章節抽屜", ["#contentsBox"]); await p.click("#closeChapters");
   await p.click("#setBtn"); await check("故事：設定", ["#setDlg"]); await p.click("#setClose");

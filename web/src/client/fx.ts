@@ -5,6 +5,11 @@ import { cardText, isRedCard, rankOf, rankText, SUIT_SYMBOL, suitOf } from "../g
 // ---------------- 設定 ----------------
 
 export type Intensity = 0 | 1 | 2 | 3;
+// 特效品質：自動（看實際幀時間）／精簡／標準／完整。只影響裝飾（粒子、常駐動畫、裂痕、大範圍震動），
+// 回合提示、勝負、計分、操作時序在任何品質下都一樣
+export type Quality = "auto" | "lite" | "standard" | "full";
+export type Level = Exclude<Quality, "auto">;
+export const QUALITY_LABELS: [Quality, string][] = [["auto", "自動"], ["lite", "精簡"], ["standard", "標準"], ["full", "完整"]];
 export interface FxSettings {
   intensity: Intensity;   // 0 關閉 1 低 2 標準 3 強
   fast: boolean;          // 快速動畫模式
@@ -14,6 +19,8 @@ export interface FxSettings {
   sfx: number;            // 音效音量 0..1
   music: number;          // 背景音樂音量 0..1
   muted: boolean;         // 一鍵靜音
+  coach: boolean;         // 對局中的新手提示（每個階段第一次出現一次）
+  quality: Quality;       // 特效品質
 }
 export const INTENSITY_LABELS = ["關閉", "簡化", "標準", "強"];
 const KEY = "hb-web-settings";
@@ -26,7 +33,7 @@ export const lowEnd = (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?
 export const settings: FxSettings = loadSettings();
 
 function loadSettings(): FxSettings {
-  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.15, muted: false };
+  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.15, muted: false, coach: true, quality: "auto" };
   let s: FxSettings = def;
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
@@ -34,6 +41,7 @@ function loadSettings(): FxSettings {
     if (raw.speed === 2 && raw.fast === undefined) s.fast = true;   // 舊版「動畫速度：快」
   } catch { /* 用預設值 */ }
   if (![0, 1, 2, 3].includes(s.intensity)) s.intensity = def.intensity;
+  if (!["auto", "lite", "standard", "full"].includes(s.quality)) s.quality = "auto";
   s.sfx = clamp01(Number(s.sfx)); s.music = clamp01(Number(s.music));
   return s;
 }
@@ -79,10 +87,23 @@ function springEasing(stiffness = 230, damping = 17): string {
   return `linear(${pts.join(", ")})`;
 }
 
+// 自動品質現在的等級（perf.ts 依實際幀時間調整）；低階手機從精簡開始
+let autoLevel: Level = lowEnd ? "lite" : "standard";
+export const getAutoLevel = () => autoLevel;
+export function setAutoLevel(l: Level) { if (l === autoLevel) return; autoLevel = l; applySettings(); for (const fn of listeners) fn(); }
+// 實際使用的品質：動畫「關閉／簡化」或系統要求減少動態效果 → 一律精簡（效能再好也不覆蓋使用者的偏好）
+export function quality(): Level {
+  if (settings.intensity <= 1) return "lite";
+  return settings.quality === "auto" ? autoLevel : settings.quality;
+}
+// 裝飾粒子的倍率：精簡 0、標準 1、完整 1.5
+export const qFactor = () => ({ lite: 0, standard: 1, full: 1.5 })[quality()];
+
 export function applySettings() {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.dataset.motion = String(settings.intensity);
+  root.dataset.q = quality();
   root.style.setProperty("--spd", String(motionOn() ? speedMult() : 0.01));
   root.style.setProperty("--amp", String(amp()));
 }
@@ -226,7 +247,7 @@ export function bounce(el: Element) {
 
 // 局部震動（只震牌桌那一塊）
 export function shake(el: Element, ampPx = 8, dur = 260) {
-  if (!settings.shake || !motionOn()) return;
+  if (!settings.shake || !motionOn() || quality() === "lite") return;   // 精簡：不做大範圍震動
   const a = ampPx * amp();
   const frames: Keyframe[] = [];
   const n = 8;

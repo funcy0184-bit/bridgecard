@@ -19,8 +19,11 @@ import {
 } from "./feedback";
 import { ImpactGate, evaluateTrick, playWeight, trickKey, type Impact } from "./impact";
 import { PLAY_T, contact, flightMs, presentImpact, pullUp, slamFly } from "./impactfx";
+import { attachAura, auraConverge, auraUpgrade, resetAura, updateAura } from "./aura";
+import { watchPerf } from "./perf";
 import { burstAt } from "./particles";
-import { BUILD, renderSettings } from "./settings-ui";
+import { BUILD, COACH_KEY, renderSettings } from "./settings-ui";
+import { LEAD_ADVICE, SUIT_NAME, followAdvice, illegalReason, trumpWord, whyTrick } from "../game/explain";
 import { emo, risk as riskOf } from "./tension";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -62,6 +65,8 @@ const canPlayNow = () => !!st && (st.phase === Phase.Draw || st.phase === Phase.
 // 畫面切換：紙張滑入；牌桌從中心展開。重複進同一個畫面不重播
 function show(id: "home" | "online" | "wait" | "table") {
   for (const s of ["home", "online", "wait", "table"]) $(s).hidden = s !== id;
+  watchPerf(id === "table");
+  if (id !== "table") resetAura();
   if (screen === id) return;
   screen = id;
   const el = $(id);
@@ -135,7 +140,8 @@ function goHome(msg = "", err = false, toOnline = false) {
   conn?.close(); conn = null;
   clearTimeout(resultTimer);
   resultSig.skip = true;
-  for (const id of ["result", "menu", "auctionPop", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal"]) $(id).hidden = true;
+  for (const id of ["result", "menu", "auctionPop", "lastTrickPop", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal"]) $(id).hidden = true;
+  hideCoach(true);
   history.replaceState(null, "", "/");
   show(toOnline ? "online" : "home");
   say(toOnline ? msg : "", err);
@@ -145,16 +151,16 @@ function goHome(msg = "", err = false, toOnline = false) {
 
 // ---------------- 07 阿禾的故事（教學）入口 ----------------
 
-const STORY_KEY = "hb.story.v2";      // 跟 /story/ 用同一個進度鍵
+const STORY_KEY = "hb.story.v3";      // 跟 /story/ 用同一個進度鍵
 const OFFER_KEY = "hb-story-offered";
 function storyProgress(): { page: number; finished: boolean; answers: Record<string, unknown> } | null {
   try {
     const p = JSON.parse(store.get(STORY_KEY) ?? "null");
-    return p && p.v === 2 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished, answers: p.answers ?? {} } : null;
+    return p && p.v === 3 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished, answers: p.answers ?? {} } : null;
   } catch { return null; }
 }
-const ACT_STEPS = [["grab"], ["bid"], ["follow", "ruff"], ["last"]];
-const ACT_OF_PAGE = [1, 2, 3, 3, 4];
+const ACT_STEPS = [["grab", "grab2"], ["bid", "bid2"], ["follow", "ruff", "flipA", "flipB", "trumps", "nt"], ["last", "down"]];
+const ACT_OF_PAGE = [1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4];
 function refreshStoryCard() {
   const p = storyProgress();
   $("chapHead").textContent = !p ? "第一次玩？" : p.finished ? "想複習哪一幕？" : "接著跟阿禾學";
@@ -339,6 +345,7 @@ function onState(s: TableState) {
 function render(first = false) {
   if (!st) return;
   const s = st;
+  if (s.phase === Phase.Draw) coach("draw", "搶牌開始", "每一墩贏的人拿走翻開的明牌，輸的人摸一張暗牌。這段不算分，搶的是下一階段的好牌。");
   $("table").classList.toggle("bidding", s.phase === Phase.Bidding);
   $("table").classList.toggle("finished", s.phase === Phase.Finished);
   $("felt").classList.toggle("drawing", s.phase === Phase.Draw);
@@ -347,6 +354,8 @@ function render(first = false) {
   renderOpp(first);
   renderStatus();
   renderCenter(first);
+  renderTrickInfo();
+  refreshAura();
   renderBid(first);
   renderHand(first);
   renderTurn();
@@ -403,13 +412,24 @@ function renderPhase() {
   const s = st!;
   const txt = s.phase === Phase.Draw ? "前半場｜搶牌" : s.phase === Phase.Bidding ? "叫牌中" : s.phase === Phase.Play ? "後半場｜出牌" : "這局打完了";
   const pt = $("phaseText");
-  if (pt.textContent !== txt) { pt.textContent = txt; fx.slideIn($("phaseChip"), "left"); }
+  const step = s.phase === Phase.Draw ? 0 : s.phase === Phase.Bidding ? 1 : s.phase === Phase.Play ? 2 : 3;
+  if (pt.textContent !== txt) {
+    pt.textContent = txt;
+    $("phaseChip").querySelectorAll("li").forEach((li, i) => { li.classList.toggle("done", i < step); li.classList.toggle("now", i === step); });
+    const now = $("phaseChip").querySelector("li.now");
+    if (now) fx.punch(now, 0.12, 320);
+  }
+  // 搶牌和出牌的墩數是兩組，不要看起來像同一組累計
   const chip = $("trickChip");
   if (s.phase === Phase.Draw || s.phase === Phase.Play) {
     const n = trickNo(s);
-    if (!chip.querySelector(".num")) chip.innerHTML = `第 <span class="num"></span> / 13 墩`;
-    flipNumber(chip.querySelector(".num") as HTMLElement, pad2(n), false);
-  } else chip.replaceChildren();
+    const want = s.phase === Phase.Draw ? "draw" : "play";
+    if (chip.dataset.kind !== want) {
+      chip.dataset.kind = want;
+      chip.innerHTML = want === "draw" ? `搶牌 <span class="num"></span>／13 次` : `第 <span class="num"></span>／13 墩`;
+    }
+    flipNumber(chip.querySelector(".num") as HTMLElement, String(n), false);
+  } else { chip.replaceChildren(); chip.dataset.kind = ""; }
   const info = $("infoStrip");
   if ((s.phase === Phase.Play || s.phase === Phase.Finished) && s.highestBid >= 0) {
     info.hidden = false;
@@ -441,15 +461,20 @@ function renderOpp(first: boolean) {
 function contractHtml(s: TableState) {
   const b = s.highestBid;
   const base = isRedBid(b) ? `<span class="red">${bidText(b)}</span>` : bidText(b);
-  return s.doubled > 0 ? `${base}<span class="x">${s.doubled >= 2 ? "再加倍" : "加倍"}</span>` : base;
+  return s.doubled > 0 ? `${base}<span class="x">${s.doubled >= 2 ? "再加倍" : "加倍"}</span><span class="mult" title="計分倍率">×${s.doubled >= 2 ? 4 : 2}</span>` : base;
 }
 
 function renderStatus() {
   const s = st!;
   const el = $("statusText");
-  if (s.phase === Phase.Draw) el.innerHTML = `牌堆還剩 <b>${s.stockCount}</b> 張 · 贏了拿明牌，輸了摸暗牌`;
-  else el.textContent = "";
+  const leading = (s.phase === Phase.Draw || s.phase === Phase.Play) && s.leadCard >= 0;
+  const su: number = leading ? suitOf(s.leadCard) : 0;
+  el.innerHTML = leading ? `本墩領出 <b class="lead ${su === 1 || su === 2 ? "red" : ""}">${SUIT_SYMBOL[su]} ${SUIT_NAME[su]}</b>（${nameOf(s.leaderSeat)}先出）`
+    : s.phase === Phase.Draw ? "搶牌：爭取下一階段的手牌，不算合約墩數"
+    : s.phase === Phase.Bidding ? "叫牌：決定合約、莊家、王牌和目標墩數"
+    : s.phase === Phase.Play ? "出牌：照合約爭取墩數" : "結算：比較目標和實際墩數，算這局的分數";
   $("auctionBtn").hidden = !((s.phase === Phase.Play || s.phase === Phase.Finished) && s.auctionCalls.length > 0);
+  $("lastTrickBtn").hidden = !(lastTrick && lastTrick.hand === s.handNumber && s.phase !== Phase.Bidding);
 }
 
 function renderCenter(first: boolean) {
@@ -496,7 +521,7 @@ function renderCenter(first: boolean) {
     $("tallyLabel").textContent = iDecl ? "你已贏" : `${oppName()}已贏`;
     flipNumber($("tallyBig"), String(iDecl ? s.myTricks : s.oppTricks), true, Math.min(4, Math.max(0, streak - 1)) * 0.06);
     $("tallyNeed").textContent = String(tricksNeeded(s.highestBid));
-    $("tallyLine").textContent = `你 ${s.myTricks}｜${oppName()} ${s.oppTricks}`;
+    $("tallyLine").textContent = `${iDecl ? oppName() : "你"} ${iDecl ? s.oppTricks : s.myTricks} 墩`;
     if (s.phase === Phase.Play) emo.sustain(s);
   }
   renderTrick();
@@ -939,43 +964,157 @@ function renderActions() {
 
 // ---------------- 輪到誰 ----------------
 
+// ---------------- 對局提示（第一次到每個階段出現一次；設定裡可以關掉或重看） ----------------
+// 浮在阿禾那一列上面，不遮手牌、確認出牌和牌桌；幾秒後自己收起來，也可以按「知道了」
+type CoachId = "draw" | "bid" | "contract" | "firstTrick" | "result";
+let coachSeen = new Set<CoachId>(JSON.parse(store.get(COACH_KEY) ?? "[]") as CoachId[]);
+let coachTimer = 0;
+const coachQueue: [CoachId, string, string][] = [];
+function coachOnce(id: CoachId): boolean {
+  if (!fx.settings.coach || coachSeen.has(id)) return false;
+  coachSeen.add(id);
+  store.set(COACH_KEY, JSON.stringify([...coachSeen]));
+  return true;
+}
+function coach(id: CoachId, title: string, text: string) {
+  if (!coachOnce(id)) return;
+  if (!$("coach").hidden) { coachQueue.push([id, title, text]); return; }
+  showCoach(title, text);
+}
+function showCoach(title: string, text: string) {
+  $("coachTitle").textContent = title;
+  $("coachText").textContent = text;
+  const c = $("coach");
+  c.hidden = false;
+  fx.slideIn(c, "up");
+  clearTimeout(coachTimer);
+  coachTimer = window.setTimeout(() => hideCoach(), Math.max(5200, 2600 + text.length * 70));
+}
+function hideCoach(all = false) {
+  clearTimeout(coachTimer);
+  $("coach").hidden = true;
+  if (all) { coachQueue.length = 0; return; }
+  const next = coachQueue.shift();
+  if (next) setTimeout(() => showCoach(next[1], next[2]), 250);
+}
+$("coachOk").addEventListener("click", () => hideCoach());
+window.addEventListener("hb-coach-reset", () => { coachSeen = new Set(); });
+
+// 常駐氣氛：只看真的加倍狀態和局內連續贏墩（不加分、不追蹤連勝局數）
+function refreshAura() {
+  const s = st;
+  if (!s) { resetAura(); return; }
+  const live = s.phase === Phase.Bidding || s.phase === Phase.Play || s.phase === Phase.Finished;
+  updateAura({ doubled: live ? s.doubled : 0, myStreak: streak, oppStreak, playing: s.phase === Phase.Play }, { opp: oppName() });
+}
+
+// 這一墩：誰先出（①）、誰後出（②）、領出花色；出牌格標上名字和先後
+function renderTrickInfo() {
+  const s = st!;
+  const active = s.phase === Phase.Draw || s.phase === Phase.Play;
+  const meLead = s.leaderSeat === s.seat;
+  const opp = oppName();
+  $("mySlot").dataset.label = active ? `你 ${meLead ? "①先出" : "②後出"}` : "";
+  $("oppSlot").dataset.label = active ? `${opp} ${meLead ? "②後出" : "①先出"}` : "";
+  const key = active && s.leadCard >= 0 ? `${s.handNumber}:${s.leadCard}` : "";
+  const st0 = $("statusText");
+  if (st0.dataset.lead !== key) {
+    st0.dataset.lead = key;
+    const b = st0.querySelector(".lead");
+    if (key && b) fx.punch(b, 0.22, 320);                         // 領出花色出現：簡短強調
+  }
+}
+
+// 剛結束的那一墩：誰贏、為什麼、下一墩誰先出（正式對局只停一下；完整內容在「上一墩」）
+let trickShow: { title: string; why: string; next: string; until: number; good: boolean } | null = null;
+let lastTrick: { hand: number; title: string; lead: number; follow: number; leaderName: string; followerName: string; suit: number; trump: number; why: string; next: string } | null = null;
+let trickShowTimer = 0;
+const trickShowing = () => !!trickShow && performance.now() < trickShow.until && selCard < 0 && staged < 0;
+
+function recordTrick(e: GameEvent, s: TableState) {
+  if (s.leadCard < 0 || s.followCard < 0) return;
+  const trump = s.phase === Phase.Play ? bidStrain(s.highestBid) : Strain.NoTrump;
+  const leaderName = nameOf(s.leaderSeat), followerName = nameOf(1 - s.leaderSeat);
+  const w = whyTrick(s.leadCard, s.followCard, trump, followerName);
+  const winner = nameOf(e.seat);
+  const lastPlay = s.phase === Phase.Play && s.myTricks + s.oppTricks === 12;
+  const lastDraw = s.phase === Phase.Draw && s.stockCount <= 2;
+  let next = lastPlay ? "這是最後一墩，接著結算。" : lastDraw ? "搶牌結束，接著叫牌。" : `下一墩由${winner}先出。`;
+  if (s.phase === Phase.Draw && s.faceUp >= 0) next += ` ${winner}拿走明牌 ${cardText(s.faceUp)}，${nameOf(1 - e.seat)}摸一張暗牌。`;
+  const title = `${winner}贏這墩`;
+  lastTrick = { hand: s.handNumber, title, lead: s.leadCard, follow: s.followCard, leaderName, followerName, suit: suitOf(s.leadCard), trump, why: w.why, next };
+  trickShow = { title, why: w.why, next: next.split(" ")[0], until: performance.now() + (fx.settings.fast ? 1900 : 2700), good: e.seat === s.seat };
+  clearTimeout(trickShowTimer);
+  trickShowTimer = window.setTimeout(() => { if (st) { renderTurn(); renderTrickInfo(); } }, (trickShow.until - performance.now()) + 40);
+}
+
+// 上一墩回看：雙方出牌、先後順序、領出花色、王牌、勝者與原因
+function openLastTrick() {
+  const t = lastTrick;
+  if (!t) return;
+  $("ltTitle").textContent = `上一墩：${t.title}`;
+  const fig = (id: string, card: number, who: string, order: string) => {
+    const f = $(id); f.replaceChildren(fx.cardEl(card));
+    const cap = document.createElement("figcaption"); cap.textContent = `${order} ${who}`; f.appendChild(cap);
+  };
+  fig("ltLead", t.lead, t.leaderName, "① 先出");
+  fig("ltFollow", t.follow, t.followerName, "② 後出");
+  $("ltSuit").textContent = `${SUIT_SYMBOL[t.suit]} ${SUIT_NAME[t.suit]}（第一張牌的花色）`;
+  $("ltTrump").textContent = trumpWord(t.trump) + (t.trump === Strain.NoTrump ? "（沒有王吃）" : "");
+  $("ltWhy").textContent = `${t.title}：${t.why}`;
+  $("ltNext").textContent = t.next;
+  openModal("lastTrickPop");
+}
+$("lastTrickBtn").addEventListener("click", openLastTrick);
+
+// 輪到誰、現在要做什麼：你先出／你要跟牌／等對手／判定這墩／本墩完成
 function renderTurn() {
   const s = st!;
   const line = $("turnLine");
-  let text = "", hint = "", mine = false;
-  if (s.phase === Phase.Finished) text = "";
-  else if (myTurn() && s.phase !== Phase.Bidding) {
-    mine = true;
-    text = "換你出牌";
-    const following = s.leaderSeat !== s.seat && s.leadCard >= 0;
-    if (staged >= 0) hint = "預覽中：按「確認出牌」送出，點牌收回";
-    else if (selCard >= 0) hint = s.legal.includes(selCard) ? "按「確認出牌」送出，或拖到桌上預覽" : `${cardText(selCard)} 現在不能出，換一張吧`;
-    else if (following) {
-      const su = suitOf(s.leadCard);
-      const has = s.hand.some(c => suitOf(c) === su);
-      const sym = `<span class="${su === 1 || su === 2 ? "red" : ""}">${SUIT_SYMBOL[su]}</span>`;
-      // 只有真的能王吃（有合約王牌、手上也有）才提王牌
-      const trump = s.phase === Phase.Play ? bidStrain(s.highestBid) : Strain.NoTrump;
-      const canRuff = trump !== Strain.NoTrump && s.hand.some(c => suitOf(c) === trump);
-      hint = has ? `跟 ${sym}：手上有就要先跟` : `你沒有 ${sym}，可以墊別的牌${canRuff ? "，或出王牌王吃" : ""}`;
-    } else hint = s.phase === Phase.Draw ? `贏了這墩就拿走 ${s.faceUp >= 0 ? cardText(s.faceUp) : "明牌"}` : "你先出，出哪張都可以";
-  } else if (s.phase !== Phase.Bidding && !(s.leadCard >= 0 && s.followCard >= 0)) {
-    text = selCard >= 0 ? `換${oppName()}出牌…（你先選好 ${cardText(selCard)} 了）` : `換${oppName()}出牌…`;
+  const opp = oppName();
+  let cls = "wait", title = "", lines: string[] = [];
+  const active = s.phase === Phase.Draw || s.phase === Phase.Play;
+  const meLead = s.leaderSeat === s.seat;
+  const lead = s.leadCard >= 0 ? cardText(s.leadCard) : "";
+  const trump = s.phase === Phase.Play ? bidStrain(s.highestBid) : Strain.NoTrump;
+  if (!active) title = "";
+  else if (s.leadCard < 0 && trickShowing()) {
+    cls = "done"; title = trickShow!.title; lines = [trickShow!.why, trickShow!.next];
+  } else if (s.leadCard >= 0 && s.followCard >= 0) {
+    cls = "wait judge"; title = "判定這墩中…";
+    lines = [`① ${nameOf(s.leaderSeat)} ${lead} → ② ${nameOf(1 - s.leaderSeat)} ${cardText(s.followCard)}`];
+  } else if (myTurn()) {
+    cls = "mine";
+    title = meLead ? "你先出牌" : "換你跟牌";
+    const pick = staged >= 0 ? staged : selCard;
+    const sel = staged >= 0 ? "預覽中：按「確認出牌」送出，點牌收回"
+      : selCard >= 0 ? (s.legal.includes(selCard) ? "按「確認出牌」送出，或拖到桌上預覽" : illegalReason(s.hand, s.leadCard, selCard) ?? "")
+      : "";
+    if (meLead) lines = [sel || (s.phase === Phase.Draw && s.faceUp >= 0 ? `${LEAD_ADVICE.replace("。", "")}；贏了拿走 ${cardText(s.faceUp)}。` : LEAD_ADVICE)];
+    else lines = [`① ${opp}先出 ${lead} → ② 換你跟牌`, sel || followAdvice(s.hand, s.leadCard, trump, s.phase === Phase.Draw)];
+    void pick;
+  } else {
+    title = s.leadCard < 0 ? `等${opp}先出牌` : `等${opp}跟牌`;
+    lines = [s.leadCard < 0 ? `這墩由${opp}先出，你後出${selCard >= 0 ? `（你先選好 ${cardText(selCard)} 了）` : ""}` : `① 你先出 ${lead} → ② 換${opp}跟牌`];
   }
-  const key = text + "|" + hint + "|" + mine;
+  const key = cls + "|" + title + "|" + lines.join("|");
   if (key === lastTurnText) return;
-  const was = lastTurnText.split("|")[0];
+  const was = lastTurnText.split("|")[1];
   lastTurnText = key;
-  line.className = "turn" + (mine ? " mine" : " wait");
+  line.className = "turn " + cls;
   line.replaceChildren();
-  if (mine) {
-    const tt = document.createElement("span");
-    tt.className = "tt";
-    [...text].forEach((ch, i) => { const sp = document.createElement("span"); sp.className = "ch"; sp.style.setProperty("--i", String(i)); sp.textContent = ch; tt.appendChild(sp); });
-    line.appendChild(tt);
-    if (hint) { const h = document.createElement("span"); h.className = "hint"; h.innerHTML = hint; line.appendChild(h); }
-    if (was !== text) { fx.popIn(tt); fx.buzz(12); }
-  } else line.textContent = text;
+  if (!title) return;
+  const tt = document.createElement("span");
+  tt.className = "tt";
+  if (cls === "mine") [...title].forEach((ch, i) => { const sp = document.createElement("span"); sp.className = "ch"; sp.style.setProperty("--i", String(i)); sp.textContent = ch; tt.appendChild(sp); });
+  else tt.textContent = title;
+  line.appendChild(tt);
+  for (const t of lines) if (t) { const h = document.createElement("span"); h.className = "hint"; h.textContent = t; line.appendChild(h); }
+  if (was !== title && cls === "mine") {
+    fx.popIn(tt); fx.buzz(12);
+    // 輪到你：提示和你的手牌區短暫亮一下
+    if (fx.motionOn()) handBox.animate([{ filter: "brightness(1)" }, { filter: "brightness(1.18)" }, { filter: "brightness(1)" }], { duration: fx.ms(520) });
+  }
 }
 
 // ---------------- 03 叫牌面板：階數＋花色 ----------------
@@ -1207,6 +1346,8 @@ async function showResult(instant: boolean) {
   const opp = oppName();
 
   $("resRibbon").textContent = matchOver ? "整場打完了！" : "這局打得怎麼樣？";
+  // 結算的提示放在結算單裡（不另外蓋一層）
+  $("resCoach").hidden = !coachOnce("result");
   const title = $("resTitle");
   const margin = Math.abs(s.myScore - s.oppScore);
   title.textContent = matchOver ? matchTitle(iWon, margin, opp) : handTitle(r, me, opp);
@@ -1410,6 +1551,7 @@ function onEvent(e: GameEvent) {
 
     case "CardPlayed":
       // Layer A：每一張牌都重重拍在桌上（王牌稍微重一點）。結果還沒確認，所以這裡不放「王吃」的大特效
+      trickShow = null;
       flyPlayed(e);
       tick(e.extra === 1 ? `${who}出王牌 ${cardHtml(e.card)}` : `${who}出了 ${cardHtml(e.card)}`);
       break;
@@ -1417,7 +1559,15 @@ function onEvent(e: GameEvent) {
     case "TrickWon": {
       // Layer B：規則已經確認誰贏這墩，才依局勢決定衝擊等級；同一墩只演一次
       if (!st || !impactGate.once(trickKey(st))) break;
-      const im = evaluateTrick(e, st);
+      recordTrick(e, st);
+      if (st.phase === Phase.Play && st.myTricks + st.oppTricks === 0) {
+        const w = nameOf(e.seat);
+        coach("firstTrick", "第一墩結束", `${w}贏了這墩，所以下一墩由${w}先出。誰贏誰先出，不是固定輪流。`);
+      }
+      let im = evaluateTrick(e, st);
+      // 連贏延續（你在後半場連贏到第 3 墩以上）：一般贏墩升一級演出，並寫出真正的原因
+      if (im.tier === 1 && e.seat === mySeat && st.phase === Phase.Play && streak + 1 >= 3)
+        im = { ...im, tier: 2, kind: "trick", label: `連贏 ${streak + 1} 墩`, crack: "none", hitstop: 40 };
       void collectTrick(e, im);
       trickQuip(e, st, im);
       break;
@@ -1440,6 +1590,7 @@ function onEvent(e: GameEvent) {
     case "DrawPhaseOver":
       streak = 0; oppStreak = 0; streakGlow($("felt"), 0); emo.clear();
       // 放在上方的階段橫幅，不要蓋住等一下跳出來的叫牌面板
+      coach("bid", "搶牌結束，開始叫牌", "說出這局要贏幾墩：叫 N 線＝要贏 N＋6 墩，花色就是王牌。一方叫了、另一方 Pass，合約就定了。");
       fx.popup("牌搶完了，來叫牌！", $("phaseChip"), { size: 20, color: GOLD, flags: ["pop"], hold: 900, delay: 700 });
       setTimeout(() => sfx.stamp(), fx.ms(900));
       fx.buzz(20);
@@ -1480,8 +1631,9 @@ function onEvent(e: GameEvent) {
       break;
 
     case "Doubled":
-      // 加倍：紅色衝擊、低頻敲擊、短暫局部震動
+      // 加倍：紅色衝擊、低頻敲擊、短暫局部震動；桌緣進入升溫狀態（×2 徽章蓋章）
       emo.double();
+      setTimeout(() => { refreshAura(); auraUpgrade(1, document.querySelector("#bidContract .mult, #infoStrip .mult")); }, fx.ms(520));
       if (!me) aheSay("那我可要加倍了。", { key: true, delay: 500 });
       fx.popup("加倍！", side, { size: 50, color: "#F08A96", flags: ["pop", "shake"], hold: 900 });
       doubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
@@ -1489,8 +1641,9 @@ function onEvent(e: GameEvent) {
       break;
 
     case "Redoubled":
-      // 再加倍：雙重衝擊波、金紅粒子、短促亮光、更重的音效
+      // 再加倍：雙重衝擊波、金紅粒子、短促亮光、更重的音效；桌緣進入高壓狀態（×4 徽章蓋章）
       emo.redouble();
+      setTimeout(() => { refreshAura(); auraUpgrade(2, document.querySelector("#bidContract .mult, #infoStrip .mult")); }, fx.ms(560));
       if (me) aheSay("你還敢再加倍？行！", { key: true, delay: 600 });
       fx.popup("再加倍！！", side, { size: 54, color: GOLD, flags: ["pop", "shake"], hold: 1000 });
       redoubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
@@ -1509,6 +1662,10 @@ function onEvent(e: GameEvent) {
       setTimeout(() => sfx.slide(), fx.ms(900));
       const trump = bidStrain(e.value);
       tick(`好，合約定了！${who}當莊家，要贏 ${tricksNeeded(e.value)} 墩${trump === Strain.NoTrump ? "（無王）" : `，${SUIT_SYMBOL[trump]} 是王牌`}`);
+      {
+        const t = bidStrain(e.value), first = nameOf(1 - e.seat);
+        coach("contract", "合約成立", `${nameOf(e.seat)}當莊家，要贏 ${tricksNeeded(e.value)} 墩，${t === Strain.NoTrump ? "本局無王" : `${SUIT_SYMBOL[t]} 是王牌`}。第一墩由莊家的對手（${first}）先出。`);
+      }
       // 你當莊家：阿禾把壓力丟回給你；阿禾當莊家、由你先出時就不多話
       if (me) aheSay("好，這局就看你了。", { key: true, delay: 1600 });
       break;
@@ -1517,9 +1674,16 @@ function onEvent(e: GameEvent) {
       const made = e.value >= e.extra;
       const good = me === made;    // 我是莊家且打成，或對方是莊家且倒約
       // 失敗時不放羞辱或懲罰特效：字小一點、顏色柔和、不震
-      fx.popup(made ? "打成！" : `倒 ${e.extra - e.value} 墩`, centerAnchor(),
-        { size: good ? 70 : 40, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1500, delay: 650 });
-      if (good) { setTimeout(() => fx.shake($("felt"), 6, 320), fx.ms(700)); fx.buzz([30, 50, 30, 50, 120]); }
+      const iDecl = e.seat === mySeat;
+      const text = made ? (iDecl ? "打成！" : `${oppName()}打成`) : (iDecl ? `倒 ${e.extra - e.value} 墩` : "守住了！");
+      fx.popup(text, centerAnchor(), { size: good ? 70 : 40, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1500, delay: 650 });
+      const r0 = riskOf(st?.highestBid ?? -1, st?.doubled ?? 0);
+      if (good) {
+        // 蓄力（桌緣往中間收）→ 停頓 → 爆發 → 收斂到結算單
+        setTimeout(() => auraConverge(), fx.ms(420));
+        setTimeout(() => void emo.release(true, Math.max(r0, (st?.doubled ?? 0) > 0 ? 0.8 : r0), centerAnchor(), $("felt")), fx.ms(900));
+        fx.buzz([30, 50, 30, 50, 120]);
+      } else setTimeout(() => void emo.release(false, r0, centerAnchor(), $("felt")), fx.ms(700));
       break;
     }
     case "HandScored":
@@ -1622,6 +1786,7 @@ async function collectTrick(e: GameEvent, im: Impact) {
   streak = winnerMe ? streak + 1 : 0;
   oppStreak = winnerMe ? 0 : oppStreak + 1;
   streakGlow(felt, streak);
+  refreshAura();
   // Layer B：依 Impact 等級演出（壓痕、裂痕、下沉、定格…），回傳要定格多久
   const hold = presentImpact(im, { felt, winner, loser, markers: [$("infoStrip"), $("tallyPanel")], streak: winnerMe ? streak : 0 });
   const hs = hold > 0 ? hold : 0;
@@ -1630,14 +1795,17 @@ async function collectTrick(e: GameEvent, im: Impact) {
   if (!drawing) {
     const good = im.good;
     if (im.outcome) {
-      // 合約定案（Tier 3／4）：先重擊、定格，接著把叫牌以來累積的壓力釋放出來（沉重的一方只收掉壓力）
+      // 合約定案（Tier 3／4）：重擊、定格。還沒打完：只說「合約已達標／倒約已確定」（之後的墩還會影響超墩和計分），
+      // 完整的爆發留給整局結束（GameOver）——一局只爆一次
       const made = im.outcome === "made";
+      const lastTrick = (st?.myTricks ?? 0) + (st?.oppTricks ?? 0) === 12;
+      const declSide = made ? winnerMe : !winnerMe;    // 定案的是誰的合約
       const text = im.kind === "match" && good ? (im.comeback ? "逆轉！" : "決勝一墩！")
-        : made ? (winnerMe ? "打成了！" : `${oppName()}打成了`) : (winnerMe ? `${oppName()}倒約了！` : "倒約了…");
+        : lastTrick ? "" : made ? (winnerMe ? "合約已達標！" : `${oppName()}的合約已達標`) : (winnerMe ? `${oppName()}倒約已確定` : "倒約已確定…");
+      void declSide;
       const r0 = riskOf(st?.highestBid ?? -1, st?.doubled ?? 0);
       const power = im.tier === 4 ? Math.max(r0, 0.85) : r0;
-      fx.popup(text, centerAnchor(), { size: good ? 40 + Math.round(power * 14) : 28, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1100, delay: (good ? 380 : 240) + msBase(im.hitstop) });
-      setTimeout(() => void emo.release(good, power, centerAnchor(), felt), fx.ms(200) + hs);
+      if (text) fx.popup(text, centerAnchor(), { size: good ? 34 + Math.round(power * 10) : 26, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1100, delay: (good ? 380 : 240) + msBase(im.hitstop) });
     } else if (im.tier === 2 && im.label) {
       // 王吃、關鍵一墩、加倍局再一墩：結果確認了才亮字
       const ruff = im.kind === "ruff";
@@ -1720,7 +1888,7 @@ $("restartSolo").addEventListener("click", () => {
   $("menu").hidden = true;
   if (conn instanceof LocalTable) conn.restart();     // 會發 NewHand：牌桌照新局的流程清空重畫
 });
-for (const m of ["menu", "auctionPop", "rulesModal", "storyOffer", "homeMenu", "newsModal"]) {
+for (const m of ["menu", "auctionPop", "lastTrickPop", "rulesModal", "storyOffer", "homeMenu", "newsModal"]) {
   const modal = $(m);
   modal.addEventListener("click", ev => {
     if (ev.target === modal || (ev.target as HTMLElement).closest("[data-close]")) modal.hidden = true;
@@ -1743,11 +1911,14 @@ function esc(s: string) {
 
 fx.initFx($("fx"), $("app"));
 emo.attach($("app"));
+attachAura($("felt"), $("actions"), $("oppArea"));
 emo.onChange(p => $("bidPanel").style.setProperty("--tension", p.toFixed(2)));
 {
   const params = new URLSearchParams(location.search);
   const room = normalizeCode(params.get("room") ?? "");
   const solo = params.get("solo");
+  // 從教學最後的「開一場有提示的練習局」進來：對局提示打開、全部重新提示一次
+  if (params.get("coach") === "1") { store.del(COACH_KEY); coachSeen = new Set(); fx.settings.coach = true; fx.saveSettings(); }
   if (solo === "new" || solo === "1") enterSolo(solo === "new");   // 故事最後的「自己跟電腦打一局」= new：重新發牌
   else if (isValidCode(room)) {
     codeInput.value = room;

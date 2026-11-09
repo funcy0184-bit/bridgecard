@@ -715,3 +715,92 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   .felt > #oppAnchor { top: 18%; }
   .felt > #myAnchor { bottom: 14%; }
 }
+
+/* ---------- 對局資訊：整局流程、這一墩的先後與領出花色、輪到誰 ---------- */
+.flow { background: var(--paper); display: flex; align-items: center; flex: none; margin: 0; padding: 4px 8px; list-style: none; clip-path: var(--torn-a); gap: 1px;
+  font: 500 12.5px var(--display); letter-spacing: .06em; color: var(--ink-soft); }
+.flow li { padding: 1px 4px; border-radius: 4px; white-space: nowrap; }
+.flow li + li::before { content: "›"; margin-right: 4px; color: var(--gold); }
+.flow li.done { color: #9C8A6E; }
+.flow li.now { color: var(--wine); font-weight: 700; background: rgba(185,138,62,.18); box-shadow: inset 0 -2px 0 var(--gold); }
+.score .u { margin-left: 1px; font-size: 11px; }
+.score .tg { font-size: 11px; }
+@media (max-width: 380px) { .score .tg { display: none; } }
+.status { font-size: 11.5px; line-height: 1.3; }
+.leadbadge { position: absolute; left: 50%; top: 6px; translate: -50% 0; z-index: 4; padding: 2px 12px; border-radius: 999px; white-space: nowrap;
+  font: 500 12px var(--display); letter-spacing: .08em; color: var(--ink); background: rgba(251,244,228,.93); box-shadow: 0 0 0 1px rgba(185,138,62,.7), 0 3px 8px rgba(0,0,0,.35); pointer-events: none; }
+.leadbadge b { font-size: 14px; } .leadbadge .red { color: var(--red); }
+.slot { position: relative; }
+/* 出牌格：名字＋先出／後出，貼在牌的下緣（不蓋牌角的點數） */
+.slot::after { content: attr(data-label); position: absolute; left: 50%; bottom: -9px; translate: -50% 0; z-index: 3; white-space: nowrap; pointer-events: none;
+  padding: 1px 7px; border-radius: 999px; font: 500 10px/1.5 var(--display); letter-spacing: .04em; color: var(--ink); background: rgba(251,244,228,.92); box-shadow: 0 0 0 1px rgba(185,138,62,.6); }
+.slot[data-label=""]::after { display: none; }
+.status .lead { font-size: 13px; color: var(--on-wood); } .status .lead.red { color: var(--red-soft); }
+.turn .hint { display: block; line-height: 1.45; }
+.turn.done, .turn.judge { color: var(--on-wood); }
+.turn.done .tt { font: 700 15px var(--display); letter-spacing: .2em; color: var(--gold-pale); }
+.turn.judge .tt { font: 500 14px var(--display); letter-spacing: .2em; }
+.turn.done .hint, .turn.judge .hint { color: var(--muted); }
+.turn.wait .tt { font: 500 14px var(--display); letter-spacing: .14em; }
+.hand .card.dim::after { content: "✕"; position: absolute; right: 3px; top: 3px; width: 13px; height: 13px; display: grid; place-items: center; border-radius: 50%;
+  font: 700 8px/1 sans-serif; color: #F7E9CC; background: rgba(60,40,25,.75); pointer-events: none; }
+.tally + .tline, .tline { font-size: 10.5px; }
+/* 對局提示：浮在阿禾那一列上（不遮手牌、確認出牌和牌桌） */
+.coach { position: absolute; inset: 0 8px; z-index: 8; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 12px; margin: 0;
+  font-size: 12.5px; line-height: 1.45; color: var(--ink); background: var(--paper-hi); border-radius: 8px; box-shadow: 0 0 0 1px rgba(185,138,62,.8), 0 8px 18px rgba(0,0,0,.45); }
+.coach b { font: 700 13.5px var(--display); letter-spacing: .12em; color: var(--wine); }
+.coach .link { align-self: flex-end; font-size: 12px; padding: 0; color: var(--wine); }
+.rescoach { margin: 0 0 6px; padding: 6px 10px; font-size: 12px; line-height: 1.5; color: var(--ink); background: rgba(185,138,62,.14); border-radius: 6px; }
+.rescoach b { display: block; color: var(--wine); }
+/* 上一墩回看 */
+.lasttrick .ltcards { display: flex; justify-content: center; gap: 22px; margin: 6px 0 10px; }
+.lasttrick figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; --cw: 58px; }
+.lasttrick figcaption { font-size: 12px; color: var(--ink-soft); }
+.ltinfo { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
+.ltinfo dt { color: var(--ink-soft); white-space: nowrap; } .ltinfo dd { margin: 0; }
+
+@media (max-width: 380px) {
+  .phasebar { gap: 4px; padding: 2px 6px; }
+  .flow { font-size: 11.5px; letter-spacing: 0; padding: 3px 6px; }
+  .flow li { padding: 1px 2px; } .flow li + li::before { margin-right: 2px; }
+  .pchip.small { font-size: 12px; letter-spacing: .02em; padding: 4px 8px; }
+}
+
+/* ---------- 常駐對局氣氛：桌緣慢慢進入危險狀態（只動 opacity／transform；精簡品質是靜態桌緣） ---------- */
+.aura { position: absolute; inset: 0; z-index: -1; border-radius: inherit; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .6s ease; contain: strict; }
+.felt[data-heat="1"] > .aura, .felt[data-heat="2"] > .aura { opacity: 1; }
+.aura > i { position: absolute; pointer-events: none; }
+.aura .ag { inset: 0; border-radius: inherit; opacity: .55; box-shadow: inset 0 0 0 2px rgba(226,184,96,.55), inset 0 0 26px 6px rgba(226,184,96,.32);
+  animation: auraBreath calc(2.8s / var(--spd)) ease-in-out infinite; }
+.felt[data-tone="wine"] > .aura .ag { box-shadow: inset 0 0 0 2px rgba(160,45,60,.65), inset 0 0 30px 8px rgba(130,25,40,.45); }
+.felt[data-heat="2"] > .aura .ag { animation-duration: calc(1.6s / var(--spd)); }
+.aura .ar { left: 0; top: 0; width: 34%; height: 2px; background: linear-gradient(90deg, transparent, rgba(255,226,150,.85), transparent);
+  animation: auraRun calc(4.6s / var(--spd)) linear infinite; }
+.felt[data-tone="wine"] > .aura .ar { background: linear-gradient(90deg, transparent, rgba(240,140,150,.75), transparent); }
+.aura .ac { inset: 0; opacity: 0; transition: opacity .8s; font: 400 38px/1 var(--display); color: rgba(240,200,120,1);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='%23E2B860' font-size='34' font-family='serif'%3E%3Ctext x='10' y='44'%3E%E2%99%A0%3C/text%3E%3Ctext x='70' y='44'%3E%E2%99%A5%3C/text%3E%3Ctext x='10' y='104'%3E%E2%99%A6%3C/text%3E%3Ctext x='70' y='104'%3E%E2%99%A3%3C/text%3E%3C/g%3E%3C/svg%3E");
+  background-size: 120px 120px; }
+.felt[data-heat="2"] > .aura .ac { opacity: .06; }
+@keyframes auraBreath { 50% { opacity: 1; } }
+@keyframes auraRun { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+:root[data-q="lite"] .aura > i, :root[data-motion="0"] .aura > i { animation: none !important; }
+:root[data-q="lite"] .aura .ar { display: none; }
+:root.paused .aura > i, :root.paused .mult { animation-play-state: paused !important; }
+/* 倍率徽章：照規則的實際倍率，克制地呼吸 */
+.mult { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 4px; font: 700 12px/1.5 var(--display); color: #F7E9CC; background: var(--wine);
+  box-shadow: 0 0 0 1px var(--gold-hi); animation: multBreath calc(2.4s / var(--spd)) ease-in-out infinite; }
+@keyframes multBreath { 50% { transform: scale(1.08); } }
+:root[data-q="lite"] .mult, :root[data-motion="0"] .mult { animation: none; }
+/* 連贏標記：放在連贏那一方旁邊 */
+.streakchip { position: absolute; z-index: 7; pointer-events: none; white-space: nowrap; padding: 1px 9px 1px 22px; border-radius: 999px;
+  font: 700 11px/1.7 var(--display); letter-spacing: .06em; }
+.streakchip::before { content: "♠"; position: absolute; left: 7px; top: 50%; translate: 0 -50%; font-size: 12px; }
+.actions { position: relative; }
+.streakchip.me { right: 18px; top: -16px; color: #2A1B05; background: linear-gradient(180deg, var(--gold-pale), var(--gold-hi)); box-shadow: 0 0 0 1px rgba(120,80,20,.5), 0 3px 8px rgba(0,0,0,.35); }
+.streakchip.opp { right: 10px; bottom: 2px; color: #F7E9CC; background: var(--wine); box-shadow: 0 0 0 1px rgba(226,184,96,.6), 0 3px 8px rgba(0,0,0,.35); }
+.streakchip.opp::before { content: "♥"; }
+/* 放射線（勝利層次）：只有好事才有 */
+.rays { border-radius: 50%; background: repeating-conic-gradient(rgba(255,226,150,.5) 0 6deg, transparent 6deg 22deg);
+  -webkit-mask: radial-gradient(closest-side, transparent 18%, #000 30%, transparent 72%); mask: radial-gradient(closest-side, transparent 18%, #000 30%, transparent 72%); }
+@media (max-width: 460px) { .score .tg { display: none; } }
+@media (max-width: 400px) { .score .hn { display: none; } }

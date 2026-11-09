@@ -1,7 +1,6 @@
-// 一支模擬手機真的點畫面，走完阿禾的四幕故事，再接一局跟電腦的單機對戰：
-//   首頁（來打橋牌、第一次玩會問要不要先學）→ 第一幕兩種搶牌＋換一張試試（回到同一手）→ 重新整理續讀
-//   → 第二幕叫 2♥ → 第三幕不能出的 ♥2、王吃與墊牌 → 第四幕 8／8、+20 分
-//   → 「自己跟電腦打一局」重新發牌 → 打完一整局看到結算 → 中途重新整理回到同一局 → 換牌桌顏色
+// 一支模擬手機真的點畫面，走完阿禾的四幕十二段教學，再接一局有提示的練習局：
+//   第一幕兩種搶牌＋贏家接著先出 → 第二幕叫牌情況 A／B → 第三幕跟牌、王吃／墊牌、♠K／♦A 先出對照、
+//   都是王牌、無王 → 第四幕打成與倒一 → 換章節時舊動畫不殘留 → 練習局（對局提示、上一墩、結算）
 // 用法：先 npm run dev，再 node test/e2e/story-walk.mjs [網址] [截圖資料夾]
 //   換機型：HB_DEVICE="iPhone SE" node test/e2e/story-walk.mjs
 import { createRequire } from "node:module";
@@ -46,219 +45,166 @@ async function settleStory() {
   await page.waitForFunction(() => document.querySelector("#controls .s-emph") !== null, null, { timeout: 5000 });
 }
 
-console.log(`裝置：${deviceName}　網址：${base}`);
+const pick = async (card) => { await page.locator(`#sHand .card[data-id="${id(card)}"]`).click(); await wait(80); };
+const confirm = async () => { await page.locator("#sConfirm").click(); };
+const fb = () => text("#feedback");
+const btn = (name) => page.getByRole("button", { name });
+async function playCard(card) { await pick(card); await confirm(); await settleStory(); }
 
-// ---------------- 首頁 ----------------
+console.log(`裝置：${deviceName}　網址：${base}`);
 console.log("首頁");
 await page.goto(base + "/");
-check((await page.title()) === "來打橋牌", "網頁標題是「來打橋牌」");
 check((await text("#home h1")) === "來打橋牌", "首頁大標題是「來打橋牌」");
-check((await text("#chapHead")).includes("第一次玩") && (await text("#storyCardSub")).includes("阿禾帶你打一場"), "封面寫著「第一次玩？」「沒玩過也沒關係，阿禾帶你打一場！」");
-check((await page.locator("#home .cv-btn").count()) === 3 && (await page.locator("#home .cv-card").count()) === 4, "封面：故事教學、人機對戰、朋友連線三顆按鈕＋四個篇章");
-check(await page.evaluate(() => getComputedStyle(document.getElementById("home")).backgroundImage.includes("gradient")), "封面是米白紙底");
 await page.locator("#solo").click();
-check(await page.locator("#storyOffer").isVisible(), "第一次按「跟電腦打一局」會先問要不要跟阿禾學");
-await shot("01-offer");
+check(await page.locator("#storyOffer").isVisible(), "第一次按「跟阿禾打」會先問要不要跟阿禾學");
 await page.locator("#storyOffer a.btn").click();
 await page.waitForURL(/\/story\/$/);
+await page.waitForSelector("#sHand .card");
 
 // ---------------- 第一幕 ----------------
-console.log("第一幕：先來搶牌");
-await page.waitForSelector("#sHand .card");
-check((await text("#title")) === "先來搶牌", "第一幕標題：先來搶牌");
-// 開場：旁白和阿禾一句一句講，最後一句是阿禾的問題
-check((await mode()) === "intro", "一進來先是開場對話（不是直接出題）");
-// 開場講到「先從最簡單的開始」時，多一顆「好啊，來吧！」可以按
-const letsGo = page.getByRole("button", { name: "好啊，來吧！" });
+console.log("第一幕：搶牌與一墩的完整循環");
+check((await text("#title")) === "先來搶牌" && (await text("#tableLabel")).includes("學："), "第一幕：標題與「本段要學什麼」");
+const letsGo = btn("好啊，來吧！");
 for (let i = 0; i < 8 && !(await letsGo.isVisible()); i++) { await page.locator("#spoken").click(); await wait(60); }
-check(await letsGo.isVisible() && (await spoken()).includes("先從最簡單的開始"), "開場：阿禾說「來，先從最簡單的開始」，可以按「好啊，來吧！」");
-await letsGo.click(); await wait(80);
-check((await mode()) === "intro" && !(await letsGo.isVisible()), "按「好啊，來吧！」往下一句（還在開場、按鈕收起來）");
-let introLines = 0;
-for (let i = 0; i < 20 && (await mode()) === "intro"; i++) {
-  const before = (await page.locator("#spoken").getAttribute("data-full")) ?? "";
-  await page.locator("#spoken").click(); await wait(40);          // 第一下：講完這句
-  if ((await page.locator("#spoken").getAttribute("data-full")) === before) { await page.locator("#spoken").click(); await wait(60); }   // 第二下：下一句
-  introLines++;
-}
-check(introLines >= 3 && (await mode()) === "prompt", `開場一句一句講完（點了 ${introLines} 句）才輪到你`);
-check((await said()).includes("第一次來喔"), "阿禾開場：欸，第一次來喔？");
-check((await text("#sBoard")).includes("阿禾出的牌") && (await text("#sBoard")).includes("贏的人拿這張"), "桌上分開標「阿禾出的牌」和「贏的人拿這張」");
-const startHand = await handIds();
-check(JSON.stringify(startHand) === JSON.stringify([id("♣Q"), id("♣4")]), "手上是 ♣Q、♣4");
-await shot("02-act1");
-await tap("♣Q");
-await settleStory();
-let h = await handIds();
-check(h.includes(id("♦K")) && h.includes(id("♣4")) && h.length === 2, "出 ♣Q：♦K 進手牌，手上還是 2 張");
-check((await page.locator("#sOppFan .card.back").count()) === 2, "阿禾摸了暗牌：只看到 2 張牌背");
-check((await page.locator(`.card[data-id="${id("♠6")}"]`).count()) === 0, "阿禾摸的暗牌（♠6）不在畫面上");
-check((await said()).includes("這就叫一墩"), "阿禾一句一句解釋什麼是一墩");
-await shot("03-act1-q");
-await page.getByRole("button", { name: "換一張試試" }).click();
-check(JSON.stringify(await handIds()) === JSON.stringify(startHand), "換一張試試：回到同一手 ♣Q、♣4");
-await tap("♣4");
-await settleStory();
-h = await handIds();
-check(h.includes(id("♠6")) && h.includes(id("♣Q")), "出 ♣4：摸到暗牌 ♠6、♣Q 留在手上");
-check((await text("#sBoard")).includes("歸阿禾"), "明牌 ♦K 歸阿禾");
-check((await text("#feedback")).includes("兩種出法你都看過了"), "兩種搶牌都試過");
-await page.reload();
-await page.waitForSelector("#sHand .card");
-h = await handIds();
-check(h.includes(id("♠6")) && (await said()).includes("一墩") && (await mode()) === "done", "重新整理：回到同一頁、同一個結果");
-await shot("04-act1-4-reload");
+check(await letsGo.isVisible(), "開場有「好啊，來吧！」");
+await letsGo.click();
+check(await ready(), "開場講完才輪到你");
+check((await fb()).includes("你還有♣，請出一張梅花"), "輪到你：說明現在能出什麼（要跟梅花）");
+await pick("♣Q");
+check((await page.locator("#sHand .card.sel").count()) === 1 && (await text("#sConfirm")).includes("確認出牌 ♣Q"), "點一下只是選牌，出現「確認出牌 ♣Q」");
+await pick("♣Q");
+check((await page.locator("#sHand .card.sel").count()) === 0 && !(await page.locator("#sConfirm").count()), "再點一下收回，沒有出牌");
+await playCard("♣Q");
+check((await said()).includes("這就叫一墩"), "阿禾說明什麼是一墩");
+check((await fb()).includes("你贏：同樣是梅花") && (await fb()).includes("下一墩由你先出"), "結果三件事：誰贏、為什麼、下一墩誰先出");
+await btn("換一張試試").click();
+check(await ready() || (await mode()) === "prompt", "換一張試試：直接輪到你");
+await playCard("♣4");
+check((await fb()).includes("你從牌堆摸到暗牌 ♠6") && (await fb()).includes("下一墩由阿禾先出"), "輸了：摸暗牌 ♠6，下一墩由阿禾先出");
+await page.reload(); await page.waitForSelector("#sHand .card");
+check((await mode()) === "done" && (await fb()).includes("♠6"), "重新整理：回到同一頁、同一個結果");
+await btn(/下一墩：贏家先出/).click();
+check(await ready(), "第一幕之二：贏家（你）接著先出");
+check((await fb()).includes("你先出牌：這張牌會決定本墩要跟的花色"), "你先出：說明先出的牌決定領出花色");
+await playCard("♦K");
+check((await fb()).includes("不是領出花色") && (await fb()).includes("進入叫牌"), "明牌 ♥J 不決定跟牌花色；搶完才進入叫牌");
 
 // ---------------- 第二幕 ----------------
-console.log("第二幕：阿禾問，你敢拿幾墩？");
-await page.getByRole("button", { name: /下一幕/ }).click();
-check((await text("#skip")).includes("13 次牌搶完了"), "提示時間跳轉：13 次牌搶完了");
-check(await page.locator(".actcard").count() > 0, "換幕時牌桌上浮出「第二幕」紙條");
-check(await ready(), "第二幕：阿禾說完才輪到你");
-check((await page.locator("#sHand .card").count()) === 13, "手上 13 張");
-check((await page.locator("#sHand .card.hi").count()) === 6, "阿禾指著的六張紅心");
-await page.locator('#sBoard button[data-bid="13"]').click();   // 3♠
-check(await page.locator("#sCall").isHidden(), "點 3♠：先解釋、不能送出");
-check((await text("#feedback")).includes("你要叫 3♠，那就得拿到 9 墩") && (await text("#feedback")).includes("先叫 2♥"), "點 3♠：阿禾照 3♠ 算墩數，再提醒先叫 2♥");
-await page.locator('#sBoard button[data-bid="7"]').click();    // 2♥
-check((await text("#sMean")).includes("紅心當王牌，至少要贏 8 墩（6＋2）") && (await text("#feedback")).includes("你要叫 2♥，那就得拿到 8 墩喔"), "送出前顯示「紅心當王牌，至少要贏 8 墩」，阿禾：「喔？你要叫 2♥…」");
-await shot("05-act2-select");
+console.log("第二幕：叫牌、合約與首攻");
+await btn(/下一幕/).click();
+check(await ready(), "第二幕：阿禾講完才輪到你");
+await page.locator('#sBoard button[data-bid="13"]').click();       // 3♠
+check(await page.locator("#sCall").isHidden() && (await fb()).includes("先叫 2♥"), "點 3♠：先說意思、不能送出，阿禾提醒先叫 2♥");
+await page.locator('#sBoard button[data-bid="7"]').click();        // 2♥
+check((await text("#sMean")).includes("紅心當王牌，至少要贏 8 墩（6＋2）"), "送出前預覽：紅心當王牌、8 墩（6＋2）");
 await page.locator("#sCall").click();
 await settleStory();
-check((await said()).includes("我 Pass，不往上叫了。") && (await said()).includes("好，合約定了。等等可要說到做到！"), "阿禾 Pass、合約定了");
-check(await page.evaluate(() => (globalThis.__hbFx || []).some(x => x.kind === "bid") && (globalThis.__hbFx || []).some(x => x.kind === "contractSet")), "叫牌用新的籌碼演出、合約蓋章定格");
-check((await text("#sBoard")).includes("要贏 8 墩｜已贏 0 墩"), "桌上顯示「要贏 8 墩｜已贏 0 墩」");
-check((await text("#sBoard")).includes("由阿禾先出"), "由阿禾先出");
-check((await text("#feedback")).includes("合約") && (await text("#feedback")).includes("莊家"), "這時才介紹合約和莊家");
-await shot("06-act2-contract");
+check((await text("#sBoard")).includes("合約確定") && (await text("#sBoard")).includes("防守方先出"), "情況 A：阿禾 Pass，合約確定，防守方先出");
+await btn(/情況 B/).click();
+check(await ready(), "情況 B：開始");
+await page.locator('#sBoard button[data-bid="7"]').click(); await page.locator("#sCall").click();
+await page.waitForFunction(() => document.getElementById("narrator")?.dataset.mode === "prompt" && document.querySelector("#sBoard .sgrid"), null, { timeout: 15000 });
+check((await text("#spoken")).includes("我叫 2♠") || (await spoken()).includes("我叫 2♠"), "阿禾叫 2♠，再輪到你");
+check(await page.locator('#sBoard button[data-bid="7"]').isDisabled() && !(await page.locator('#sBoard button[data-bid="12"]').isDisabled()), "比 2♠ 低的叫不了，3♥ 可以叫");
+check((await text("#sBoard")).includes("還在競叫") || (await page.locator("#sBoard .auct").count()) > 0, "畫面上看得出還在競叫");
+await page.locator('#sBoard button[data-bid="-1"]').click(); await page.locator("#sCall").click();
+await settleStory();
+check((await fb()).includes("你是防守方") && (await text("#sBoard")).includes("阿禾是莊家"), "Pass：阿禾的 2♠ 成立，你是防守方");
+await btn("重新叫一次").click(); await ready();
+await page.locator('#sBoard button[data-bid="7"]').click(); await page.locator("#sCall").click();
+await page.waitForFunction(() => document.getElementById("narrator")?.dataset.mode === "prompt" && document.querySelector("#sBoard .sgrid"), null, { timeout: 15000 });
+await page.locator('#sBoard button[data-bid="12"]').click(); await page.locator("#sCall").click();
+await settleStory();
+check((await fb()).includes("你是莊家，要贏 9 墩"), "叫 3♥：你是莊家、要贏 9 墩");
 
 // ---------------- 第三幕 ----------------
-console.log("第三幕：那張小紅心，該現在用嗎？");
-await page.getByRole("button", { name: /下一幕/ }).click();
-check(await ready(), "第三幕：阿禾說完才輪到你");
-await tap("♥2");
-await wait(400);
-check((await spoken()).includes("等等，你還有這個花色，要先跟牌喔。"), "有黑桃還出 ♥2：阿禾提醒要先跟牌");
-check(await page.locator(`#sHand .card[data-id="${id("♥2")}"]`).evaluate(e => e.classList.contains("dim")), "♥2 變暗（現在不能出）");
-check((await page.locator("#slotMe .card").count()) === 0, "不能出的牌沒有上桌");
-await shot("07-act3-illegal");
-await tap("♠3");
-await settleStory();
-check(await page.locator("#slotOpp").evaluate(e => e.classList.contains("won")), "改出 ♠3：阿禾的 ♠A 拿走這墩");
-await page.getByRole("button", { name: /換一手試試/ }).click();
-check((await text("#skip")).includes("換一手試試"), "切換時標示「換一手試試」");
-await ready();
-check(JSON.stringify(await handIds()) === JSON.stringify([id("♥2"), id("♣3")]), "手裡換成 ♥2 和 ♣3");
-await tap("♥2");
-await settleStory();
-check((await said()).includes("王吃"), "出 ♥2：王吃");
-check(await page.locator("#slotMe").evaluate(e => e.classList.contains("won")), "王吃贏下這墩");
-await shot("08-act3-ruff");
-await page.getByRole("button", { name: "換一張試試" }).click();
-check((await mode()) === "prompt", "換一張試試：不用再聽一次開場，直接輪到你");
-await tap("♣3");
-await settleStory();
-check(JSON.stringify(await handIds()) === JSON.stringify([id("♥2")]), "墊 ♣3：阿禾拿墩，♥2 留在手上");
-check((await text("#feedback")).includes("兩種你都試過了"), "王吃、墊牌都試過");
+console.log("第三幕：先後順序、跟牌與王牌");
+await btn(/下一幕/).click(); await ready();
+await pick("♥2");
+check((await fb()).includes("你還有♠，這墩必須先跟黑桃") && await page.locator("#sConfirm").isDisabled(), "選到 ♥2：說明原因，「確認出牌」按不下去");
+await pick("♠3"); await confirm(); await settleStory();
+check((await fb()).includes("阿禾贏") && (await fb()).includes("下一墩由阿禾先出"), "跟牌：阿禾贏，下一墩由阿禾先出");
+await btn("換一手試試").click(); await ready();
+check((await fb()).includes("可以用紅心王吃，也可以墊牌"), "沒有黑桃：提示可以王吃或墊牌");
+await playCard("♥2");
+check((await fb()).includes("王吃"), "♥2 王吃");
+await btn(/A 不一定贏 K/).click(); await ready();
+await playCard("♦A");
+check((await fb()).includes("阿禾贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌"), "對照 A：♠K 贏，♦A 不是黑桃也不是王牌");
+await btn("換你先出看看").click(); await ready();
+await playCard("♦A");
+check((await fb()).includes("你贏：本墩先出方塊") && (await fb()).includes("同樣兩張牌，改變誰先出，領出花色就不同"), "對照 B：♦A 贏，並列回顧");
+await btn(/都是王牌/).click(); await ready();
+await playCard("♥Q");
+check((await fb()).includes("兩張都是王牌"), "都是王牌：比點數");
+await btn(/無王/).click(); await ready();
+check(!(await fb()).includes("王吃") && (await fb()).includes("本局無王"), "無王：不出現王吃提示");
+await playCard("♠2");
+check((await fb()).includes("阿禾贏") && (await fb()).includes("本局無王"), "無王：沒有王吃，出什麼都贏不了");
 
 // ---------------- 第四幕 ----------------
-console.log("第四幕：最後一墩，你來收桌");
-await page.getByRole("button", { name: /下一幕/ }).click();
-check((await text("#skip")).includes("快轉到最後一墩"), "明示「快轉到最後一墩」");
+console.log("第四幕：打成與倒約");
+await btn(/下一幕/).click(); await ready();
+await playCard("♣A");
+check((await fb()).includes("2♥、沒有加倍、剛好打成，這局 +20 分") && (await fb()).includes("8 比 5"), "情況 A：8 墩打成 +20");
+await btn(/差一墩/).click(); await ready();
+await playCard("♣K");
+check((await fb()).includes("倒 1 墩，對手 +10 分") && (await fb()).includes("即使你拿 7 墩、對手拿 6 墩，你仍未達成承諾的 8 墩"), "情況 B：7 比 6 倒一，對手 +10");
+check((await page.locator("#contents .book.done").count()) === 4, "四幕都打勾");
+check((await page.locator("#toSolo").getAttribute("href")) === "/?solo=new&coach=1", "結尾：開一場有提示的練習局");
+
+// ---------------- 換章節不殘留 ----------------
+console.log("跳過、重播、換章節不殘留");
+await page.evaluate(() => { const b = [...document.querySelectorAll("#contents .book")][2]; b.click(); });   // 第三幕（之前打過：先重來這手）
+await wait(200);
+if ((await mode()) === "done") await btn("重來這手").click();
 await ready();
-check((await text("#tally")).replace(/\s/g, "") === "7／8", "一開始 7／8");
-await tap("♣A");
-await settleStory();
-check((await text("#tally")).replace(/\s/g, "") === "8／8", "出 ♣A 之後 8／8");
-check((await text("#feedback")).includes("2♥、沒有加倍、剛好打成，這局 +20 分"), "顯示「2♥、沒有加倍、剛好打成，這局 +20 分」");
-check((await text("#feedback")).includes("8 比 5"), "最後雙方 8 比 5");
-check((await said()).includes("還真的被你打成了") && (await said()).includes("這就叫『打成』"), "阿禾：還真的被你打成了、這就叫打成");
-check((await said()).includes("要不要真的打一局") && (await text("#toSolo")).includes("來啊，開打") && (await page.getByRole("button", { name: "我想再練一下" }).count()) === 1, "結尾：阿禾邀你真的打一局，按鈕「來啊，開打！」「我想再練一下」");
-check((await page.locator("#contents .book.done").count()) === 4, "目錄四幕都打勾");
-await shot("09-act4-made");
+await pick("♠3"); await confirm();
+await wait(120);
+await page.evaluate(() => { const b = [...document.querySelectorAll("#contents .book")][0]; b.click(); });   // 出牌途中換到第一幕
+await wait(2500);
+const st1 = await page.evaluate(() => ({ title: document.getElementById("title").textContent, opp: document.querySelector("#slotOpp .card")?.getAttribute("aria-label"), me: document.querySelector("#slotMe .card")?.getAttribute("aria-label") ?? "", flying: document.querySelectorAll("#fx .card.flying").length }));
+check(st1.title === "先來搶牌" && st1.opp === "♣9" && st1.me !== "♠3" && st1.flying === 0, `出牌途中換章節：第三幕的 ♠3 沒有跑進第一幕（${JSON.stringify(st1)}）`);
+check(!(await said()).includes("有黑桃就要出黑桃"), "舊段落的對話沒有出現");
 
-// ---------------- 單機對戰 ----------------
-console.log("自己跟電腦打一局");
-await page.evaluate(() => localStorage.setItem("hb-web-settings", JSON.stringify({ speed: 2, shake: false, vibrate: false, theme: "dusk" })));
-await page.locator("#toSolo").click();
-await page.waitForURL(/\?solo=1$/);
+// ---------------- 練習局 ----------------
+console.log("練習局（有提示）");
+await page.goto(base + "/?solo=new&coach=1");
 await page.waitForSelector("#hand .card");
-check((await text("#roomChip")) === "單機", "進入單機牌桌");
-check((await text("#oppName")) === "阿禾", "對手是阿禾（電腦）");
-check((await page.locator("#hand .card").count()) === 13 && (await text("#handNo")) === "第 1 局", "重新發牌：第 1 局、13 張");
-await shot("10-solo-start");
-
-let reloaded = false, tricks = 0;
+await page.evaluate(() => { window.__coach = []; new MutationObserver(() => { const t = document.getElementById("coachTitle").textContent; if (t && window.__coach.at(-1) !== t) window.__coach.push(t); }).observe(document.getElementById("coach"), { subtree: true, childList: true, characterData: true, attributes: true }); });
+await wait(600);
+check((await text("#coachTitle")).includes("搶牌開始"), "練習局：搶牌開始的提示");
+check((await text("#phaseChip")).includes("搶牌") && (await page.locator("#phaseChip li.now").innerText()) === "搶牌", "整局流程：現在在「搶牌」");
+let turns = 0, sawLast = false, sawOrder = false, sawReason = false;
 const t0 = Date.now();
-while (Date.now() - t0 < 180000) {
-  if (await page.locator("#result").isVisible()) break;
-  const panelMine = await page.locator("#bidPanel.mine").isVisible();
-  if (panelMine) {
-    const head = await text("#bidContract");
-    if (head.includes("換你叫牌")) {
-      await page.locator("#bidLevels button:not([disabled])").first().click();
-      await page.locator("#bidStrains button:not([disabled])").first().click();
-      await page.locator("#bidConfirm").click();
-    } else await page.locator("#bidPass").click();
-    await wait(300);
-    continue;
+while (Date.now() - t0 < 180000 && !(await page.locator("#result").isVisible())) {
+  if (await page.locator("#bidPanel.mine").isVisible()) {
+    if ((await text("#bidContract")).includes("換你叫牌")) { await page.locator("#bidLevels button:not([disabled])").first().click(); await page.locator("#bidStrains button:not([disabled])").first().click(); await page.locator("#bidConfirm").click(); }
+    else await page.locator("#bidPass").click();
+    await wait(300); continue;
   }
-  const legal = page.locator("#hand .card.legal");
-  const myTurn = ((await page.locator("#turnLine").getAttribute("class")) ?? "").includes("mine") && (await legal.count()) > 0;
-  if (myTurn) {
-    if (!reloaded && tricks === 4) {
-      const before = (await handIds("#hand")).sort((a, b) => a - b);
-      await page.reload();
-      await page.waitForSelector("#hand .card");
-      await wait(300);
-      const after = (await handIds("#hand")).sort((a, b) => a - b);
-      check(JSON.stringify(before) === JSON.stringify(after), "打到一半重新整理：回到同一局、同一手牌");
-      reloaded = true;
-      continue;
-    }
-    // 手牌會疊在一起：點每張牌露出來的左上角（跟真人一樣）
-    const pick = Number(await legal.first().getAttribute("data-id"));
-    const c = page.locator(`#hand .card[data-id="${pick}"]`);
-    await c.click({ position: { x: 10, y: 34 } });          // 選牌
-    await page.locator("#playBtn").click();                  // 確認出牌
-    tricks++;
-    await wait(250);
-    continue;
+  const tl = await page.locator("#turnLine").innerText();
+  if (/①.*→.*②/.test(tl)) sawOrder = true;
+  if (/贏這墩/.test(tl) && /下一墩|最後一墩|搶牌結束/.test(tl)) sawReason = true;
+  if (!sawLast && !(await page.locator("#lastTrickBtn").isHidden())) {
+    await page.locator("#lastTrickBtn").click(); await wait(250);
+    sawLast = (await text("#ltWhy")).includes("贏") && (await text("#ltSuit")).length > 0 && (await page.locator("#ltLead .card").count()) === 1;
+    await page.locator("#lastTrickPop [data-close]").click(); await wait(150);
   }
-  await wait(200);
+  const mine = ((await page.locator("#turnLine").getAttribute("class")) ?? "").includes("mine") && (await page.locator("#hand .card.legal").count()) > 0;
+  if (mine) { await page.locator("#hintBtn").click(); await page.locator("#playBtn").click(); turns++; await wait(250); continue; }
+  await wait(150);
 }
-check(await page.locator("#result").isVisible(), `打完一整局，跳出結算（你出了 ${tricks} 張牌）`);
-// 結算是分段演出：點一下結算單跳過，跳過後必須直接是最後的正確結果
-await page.locator("#resSheet").click({ position: { x: 30, y: 120 } });
-await page.waitForFunction(() => !document.querySelector("#result .pending"), null, { timeout: 5000 });
-const finalOk = await page.evaluate(() => document.getElementById("rtMe")?.textContent === document.getElementById("myScore")?.dataset.v
-  && document.getElementById("rtOpp")?.textContent === document.getElementById("oppScore")?.dataset.v);
-check(finalOk, "點一下跳過結算動畫：總分直接是正確的最終數字");
-const res = await text("#resBody");
-check(/合約 .+（.+是莊家）/.test(res) && /\+\d+ 分/.test(res), "結算有合約、墩數和分數");
-await shot("11-solo-result");
-await page.locator("#nextBtn").click();
-await page.waitForFunction(() => document.querySelector("#handNo")?.textContent === "第 2 局", null, { timeout: 10000 });
-check(true, "按「再來一局！」重新發牌：第 2 局");
+check(await page.locator("#result").isVisible(), `打完一整局（你出了 ${turns} 張）`);
+check(sawOrder, "每墩顯示「① 誰先出 → ② 換誰」");
+check(sawReason, "每墩結束顯示誰贏、為什麼、下一墩誰先出");
+check(sawLast, "「上一墩」可以回看：雙方出牌、領出花色、原因");
+const coachSeen = await page.evaluate(() => window.__coach);
+check(["搶牌結束，開始叫牌", "合約成立", "第一墩結束"].every(t => coachSeen.includes(t)), `對局提示依階段出現（${coachSeen.join("、")}）`);
+check(!(await page.locator("#resCoach").isHidden()), "結算單裡有「結算怎麼算」的提示");
+await shot("practice-result");
 
-// ---------------- 08 設定 ----------------
-console.log("設定");
-await page.locator("#menuBtn").click();
-await page.locator("#settingsBox .seg button", { hasText: "強" }).click();
-check((await page.evaluate(() => document.documentElement.dataset.motion)) === "3", "動畫強度改成「強」立刻生效");
-await page.locator("#settingsBox .seg button", { hasText: "關閉" }).click();
-check((await page.evaluate(() => document.documentElement.dataset.motion)) === "0", "動畫強度可以關閉");
-await shot("12-settings");
-await page.reload();
-await page.waitForSelector("#hand .card");
-check((await page.evaluate(() => document.documentElement.dataset.motion)) === "0", "重新整理後設定還在");
-await page.goto(base + "/story/");
-check((await page.evaluate(() => document.documentElement.dataset.motion)) === "0", "故事頁也用同一份設定");
-await page.goto(base + "/");
-check((await text("#storyCardSub")).includes("四幕都打完了") && (await page.locator(".cv-card.done").count()) === 4, "封面四個篇章都打勾");
-check((await text("#soloSub")).includes("繼續"), "「跟阿禾打」按鈕提示可以繼續上次那局");
-
-check(errors.length === 0, `主控台沒有錯誤${errors.length ? "：" + errors.join(" | ") : ""}`);
+check(errors.length === 0, "全程沒有頁面錯誤" + (errors.length ? "：" + errors.slice(0, 3).join(" | ") : ""));
 await browser.close();
 console.log(`\n${checks - failures}/${checks} 項通過`);
 process.exit(failures ? 1 : 0);

@@ -92,7 +92,7 @@ async function step(page, me) {
     return "acted";
   }
   const legal = page.locator("#hand .card.legal");
-  if (await legal.count() > 0 && /換你出牌/.test(turn)) {
+  if (await legal.count() > 0 && /你先出牌|換你跟牌/.test(turn)) {
     // 手牌是疊在一起的，跟真人一樣點露出來的左邊那一條
     const id = await legal.first().getAttribute("data-id");
     const card = page.locator(`#hand .card[data-id="${id}"]`);   // 記住是哪一張，第二次點同一張
@@ -126,16 +126,19 @@ const sB = [await B.textContent("#myScore"), await B.textContent("#oppScore")];
 if (sA[0] !== sB[1] || sA[1] !== sB[0]) { console.error("✗ 兩邊分數不一致", sA, sB); process.exit(1); }
 console.log(`✓ 兩邊分數一致：阿明 ${sA[0]} · 小美 ${sA[1]}`);
 // 局勢衝擊：兩支手機看同一個伺服器確認的結果 → 每一墩的衝擊種類一樣、贏的一方相反、同一墩不會演兩次
-const impacts = async P => P.evaluate(() => (globalThis.__hbFx || []).filter(x => x.kind === "impact").map(x => ({ tier: x.tier, what: x.what, mine: x.mine })));
+// 「連贏延續」只在連贏的那一方升一級演出（對面看到的是壓力），比對時還原成規則算出的基本等級
+const impacts = async P => P.evaluate(() => (globalThis.__hbFx || []).filter(x => x.kind === "impact").map(x => ({ tier: x.what === "trick" && x.tier === 2 ? 1 : x.tier, what: x.what, mine: x.mine })));
 const [ia, ib] = [await impacts(A), await impacts(B)];
 const same = ia.length === ib.length && ia.every((x, k) => x.what === ib[k].what && x.tier === ib[k].tier && x.mine !== ib[k].mine);
 if (!same || ia.length !== 26) { console.error("✗ 兩邊的局勢衝擊不一致或有重播", ia.length, ib.length); process.exit(1); }
 console.log(`✓ 兩邊的局勢衝擊一致：26 墩各演一次（Tier ${[0, 1, 2, 3, 4].map(t => ia.filter(x => x.tier === t).length).join("/")}），贏的一方剛好相反`);
 
 // --- 下一局、重新整理也回得來 ---
+// 一局就有人到 100 分（例如被加倍倒很多墩）時，按鈕是「再來一場」：新的一場從第 1 局開始
+const matchOver = (await B.textContent("#nextBtn")).includes("再來一場");
 await B.click("#nextBtn");
-await A.waitForFunction(() => document.querySelector("#handNo")?.textContent?.includes("第 2 局"), null, { timeout: 8000 });
-console.log("✓ 朋友按「下一局」，兩邊都進到第 2 局");
+await A.waitForFunction(want => document.querySelector("#handNo")?.textContent?.includes(want) && document.getElementById("phaseText")?.textContent?.includes("搶牌"), matchOver ? "第 1 局" : "第 2 局", { timeout: 8000 });
+console.log(matchOver ? "✓ 整場打完，朋友按「再來一場」，兩邊都進到新的一場" : "✓ 朋友按「下一局」，兩邊都進到第 2 局");
 await B.reload();
 await B.waitForSelector("#table:not([hidden])", { timeout: 8000 });
 await sleep(500);

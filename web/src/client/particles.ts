@@ -1,6 +1,6 @@
 // ParticleEffects：金粉、星芒、紙屑、小花色、印章墨跡。
 // 一張全螢幕 canvas，只有在有粒子時才跑動畫迴圈；粒子總數有上限，低階手機自動減半。
-import { amp, lowEnd, settings } from "./fx";
+import { amp, lowEnd, qFactor, quality, settings } from "./fx";
 
 export type Kind = "dust" | "star" | "paper" | "suit" | "ink";
 interface P {
@@ -32,7 +32,7 @@ function ensure() {
 
 function resize() {
   if (!canvas) return;
-  dpr = Math.min(2, window.devicePixelRatio || 1);
+  dpr = Math.min(quality() === "full" ? 2 : 1.5, window.devicePixelRatio || 1);   // 限制像素密度：完整品質才用到 2 倍
   canvas.width = Math.round(innerWidth * dpr);
   canvas.height = Math.round(innerHeight * dpr);
 }
@@ -42,13 +42,13 @@ export interface BurstOpt {
   speed?: number; spread?: number; angle?: number; gravity?: number; life?: number; size?: number;
 }
 
-export const enabled = () => settings.particles && settings.intensity > 0;
+export const enabled = () => settings.particles && settings.intensity > 0 && qFactor() > 0;   // 精簡品質：關掉裝飾粒子
 
 // 從 (x, y) 噴出一團粒子；angle/spread 用弧度（預設往四面八方）
 export function burst(x: number, y: number, o: BurstOpt = {}) {
   if (!enabled()) return;
   ensure();
-  const n = Math.round((o.count ?? 18) * Math.min(1.4, amp()) * (lowEnd ? 0.5 : 1));
+  const n = Math.round((o.count ?? 18) * Math.min(1.4, amp()) * (lowEnd ? 0.5 : 1) * qFactor());
   const kinds = o.kinds ?? ["dust", "star"];
   for (let i = 0; i < n && ps.length < MAX; i++) {
     const kind = kinds[i % kinds.length];

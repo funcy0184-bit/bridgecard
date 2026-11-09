@@ -12,7 +12,7 @@ import { logFx } from "./feedback";
 import { legacyLevel, type Impact } from "./impact";
 import { SUIT_SYMBOL, suitOf } from "../game/cards";
 
-const full = () => fx.motionOn() && fx.settings.intensity >= 2;
+const full = () => fx.motionOn() && fx.settings.intensity >= 2 && fx.quality() !== "lite";   // 精簡品質：不畫裂痕、下沉、大衝擊波
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 // 牌桌裡的特效層（在牌的下面）
@@ -174,6 +174,7 @@ export function presentImpact(im: Impact, t: ImpactTargets): number {
   if (full()) {
     dent(layer, at.x, at.y, im.tier, good);
     if (im.kind === "ruff" && winner?.dataset.id) sigil(layer, at.x, at.y, SUIT_SYMBOL[suitOf(Number(winner.dataset.id))], good);
+    if (good) rays(layer, at.x, at.y, im.tier);
     if (im.crack !== "none") crack(layer, at.x, at.y, im.crack, im.power, good, at.w);
     if (im.tier >= 3) sink(felt, layer, im.tier, im.power, good);
     // 合約定案的好結果：震動交給接下來的「釋放」（EmotionDirector.release），這裡不重複震
@@ -192,6 +193,14 @@ function dent(layer: HTMLElement, x: number, y: number, tier: number, good: bool
   const d = spawn(layer, `dent${good ? "" : " somber"}`, x, y, size, size * 0.8);
   done(d.animate([{ scale: "0.55", opacity: 0.7 }, { scale: "1", opacity: 0.55, offset: 0.25 }, { scale: "1.15", opacity: 0 }],
     { duration: fx.ms(tier >= 3 ? 560 : 420), easing: "cubic-bezier(.15,.7,.3,1)" }), d);
+}
+
+// ---- 放射線：好事才有（王吃、連贏延續、關鍵墩、合約），一個元素、只動 transform／opacity ----
+function rays(layer: HTMLElement, x: number, y: number, tier: number) {
+  const size = [0, 0, 220, 300, 380][tier];
+  const r = spawn(layer, "rays", x, y, size, size);
+  done(r.animate([{ scale: "0.35", rotate: "0deg", opacity: 0 }, { scale: "0.9", opacity: 0.55, offset: 0.25 }, { scale: "1.25", rotate: "18deg", opacity: 0 }],
+    { duration: fx.ms(tier >= 3 ? 700 : 520), easing: "cubic-bezier(.2,.7,.3,1)" }), r);
 }
 
 // ---- 王吃：王牌花色的紋樣從牌下面浮出來 ----

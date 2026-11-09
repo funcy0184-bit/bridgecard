@@ -106,17 +106,18 @@
       <span class="chip" id="roomChip"></span>
       <div class="score" aria-live="polite">
         <span id="handNo" class="hn"></span>
-        <span>你 <b id="myScore">0</b></span>
+        <span>你 <b id="myScore">0</b><small class="u">分</small></span>
         <span class="sep">·</span>
-        <span><span id="oppNameTop"></span> <b id="oppScore">0</b></span>
-        <small>／<span id="target">100</span></small>
+        <span><span id="oppNameTop"></span> <b id="oppScore">0</b><small class="u">分</small></span>
+        <small class="tg">累積先到 <span id="target">100</span> 分</small>
       </div>
       <button id="muteBtn" class="icon" type="button" aria-label="靜音"></button>
       <button id="menuBtn" class="icon" type="button" aria-label="選單">⋯</button>
     </header>
 
     <div class="phasebar">
-      <span class="pchip" id="phaseChip"><svg viewBox="0 0 24 18" aria-hidden="true"><rect x="2" y="3" width="9" height="13" rx="1.5" transform="rotate(-12 6 9)" fill="none" stroke="currentColor"/><rect x="9" y="2" width="9" height="13" rx="1.5" fill="none" stroke="currentColor"/></svg><span id="phaseText"></span></span>
+      <ol class="flow" id="phaseChip" aria-label="整局流程"><li data-i="0">搶牌</li><li data-i="1">叫牌</li><li data-i="2">出牌</li><li data-i="3">結算</li></ol>
+      <span class="sr-only" id="phaseText"></span>
       <span class="pchip small" id="trickChip"></span>
     </div>
     <div class="infostrip" id="infoStrip" hidden></div>
@@ -125,10 +126,11 @@
       <div class="who"><img src="/art/stamp-ahe.svg" alt="" class="oppstamp" id="oppStamp"><b id="oppName"></b><span class="dot" id="oppDot"></span><span id="oppCount" class="cnt"></span></div>
       <div class="fan" id="oppFan"></div>
       <div class="memo" id="memo" title="對手搶走的明牌"></div>
+      <div class="coach" id="coach" hidden role="status" aria-live="polite"><b id="coachTitle"></b><span id="coachText"></span><button id="coachOk" class="link" type="button">知道了</button></div>
       <p class="quip" id="quip" role="status" aria-live="polite" hidden></p>
     </div>
 
-    <div class="status"><span id="statusText"></span><button id="auctionBtn" class="link" type="button" hidden>叫牌紀錄</button></div>
+    <div class="status"><span id="statusText"></span><button id="lastTrickBtn" class="link" type="button" hidden>上一墩</button><button id="auctionBtn" class="link" type="button" hidden>叫牌紀錄</button></div>
 
     <div class="felt" id="felt">
       <i class="fc tl"></i><i class="fc tr"></i><i class="fc bl"></i><i class="fc br"></i>
@@ -140,10 +142,11 @@
         <div class="tally"><b id="tallyBig">0</b><span>/</span><span id="tallyNeed">8</span></div>
         <small class="tline" id="tallyLine"></small>
       </div>
+      <div class="leadbadge" id="leadBadge" hidden aria-live="polite"></div>
       <div class="trick">
-        <div class="slot" id="oppSlot"></div>
+        <div class="slot" id="oppSlot" data-label=""></div>
         <div class="anchor" id="centerAnchor"></div>
-        <div class="slot" id="mySlot"></div>
+        <div class="slot" id="mySlot" data-label=""></div>
       </div>
       <div class="anchor" id="oppAnchor"></div>
       <div class="anchor" id="myAnchor"></div>
@@ -191,6 +194,7 @@
       <div class="ribbon"><span id="resRibbon">這局打得怎麼樣？</span></div>
       <h2 id="resTitle"></h2>
       <p class="resquip" id="resQuip" hidden></p>
+      <p class="rescoach" id="resCoach" hidden><b>結算怎麼算？</b>比較合約目標和實際墩數：打成拿「線數 × 10」（加倍再乘），多一墩 +2；倒約時對手每少一墩拿 10（加倍再乘）。</p>
       <div class="stats">
         <div class="stat" id="rsC"><small>合約</small><b id="rsContract"></b></div>
         <div class="stat" id="rsN"><small>要贏幾墩</small><b id="rsNeed"></b></div>
@@ -209,6 +213,16 @@
         <button id="resHome" class="btn paper" type="button">回首頁</button>
       </div>
       <p class="skiphint" id="skipHint">點一下就能跳過動畫</p>
+    </div>
+  </div>
+
+  <!-- 上一墩回看 -->
+  <div id="lastTrickPop" class="modal" hidden>
+    <div class="sheet lasttrick">
+      <h3 id="ltTitle">上一墩</h3>
+      <div class="ltcards"><figure id="ltLead"></figure><figure id="ltFollow"></figure></div>
+      <dl class="ltinfo"><dt>領出花色</dt><dd id="ltSuit"></dd><dt>王牌</dt><dd id="ltTrump"></dd><dt>結果</dt><dd id="ltWhy"></dd><dt>接下來</dt><dd id="ltNext"></dd></dl>
+      <button class="btn paper close" data-close type="button">關閉</button>
     </div>
   </div>
 
