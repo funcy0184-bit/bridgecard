@@ -9,12 +9,13 @@ function player(code, name, token = null) {
   const p = { name, seat: -1, token, state: null, events: [], ws: null, closedCode: null, msgs: [] };
   p.ws = new WebSocket(`${WS}/api/rooms/${code}/ws`);
   p.ready = new Promise(res => {
-    p.ws.onopen = () => p.ws.send(JSON.stringify({ t: "hello", token, name }));
+    p.ws.onopen = () => p.ws.send(JSON.stringify({ t: "hello", v: 2, token, name }));
     p.ws.onmessage = ev => {
       const m = JSON.parse(ev.data);
       p.msgs.push(m);
       if (m.t === "welcome") { p.seat = m.seat; p.token = m.token; res(); }
       if (m.t === "state") p.state = m.s;
+      if (m.t === "resync" && m.s) p.state = m.s;          // 第 2 版：進房／重連時一次給完整快照
       if (m.t === "event") p.events.push(m.e);
       if (m.t === "full" || m.t === "gone") res();
     };
@@ -41,21 +42,24 @@ function act(p) {
 
 const res = await fetch(`${BASE}/api/rooms`, { method: "POST" });
 const { code } = await res.json();
-if (!/^[A-Z2-9]{4}$/.test(code)) fail("房號格式不對：" + code);
+if (!/^[A-Z2-9]{6}$/.test(code)) fail("房號格式不對：" + code);
 console.log("✓ 開房成功，房號", code);
 
 const host = player(code, "阿明"); await host.ready;
 let guest = player(code, "小美"); await guest.ready;
 if (host.seat !== 0 || guest.seat !== 1) fail("座位分配錯");
-await sleep(300);
-if (!host.state || !guest.state) fail("兩人都到了卻沒發牌");
-console.log("✓ 兩人入座、雲端發牌：房主", host.state.hand.length, "張，朋友", guest.state.hand.length, "張");
+await sleep(200);
+if (host.state || guest.state) fail("還沒按準備就發牌了");
+host.send({ t: "ready", ready: true, cid: "r-host" }); guest.send({ t: "ready", ready: true, cid: "r-guest" });
+await sleep(400);
+if (!host.state || !guest.state) fail("兩人都按準備了卻沒發牌");
+console.log("✓ 兩人入座、都按準備、雲端發牌：房主", host.state.hand.length, "張，朋友", guest.state.hand.length, "張");
 
 const third = player(code, "路人"); await third.ready;
 if (!third.msgs.some(m => m.t === "full")) fail("第三個人竟然進得來");
 console.log("✓ 第三個人進不來（房間已滿）");
 
-const ghost = player("ZZZZ", "x"); await ghost.ready;
+const ghost = player("ZZZZZZ", "x"); await ghost.ready;
 if (!ghost.msgs.some(m => m.t === "gone")) fail("不存在的房號應該回 gone");
 console.log("✓ 打錯房號會被告知房間不存在");
 

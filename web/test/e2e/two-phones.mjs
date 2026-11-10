@@ -49,12 +49,28 @@ await B.waitForSelector("#online:not([hidden])");
 await B.fill("#name", "小美");
 await B.fill("#code", code.toLowerCase());     // 打小寫也要能進
 await B.click("#join");
+await Promise.all([A.waitForSelector("#wait:not([hidden])"), B.waitForSelector("#wait:not([hidden])")]);
+await A.waitForFunction(() => document.getElementById("plateOpp").classList.contains("in") && !document.getElementById("readyBtn").disabled, null, { timeout: 5000 });
+if (await A.isVisible("#table:not([hidden])")) { console.error("✗ 還沒按準備就進牌桌了"); process.exit(1); }
+console.log("✓ 朋友輸入房號加入：兩邊都在等待室，不會自動開打");
+if (!(await A.textContent("#plateMe small")).includes("房主") || !(await B.textContent("#plateOpp small")).includes("房主")) { console.error("✗ 房主標示不對"); process.exit(1); }
+// 玩法：朋友點不動（玩法由房主選）；房主點籌碼對決會說還沒開放
+await B.click('#modePick [data-mode="chips"]');
+await B.waitForFunction(() => document.getElementById("banner").textContent.includes("房主選"), null, { timeout: 3000 });
+await A.click('#modePick [data-mode="chips"]');
+await A.waitForFunction(() => document.getElementById("banner").textContent.includes("籌碼對決還在做"), null, { timeout: 3000 });
+if ((await A.getAttribute('#modePick [data-mode="classic"]', "aria-checked")) !== "true") { console.error("✗ 玩法被改掉了"); process.exit(1); }
+console.log("✓ 玩法：朋友不能換、房主點籌碼對決會說還沒開放，維持經典牌局");
+await shot(B, "02b-both-seated-B");
+await A.click("#readyBtn");
+await B.waitForFunction(() => document.querySelector("#plateOpp em").textContent.includes("準備好了"), null, { timeout: 4000 });
+await A.waitForFunction(() => document.getElementById("readyBtn").textContent === "取消準備", null, { timeout: 3000 }).catch(() => { console.error("✗ 按了準備，按鈕沒變成取消準備"); process.exit(1); });
+await shot(B, "02c-host-ready-B");
+console.log("✓ 房主按準備：朋友那邊看到「準備好了」");
+await B.click("#readyBtn");
 await Promise.all([A.waitForSelector("#table:not([hidden])"), B.waitForSelector("#table:not([hidden])")]);
-console.log("✓ 朋友輸入房號加入，兩邊都進到牌桌");
-// 房主真的等過人：朋友一坐下就說「人到齊啦」；朋友那邊沒等過，不會亂講
-await A.waitForFunction(() => document.getElementById("banner").textContent.includes("人到齊啦，準備開打！"), null, { timeout: 4000 });
-if ((await B.textContent("#banner")).includes("人到齊啦")) { console.error("✗ 朋友那邊不該出現「人到齊啦」"); process.exit(1); }
-console.log("✓ 房主看到「人到齊啦，準備開打！」");
+for (const P of [A, B]) await P.waitForFunction(() => document.getElementById("banner").textContent.includes("兩邊都準備好了"), null, { timeout: 4000 });
+console.log("✓ 兩邊都按準備：一起進牌桌，看到「兩邊都準備好了，開打！」");
 await sleep(900);
 await shot(A, "03-draw-phase-A");
 
@@ -137,6 +153,11 @@ console.log(`✓ 兩邊的局勢衝擊一致：26 墩各演一次（Tier ${[0, 1
 // 一局就有人到 100 分（例如被加倍倒很多墩）時，按鈕是「再來一場」：新的一場從第 1 局開始
 const matchOver = (await B.textContent("#nextBtn")).includes("再來一場");
 await B.click("#nextBtn");
+if (matchOver) {
+  // 整場打完：兩個人都按「再來一場」才開
+  await A.waitForFunction(() => document.getElementById("nextBtn").textContent.includes("想再來一場"), null, { timeout: 5000 });
+  await A.click("#nextBtn");
+}
 await A.waitForFunction(want => document.querySelector("#handNo")?.textContent?.includes(want) && document.getElementById("phaseText")?.textContent?.includes("搶牌"), matchOver ? "第 1 局" : "第 2 局", { timeout: 8000 });
 console.log(matchOver ? "✓ 整場打完，朋友按「再來一場」，兩邊都進到新的一場" : "✓ 朋友按「下一局」，兩邊都進到第 2 局");
 await B.reload();

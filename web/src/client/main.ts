@@ -9,10 +9,10 @@ import {
 import { GameEvent, Phase, TableState } from "../game/game";
 import { beats, isTrump } from "../game/rules";
 import { breakdown, contractText, declarerPreview, defenderPreview, madePoints, pointsPerUndertrick, PER_OVERTRICK, type HandResult } from "../game/scoring";
-import { SeatInfo, ServerMsg, isValidCode, normalizeCode } from "../server/protocol";
+import { CODE_LENGTH, MODES, Mode, Notice, RoomView, SeatInfo, ServerMsg, isValidCode, normalizeCode } from "../server/protocol";
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
-import { Link, LocalTable, hasUnfinishedSolo } from "./solo";
+import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
 import { sfx } from "./sound";
 import {
   bidChip, bidTier, contractFeedback, contractSlam, doubleFx, flipNumber, redoubleFx, rollNumber, stamp, streakGlow, victory,
@@ -39,6 +39,8 @@ let mySeat = -1;
 let st: TableState | null = null;
 let seats: SeatInfo[] = [];
 let started = false;
+let room: RoomView | null = null;   // 朋友連線：伺服器給的房間狀態（單機是 null）
+let lastEid = 0;                    // 收過的最後一個事件序號（重複的不再演一次）
 let selCard = -1, selBid = -1, selLevel = 0, selStrain = -1;
 let waiting = false, waitTimer = 0;
 let resultShownFor = -1, resultTimer = 0;
@@ -93,7 +95,7 @@ const codeInput = $<HTMLInputElement>("code");
 const homeMsg = $("homeMsg");
 nameInput.value = store.get("hb-name") ?? "";
 nameInput.addEventListener("change", () => store.set("hb-name", nameInput.value.trim()));
-codeInput.addEventListener("input", () => { codeInput.value = normalizeCode(codeInput.value).replace(/[^A-Z0-9]/g, "").slice(0, 4); });
+codeInput.addEventListener("input", () => { codeInput.value = normalizeCode(codeInput.value).replace(/[^A-Z0-9]/g, "").slice(0, CODE_LENGTH); });
 codeInput.addEventListener("keydown", e => { if (e.key === "Enter") $("join").click(); });
 
 function say(msg: string, err = false) { homeMsg.textContent = msg; homeMsg.classList.toggle("err", err); }
@@ -119,12 +121,13 @@ $("create").addEventListener("click", async () => {
 
 $("join").addEventListener("click", async () => {
   const code = normalizeCode(codeInput.value);
-  if (!isValidCode(code)) { say("房號是 4 個英文字母或數字喔。", true); fx.deny(codeInput); sfx.deny(); return; }
+  if (!isValidCode(code)) { say(`房號是 ${CODE_LENGTH} 個英文字母或數字喔。`, true); fx.deny(codeInput); sfx.deny(); return; }
   say("找這桌中…");
   try {
     const info = await roomInfo(code);
     if (!info.exists) { say("找不到這桌，再確認一下房號。", true); return; }
-    if (info.seats?.every(Boolean) && !savedToken(code)) { say("這桌已經坐滿啦。", true); return; }
+    if (!savedToken(code) && info.started) { say("這桌已經開打了，請朋友再開一桌。", true); return; }
+    if (!savedToken(code) && info.seats?.every(Boolean)) { say("這桌已經坐滿啦。", true); return; }
     enter(code);
   } catch (e) { say((e as Error).message, true); }
 });
@@ -212,7 +215,7 @@ function enterSolo(fresh: boolean) {
 // ---------------- 連線 ----------------
 
 function resetTable() {
-  mySeat = -1; st = null; seats = []; started = false; selCard = selBid = -1; selLevel = 0; selStrain = -1;
+  mySeat = -1; st = null; seats = []; started = false; room = null; lastEid = 0; selCard = selBid = -1; selLevel = 0; selStrain = -1;
   resultShownFor = -1; lastFaceUp = -1; auctionShown = 0; pulled = -1; hoverId = -1;
   inFlight.clear(); freshCards.clear();
   lastTurnText = "";
@@ -238,17 +241,32 @@ function enter(code: string) {
   conn = c;
   c.onMessage = onMsg;
   let dropped = false;
+  lastErr = "";
   c.onStatus = s => {
-    if (s === "reconnecting") { dropped = true; banner("連線斷了一下，重新連線中…"); }
+    if (conn !== c) return;
+    if (s === "reconnecting") { dropped = true; banner("連線斷了一下，重新連線中…（這時候按的不會送出）"); }
     else if (s === "open") {
-      renderPresence();
-      // 真的斷過、而且重新連上了，才說「回來啦」
-      if (dropped && $("banner").hidden) banner("回來啦！繼續打。", 1800);
+      // 真的斷過、而且重新連上了，才說「回來啦」（對手還斷著的話，下面的同步會換成對手斷線的提示）
+      if (dropped) banner("連上了！接著打。", 1600);
       dropped = false;
+    } else if (s === "closed" && (screen === "table" || screen === "wait")) {
+      banner(lastErr || "這個分頁的連線結束了，重新整理一下再進來。");
     }
   };
   c.open();
 }
+
+// 送出會改變狀態的指令；連線中斷時送不出去，要讓玩家知道（不會偷偷吃掉）
+function act(m: Command, done?: (r: Reply) => void): boolean {
+  if (!conn) return false;
+  if (conn.command(m, done)) return true;
+  banner("連線中斷了，重新連上之後再按一次。", 2400);
+  sfx.deny();
+  return false;
+}
+
+let lastErr = "";
+const PLAYING = new Set(["IN_GAME", "PAUSED", "SETTLEMENT", "REMATCH"]);
 
 function onMsg(m: ServerMsg) {
   switch (m.t) {
@@ -258,43 +276,110 @@ function onMsg(m: ServerMsg) {
       $("roomChip").hidden = false;
       roomCode = conn?.solo ? "solo" : m.code;
       break;
-    case "lobby": {
-      const before = seats.map(s => s?.taken);
-      seats = m.seats; started = m.started;
-      if (!started) showWait(before);
+    case "lobby":
+      // 單機：兩個位子都坐好，直接開打
+      seats = m.seats.map(x => ({ ...x, ready: true, rematch: false, offlineSince: null }));
+      started = m.started;
       renderNames(); renderPresence();
-      // 房主等到朋友：真的看過空位、現在兩個人都坐好而且開打了，才說人到齊
-      const opp = seats[1 - mySeat];
-      if (!started && mySeat >= 0 && !opp?.taken) sawEmptySeat = true;
-      if (started && sawEmptySeat && opp?.taken && opp.online) { sawEmptySeat = false; banner("人到齊啦，準備開打！", 1800); }
       break;
-    }
+    case "room":
+      applyRoom(m.r, m.notice, m.seat);
+      break;
+    case "resync":
+      // 完整快照：直接跳到最新的樣子，不補播之前的動畫
+      lastEid = m.eid;
+      applyRoom(m.r);
+      if (m.s && started) onState(m.s);
+      break;
     case "event":
+      if (typeof m.eid === "number") { if (m.eid <= lastEid) break; lastEid = m.eid; }   // 重複收到的不再演一次
       if (st) onEvent(m.e);
       break;
     case "state":
       onState(m.s);
       break;
+    case "reject":
+      onReject(m.code, m.msg);
+      break;
     case "full":
       forgetRoom(conn?.code ?? "");
-      goHome("這桌已經坐滿啦。", true, true);
+      goHome("這桌已經坐滿或開打了，請朋友再開一桌。", true, true);
       break;
     case "gone":
       forgetRoom(conn?.code ?? "");
-      goHome("找不到這桌，再確認一下房號。", true, true);
+      goHome("找不到這桌（房號打錯，或這桌已經收掉了）。", true, true);
+      break;
+    case "closed":
+      forgetRoom(conn?.code ?? "");
+      goHome(m.msg, true, true);
       break;
     case "emote":
       // 回個話：自己的已經先顯示了；對方的照他的暱稱顯示（不是阿禾講的）
       if (m.seat !== mySeat && Number.isInteger(m.i) && EMOTES[m.i]) oppEmote(EMOTES[m.i].text);
       break;
     case "error":
-      banner(m.msg, 2500);
+      lastErr = m.msg;
+      if (m.code === "RATE") goHome(m.msg, true, true);
+      else banner(m.msg, m.code === "VERSION" ? 0 : 2600);
       break;
   }
 }
 
-// ---------------- 等朋友：名牌滑入、郵票蓋章 ----------------
+// 伺服器拒絕了剛剛的指令：解鎖畫面、說原因（過期的不用講，伺服器會接著送最新狀態，畫面直接跳過去）
+function onReject(code: string, msg: string) {
+  setWaiting(false);
+  staged = -1;
+  unpull();
+  const nb = $<HTMLButtonElement>("nextBtn");
+  if (nb.disabled && !$("result").hidden) { nb.disabled = false; if (st) nb.textContent = st.matchWinner >= 0 ? "再來一場！" : "再來一局！"; renderRematch(); }
+  if (st) { renderHand(); renderActions(); }
+  if (code === "STALE") return;
+  banner(msg, 2600);
+  sfx.deny();
+}
 
+// ---------------- 房間狀態（朋友連線） ----------------
+
+function applyRoom(r: RoomView, notice?: Notice, who = -1) {
+  const before = seats.map(x => x?.taken);
+  const whoName = who >= 0 ? (seats[who]?.name || r.seats[who]?.name || "") : "";
+  const wasStarted = started;
+  if (r.status === "CLOSED") { forgetRoom(r.code); goHome("這桌已經關了。", true, true); return; }
+  const nowStarted = PLAYING.has(r.status);
+  // 打完一場、對方離開了：牌桌收起來，回到等人的畫面（座位、房號都還在）
+  if (wasStarted && !nowStarted) { const seat = mySeat, eid = lastEid; resetTable(); mySeat = seat; lastEid = eid; $("result").hidden = true; }
+  room = r; seats = r.seats; started = nowStarted;
+  if (!started) showWait(before);
+  else if (st && screen !== "table") show("table");
+  renderNames(); renderPresence();
+  if (notice === "started") banner(wasStarted ? "新的一場，開打！" : "兩邊都準備好了，開打！", 1800);
+  else if (who >= 0 && who !== mySeat) roomNotice(notice, whoName || oppName());
+  renderRematch();
+}
+
+function roomNotice(notice: Notice | undefined, name: string) {
+  switch (notice) {
+    case "left": banner(`${name}離開了這桌。`, 2600); break;
+    case "mode": banner(`房主把玩法換成「${MODES[room!.mode].label}」，兩邊都要重新按準備。`, 2800); break;
+    case "forfeit": banner(`${name}認輸離開了，這場算你贏。`, 3200); break;
+    case "timeout": banner(`${name}斷線太久，照規則這場算你贏。`, 3200); break;
+    case "rematch": if (seats[1 - mySeat]?.rematch) banner(`${name}想再來一場！`, 2200); break;
+  }
+}
+
+// 整場打完（朋友連線）：「再來一場」要兩個人都按；按鈕顯示現在等誰
+function renderRematch() {
+  if (!room || !st || st.matchWinner < 0 || $("result").hidden) return;
+  const nb = $<HTMLButtonElement>("nextBtn");
+  if (nb.disabled) return;
+  const me = seats[mySeat], opp = seats[1 - mySeat];
+  nb.textContent = me?.rematch ? `等${oppName()}按…（點一下取消）` : opp?.rematch ? `${oppName()}想再來一場！按這裡開打` : "再來一場！";
+  nb.classList.toggle("on", !!me?.rematch);
+}
+
+// ---------------- 等朋友：名牌滑入、郵票蓋章、準備、玩法 ----------------
+
+let readyBusy = false;
 function showWait(before: (boolean | undefined)[] = []) {
   if (!conn) return;
   show("wait");
@@ -303,19 +388,78 @@ function showWait(before: (boolean | undefined)[] = []) {
     big.dataset.code = conn.code;
     big.replaceChildren(...[...conn.code].map((ch, i) => { const s = document.createElement("span"); s.textContent = ch; fx.popIn(s, i * 70); return s; }));
   }
-  if (mySeat < 0) return;
-  $("plateMeName").textContent = seats[mySeat]?.name || "你";
-  ($("plateMe").querySelector("small") as HTMLElement).textContent = mySeat === 0 ? "房主（你）" : "朋友（你）";
-  ($("plateOpp").querySelector("small") as HTMLElement).textContent = mySeat === 0 ? "朋友" : "房主";
-  const opp = seats[1 - mySeat];
+  if (mySeat < 0 || !room) return;
+  const me = seats[mySeat], opp = seats[1 - mySeat];
+  const role = (s: number) => s === room!.host ? "房主" : "朋友";
+  $("plateMeName").textContent = me?.name || "你";
+  ($("plateMe").querySelector("small") as HTMLElement).textContent = `${role(mySeat)}（你）`;
+  ($("plateOpp").querySelector("small") as HTMLElement).textContent = role(1 - mySeat);
+  plateTag($("plateMe"), me);
   const plate = $("plateOpp");
   $("plateOppName").textContent = opp?.taken ? opp.name : "還沒來…";
+  plateTag(plate, opp);
   if (opp?.taken && !plate.classList.contains("in")) {
     plate.classList.add("in");
     fx.slideIn(plate, "right");
     if (!before[1 - mySeat]) { sfx.join(); const em = plate.querySelector("em"); if (em) fx.stampIn(em, 200); }
-  }
+  } else if (!opp?.taken) plate.classList.remove("in");
+  renderModes();
+  const rb = $<HTMLButtonElement>("readyBtn");
+  rb.disabled = room.status !== "READY" || readyBusy || !!(opp && !opp.online);
+  rb.textContent = me?.ready ? "取消準備" : "準備好了";
+  rb.classList.toggle("on", !!me?.ready);
+  rb.setAttribute("aria-pressed", String(!!me?.ready));
+  const on = (t: string, dots: boolean) => { $("waitText").textContent = t; $("waitDots").hidden = !dots; };
+  if (!opp?.taken) on("還差一個人，把房號或連結傳給朋友", true);
+  else if (!opp.online) on(`${opp.name}連線中斷，等他回來`, true);
+  else if (me?.ready && opp.ready) on("兩邊都準備好了，開打！", false);
+  else if (me?.ready) on(`等${opp.name}按準備`, true);
+  else if (opp.ready) on(`${opp.name}準備好了，換你按「準備好了」`, false);
+  else on("兩個人都按「準備好了」就開打", false);
 }
+function plateTag(el: HTMLElement, s: SeatInfo | undefined) {
+  const em = el.querySelector("em");
+  if (!em) return;
+  em.textContent = !s?.taken ? "已入座" : !s.online ? "斷線中" : s.ready ? "準備好了" : "已入座";
+  em.classList.toggle("ready", !!s?.taken && s.online && s.ready);
+  em.classList.toggle("off", !!s?.taken && !s.online);
+}
+function renderModes() {
+  if (!room) return;
+  const host = room.host === mySeat;
+  document.querySelectorAll<HTMLButtonElement>("#modePick .mode").forEach(b => {
+    const md = b.dataset.mode as Mode;
+    const on = room!.mode === md;
+    b.setAttribute("aria-checked", String(on));
+    b.classList.toggle("on", on);
+    b.classList.toggle("locked", !MODES[md]?.enabled);
+    b.classList.toggle("guest", !host);
+  });
+  $("modeNote").textContent = host ? "你是房主，玩法你來選（換了要重新準備）。" : "玩法由房主選（換了要重新準備）。";
+}
+$("modePick").addEventListener("click", ev => {
+  const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".mode");
+  if (!b || !room) return;
+  const md = b.dataset.mode as Mode;
+  if (!MODES[md]) return;
+  if (room.host !== mySeat) { banner("玩法由房主選喔。", 1800); fx.deny(b); return; }
+  if (!MODES[md].enabled) { banner(`${MODES[md].label}還在做，先用${MODES.classic.label}。`, 2400); fx.deny(b); sfx.deny(); return; }
+  if (room.mode === md) return;
+  act({ t: "mode", mode: md });
+});
+$("readyBtn").addEventListener("click", () => {
+  if (!room || readyBusy) return;
+  const want = !seats[mySeat]?.ready;
+  readyBusy = true;
+  showWait();
+  const sent = act({ t: "ready", ready: want }, r => {
+    readyBusy = false;
+    if (!r.ok) banner(r.msg, 2400);
+    if (screen === "wait") showWait();
+  });
+  if (!sent) { readyBusy = false; showWait(); }
+  else if (want) fx.punch($("readyBtn"));
+});
 const inviteUrl = () => `${location.origin}/?room=${conn?.code ?? ""}`;
 $("share").addEventListener("click", async () => {
   const url = inviteUrl();
@@ -329,7 +473,18 @@ $("copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(inviteUrl()); flashLabel($("copy"), "複製好了！"); }
   catch { flashLabel($("copy"), conn?.code ?? ""); }
 });
-$("cancelWait").addEventListener("click", () => { if (conn) forgetRoom(conn.code); goHome("", false, true); });
+// 離開這桌（開局前）：請伺服器讓出座位；連不上的話就只在這支手機忘掉（伺服器 10 分鐘後也會讓出來）
+$("cancelWait").addEventListener("click", () => {
+  const c = conn;
+  if (!(c instanceof Connection) || !c.isOpen) { if (c) forgetRoom(c.code); goHome("", false, true); return; }
+  const b = $<HTMLButtonElement>("cancelWait");
+  b.disabled = true;
+  c.command({ t: "leave" }, r => {
+    b.disabled = false;
+    if (r.ok || r.code === "NOT_SEATED") { forgetRoom(c.code); goHome("你離開了這桌。", false, true); }
+    else banner(r.msg, 2600);
+  });
+});
 
 function flashLabel(b: HTMLElement, text: string) {
   const old = b.dataset.label ?? b.textContent ?? "";
@@ -390,13 +545,20 @@ function renderNames() {
   $("rtOppName").textContent = oppName();
 }
 
+// 對手斷線／回來：只收自己貼上去的提示（別的提示不會被這裡蓋掉）
+let presenceMsg = false;
 function renderPresence() {
   const opp = seats[1 - mySeat];
-  $("oppDot").classList.toggle("off", !!opp && !opp.online);
-  const offline = started && !!opp && !opp.online;
-  if (offline) banner(`${oppName()}好像斷線了，等他回來一下。（牌局會保留）`);
-  else if (oppWasOffline && started && opp?.online) banner(`${oppName()}回來啦！繼續打。`, 1800);
-  else $("banner").hidden = true;
+  $("oppDot").classList.toggle("off", !!opp?.taken && !opp.online);
+  const offline = started && !!opp?.taken && !opp.online;
+  if (offline) {
+    banner(room?.status === "PAUSED" ? `${oppName()}斷線了，牌局先暫停，等他回來。（牌局會保留）` : `${oppName()}好像斷線了，等他回來一下。`);
+    presenceMsg = true;
+  } else if (presenceMsg) {
+    presenceMsg = false;
+    if (oppWasOffline && started && opp?.online) banner(`${oppName()}回來啦！繼續打。`, 1800);
+    else $("banner").hidden = true;
+  }
   oppWasOffline = offline;
 }
 
@@ -674,7 +836,7 @@ function playCard(id: number) {
   setWaiting(true);
   renderHand();
   renderActions();
-  conn.send({ t: "play", card: id });
+  if (!act({ t: "play", card: id })) { setWaiting(false); unpull(); }
 }
 
 function unpull() { if (pulled >= 0) { pulled = -1; if (st) renderHand(); } }
@@ -1343,7 +1505,7 @@ function sendCall(call: number) {
   if (!myBidTurn() || waiting || !conn) return;
   selBid = -1; selStrain = -1;
   setWaiting(true);
-  conn.send({ t: "call", call });
+  if (!act({ t: "call", call })) setWaiting(false);
 }
 
 function callHtml(c: number) {
@@ -1632,12 +1794,27 @@ $("resSheet").addEventListener("click", ev => {
 $("nextBtn").addEventListener("click", () => {
   const b = $<HTMLButtonElement>("nextBtn");
   resultSig.skip = true;
+  // 朋友連線、整場打完：兩個人都按「再來一場」才開新的一場（再按一次是取消）
+  if (room && st && st.matchWinner >= 0) {
+    b.disabled = true;
+    if (!act({ t: "rematch", ready: !seats[mySeat]?.rematch }, () => { b.disabled = false; renderRematch(); })) b.disabled = false;
+    return;
+  }
+  const label = b.textContent;
   b.disabled = true;
   b.textContent = "發牌中…";
-  conn?.send({ t: "next" });
+  if (!act({ t: "next" })) { b.disabled = false; b.textContent = label; }
 });
 $("resHome").addEventListener("click", () => {
   resultSig.skip = true;
+  // 朋友連線、整場已經打完：離開就讓出座位（戰績留在這桌）；還沒打完就幫你留著位子
+  const c = conn;
+  if (room && st && st.matchWinner >= 0 && c instanceof Connection && c.isOpen) {
+    c.command({ t: "leave" });          // 送出就走（連線關掉前一定會先送出去）
+    forgetRoom(c.code);
+    goHome("你離開了這桌。");
+    return;
+  }
   goHome(conn?.solo ? "這局幫你存好了，按「跟阿禾打」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
 });
 

@@ -16,9 +16,16 @@
     "run_worker_first": ["/api/*"]
   },
   "durable_objects": {
-    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+    "bindings": [
+      { "name": "ROOMS", "class_name": "Room" },
+      // 頻率限制（每個來源一個，擋猜房號）
+      { "name": "LIMITER", "class_name": "Limiter" }
+    ]
   },
   // 免費方案要用 SQLite 版的 Durable Object
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Room"] },
+    { "tag": "v2", "new_sqlite_classes": ["Limiter"] }
+  ],
   "observability": { "enabled": true }
 }

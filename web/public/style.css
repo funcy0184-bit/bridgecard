@@ -153,8 +153,8 @@ input::placeholder { color: rgba(90,70,40,.45); }
 /* ---------------- 等朋友 ---------------- */
 #wait { justify-content: center; align-items: stretch; gap: 14px; text-align: center; }
 .label { margin: 0; color: var(--muted); letter-spacing: .4em; }
-.bigcode { display: flex; justify-content: center; gap: 10px; }
-.bigcode span { width: 62px; height: 80px; display: grid; place-items: center; font: 700 42px var(--display); clip-path: var(--torn-b);
+.bigcode { display: flex; justify-content: center; gap: 7px; }
+.bigcode span { width: 48px; height: 64px; display: grid; place-items: center; font: 700 34px var(--display); clip-path: var(--torn-b);
   box-shadow: inset 0 0 0 4px transparent, inset 0 0 0 5px rgba(185,138,62,.6); }
 .plates { display: flex; flex-direction: column; gap: 8px; }
 .plate { display: flex; align-items: center; gap: 12px; padding: 10px 14px; clip-path: var(--torn-a); text-align: left; opacity: .45; }
@@ -165,8 +165,23 @@ input::placeholder { color: rgba(90,70,40,.45); }
 .plate em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--wine); border: 1.5px solid var(--wine); padding: 1px 7px; border-radius: 4px; transform: rotate(-6deg); visibility: hidden; }
 .plate.in { opacity: 1; }
 .plate.in em { visibility: visible; }
+.plate em.ready { background: var(--wine); color: var(--paper-hi); }
+.plate em.off { color: var(--ink-soft); border-color: var(--ink-soft); border-style: dashed; }
+/* 玩法（房主選；還沒開放的灰掉） */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mode { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 6px; border: 0; border-radius: 8px; cursor: pointer;
+  background: rgba(251,244,228,.08); color: var(--on-wood); box-shadow: inset 0 0 0 1px rgba(226,184,96,.45); font: inherit; }
+.mode b { font: 500 16px var(--display); }
+.mode small { font-size: 11.5px; opacity: .75; }
+.mode.on { background: rgba(243,212,136,.18); box-shadow: inset 0 0 0 2px var(--gold-pale); }
+.mode.locked { opacity: .5; cursor: not-allowed; }
+.mode.guest:not(.on) { opacity: .45; }
+#readyBtn.on { background: var(--gold-pale); color: var(--wine); }
+#readyBtn:disabled { opacity: .55; }
+@media (max-height: 700px) { #wait { gap: 9px; } .bigcode span { height: 54px; font-size: 30px; } .plate { padding: 7px 12px; } }
 .sub { color: var(--muted); margin: 0; text-align: center; font-size: 14px; }
 .waiting { color: var(--muted); margin: 0; }
+.dots { white-space: nowrap; }
 .dots i { display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--gold-hi); animation: blink calc(1.2s / var(--spd)) infinite; }
 .dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }

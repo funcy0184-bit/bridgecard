@@ -75,7 +75,7 @@
       <button id="create" class="btn wine big" type="button">開一桌</button>
       <div class="or"><span>有朋友開桌了？輸入房號就能加入</span></div>
       <div class="join">
-        <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="房號" aria-label="朋友給的房號" enterkeyhint="go">
+        <input id="code" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="房號" aria-label="朋友給的房號" enterkeyhint="go">
         <button id="join" class="btn paper" type="button">加入牌桌</button>
       </div>
       <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
@@ -91,13 +91,18 @@
       <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b></span><em class="ok">已入座</em></div>
       <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b></span><em class="ok">已入座</em></div>
     </div>
-    <p class="sub">不用註冊，傳個連結就能一起玩。</p>
+    <div class="modes" id="modePick" role="radiogroup" aria-label="玩法（房主選）">
+      <button type="button" class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>經典牌局</b><small>照正式規則計分</small></button>
+      <button type="button" class="mode locked" data-mode="chips" role="radio" aria-checked="false"><b>籌碼對決</b><small>還沒開放</small></button>
+    </div>
+    <p class="sub" id="modeNote">玩法由房主選。</p>
     <div class="row">
-      <button id="share" class="btn wine" type="button">邀請朋友</button>
+      <button id="share" class="btn paper" type="button">邀請朋友</button>
       <button id="copy" class="btn paper" type="button">複製連結</button>
     </div>
-    <p class="waiting">還差一個人，等他一下<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
-    <button id="cancelWait" class="btn ghost small" type="button">取消</button>
+    <button id="readyBtn" class="btn wine big" type="button" disabled aria-pressed="false">準備好了</button>
+    <p class="waiting"><span id="waitText">還差一個人，把房號或連結傳給朋友</span><span class="dots" id="waitDots" aria-hidden="true"><i></i><i></i><i></i></span></p>
+    <button id="cancelWait" class="btn ghost small" type="button">離開這桌</button>
   </section>
 
   <!-- ============ 02～04 牌桌：搶牌／叫牌／出牌 ============ -->

@@ -2,7 +2,7 @@
 // 對牌桌畫面來說，它跟雲端連線長得一樣：收 ClientMsg、回 ServerMsg（事件一定比狀態先到），
 // 所以 main.ts 的動畫、叫牌面板、結算都不用另外寫一套。
 // 牌局每一步都存進 localStorage，重新整理或關掉再開，回來還是同一局。
-import type { ClientMsg, ServerMsg } from "../server/protocol";
+import type { ClientMsg, RejectCode, ServerMsg } from "../server/protocol";
 import { GameEvent, GameSnapshot, HoneymoonGame, Phase } from "../game/game";
 import { chooseCall, chooseCard } from "../game/ai";
 
@@ -11,6 +11,10 @@ export type ConnStatus = "connecting" | "open" | "reconnecting" | "closed";
 // localStorage 的最小介面（測試可以換成假的）
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void; }
 
+// 指令的回覆（跟 net.ts 一樣）
+export type Reply = { ok: true; ver: number } | { ok: false; code: RejectCode; msg: string; ver: number };
+export type Command = Extract<ClientMsg, { cid?: string }>;
+
 // 牌桌畫面要的連線介面：雲端的 Connection 和單機的 LocalTable 都符合
 export interface Link {
   readonly code: string;
@@ -18,7 +22,9 @@ export interface Link {
   onMessage: (m: ServerMsg) => void;
   onStatus: (s: ConnStatus) => void;
   open(): void;
-  send(m: ClientMsg): void;
+  send(m: ClientMsg): boolean | void;
+  // 會改變狀態的指令；送不出去（斷線中）回 null
+  command(m: Command, done?: (r: Reply) => void): string | null;
   close(): void;
 }
 
@@ -73,7 +79,7 @@ export class LocalTable implements Link {
   open() {
     this.closed = false;
     this.onStatus("open");
-    this.deliver({ t: "welcome", seat: ME, token: "", code: this.code });
+    this.deliver({ t: "welcome", v: 2, seat: ME, token: "", code: this.code, gid: null });
     this.deliver({
       t: "lobby", started: true,
       seats: [{ taken: true, online: true, name: this.name || "你" }, { taken: true, online: true, name: AI_NAME }],
@@ -116,6 +122,13 @@ export class LocalTable implements Link {
         this.deliver({ t: "pong" });
         break;
     }
+  }
+
+  // 單機：手機上直接做，沒有網路，也就沒有重送、過期的問題
+  command(m: Command): string | null {
+    if (this.closed) return null;
+    this.send(m);
+    return "local";
   }
 
   close() {

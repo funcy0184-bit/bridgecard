@@ -195,7 +195,13 @@ node test/e2e/two-sockets.mjs
 node test/e2e/two-phones.mjs http://127.0.0.1:8787 test-results
 ```
 
-  - `two-sockets.mjs`：不開瀏覽器，兩條連線打完一整局；中途斷線重連、第三個人擠不進來、打錯房號
+  - `two-sockets.mjs`：不開瀏覽器，兩條連線（兩邊先按準備）打完一整局；中途斷線重連、第三個人擠不進來、打錯房號
+  - `rooms.mjs`：房間的邊界情況：6 碼房號、查房不含私人資料、準備／取消、只有房主能換玩法（籌碼對決回「還沒開放」）、同一個指令重送不重複生效、第三人、亂編憑證、同一個人開兩個分頁、房主離開換人當房主、同時按準備只開一場、開打後陌生人進不來、舊版協定、猜房號和狂開房的頻率限制（本機用 `CF-Connecting-IP` 假裝不同來源；正式環境這個標頭由 Cloudflare 填，用戶端改不了）
+
+```bash
+node test/e2e/rooms.mjs
+```
+
   - `two-phones.mjs`：兩支模擬手機（預設 iPhone 13 + Pixel 7）真的點畫面，從開房一路打到結算，順便截圖到 `test-results/`。換機型：`HB_DEVICE_A="iPhone SE" HB_DEVICE_B="Galaxy S9+" node test/e2e/two-phones.mjs`
   - `story-walk.mjs`：一支模擬手機走完阿禾的四幕（兩種搶牌、換一張試試、重新整理續讀、叫 2♥、不能出的 ♥2、王吃與墊牌、8／8 +20 分），再按「自己跟電腦打一局」打完一整局、中途重新整理、換牌桌顏色。換機型：`HB_DEVICE="iPhone SE" node test/e2e/story-walk.mjs`
 
