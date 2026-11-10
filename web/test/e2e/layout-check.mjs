@@ -98,6 +98,8 @@ for (const [name, w, h] of SIZES) {
   await p.click("#setBtn"); await check("故事：設定", ["#setDlg"]); await p.click("#setClose");
   // 牌桌：搶牌 → 叫牌 → 出牌 → 結算
   await p.goto(base + "/?solo=new"); await p.waitForSelector("#hand .card"); await check("牌桌：搶牌", ["#hand", "#actions", "#felt", ".topbar"]);
+  await p.click("#talkBtn"); await check("牌桌：回個話", ["#emotePop", "#hand", "#playBtn"]);
+  await p.locator('#emoteList button').first().click(); await p.waitForTimeout(200); await check("牌桌：你的泡泡", ["#myQuip", "#hand", "#playBtn"]);
   let saw = { bid: false, play: false };
   const t0 = Date.now();
   while (Date.now() - t0 < 120000 && !(await p.locator("#result").isVisible())) {

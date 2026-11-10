@@ -1,6 +1,7 @@
 // 阿禾的嘴（正式對戰）：台詞只在條件符合時出現、頻率有控制、不一直重複、幹話稀有，記憶只記這一場
 import { describe, expect, it } from "vitest";
 import { AheBrain, EMOTES, MEM_KEY, NONSENSE_MAX, REACTIONS } from "../src/client/ahe";
+import { EMOTE_COUNT, emoteAllowed } from "../src/server/protocol";
 
 class Store { m = new Map<string, string>(); get(k: string) { return this.m.get(k) ?? null; } set(k: string, v: string) { this.m.set(k, v); } }
 function brain(o: { seed?: number; store?: Store; attitude?: string } = {}) {
@@ -170,5 +171,28 @@ describe("這一場的記憶", () => {
     expect(b.say("matchMe", { n: 90 })!.text).toBe("你到底是不是新手啊？");
     tick(10000);
     expect(b.say("matchAhe", { n: 10 })!.text).toBe("呼！這局差點翻車。");
+  });
+});
+
+describe("回個話", () => {
+  it("短句數量跟伺服器一致；防洗版：間隔 2.5 秒、20 秒內最多 4 句", () => {
+    expect(EMOTES.length).toBe(EMOTE_COUNT);
+    expect(emoteAllowed([], 0)).toBe(true);
+    expect(emoteAllowed([0], 1000)).toBe(false);
+    expect(emoteAllowed([0], 2600)).toBe(true);
+    expect(emoteAllowed([0, 3000, 6000, 9000], 12000)).toBe(false);
+    expect(emoteAllowed([0, 3000, 6000, 9000], 21000)).toBe(true);
+  });
+  it("阿禾回你的話：不受閒聊間隔和一局上限限制，但關閉吐槽就不回", () => {
+    const { b, tick } = brain();
+    for (let i = 0; i < 6; i++) { b.say("contractMe"); b.say("faceUpMe"); tick(30000); }
+    expect(b.say("emote:pretty")).not.toBeNull();
+    tick(3000);
+    expect(b.say("emote:again")).not.toBeNull();
+    b.level = "lite";
+    tick(3000);
+    expect(b.say("emote:nice", { lastTrickAhe: true })!.text).toBe("嘿嘿，你現在才知道？");
+    b.level = "off";
+    expect(b.say("emote:cry")).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
 // 兩支手機都關掉也沒關係：狀態存在雲端，重新打開、用同一個憑證連回來就回到同一桌。
 import { DurableObject } from "cloudflare:workers";
 import { GameEvent, GameSnapshot, HoneymoonGame, Phase } from "../game/game";
-import { ClientMsg, ServerMsg, SeatInfo, cleanName } from "./protocol";
+import { ClientMsg, EMOTE_COUNT, EMOTE_WINDOW_MS, ServerMsg, SeatInfo, cleanName, emoteAllowed } from "./protocol";
 
 export interface Env {
   ROOMS: DurableObjectNamespace<Room>;
@@ -86,6 +86,7 @@ export class Room extends DurableObject<Env> {
     if (msg.t === "hello") { await this.hello(ws, msg); return; }
 
     const seat = this.seatOf(ws);
+    if (msg.t === "emote") { this.emote(seat, msg.i); return; }
     if (seat < 0 || !this.game) return;
     const g = this.game;
     switch (msg.t) {
@@ -184,6 +185,17 @@ export class Room extends DurableObject<Env> {
   }
 
   // ---------------- 小工具 ----------------
+
+  // 回個話：只轉送（不碰牌局、不存檔）；編號不對或太頻繁就丟掉
+  private emoteTimes: [number[], number[]] = [[], []];
+  private emote(seat: number, i: unknown) {
+    if (seat < 0 || seat > 1 || !Number.isInteger(i) || (i as number) < 0 || (i as number) >= EMOTE_COUNT) return;
+    const now = Date.now();
+    if (!emoteAllowed(this.emoteTimes[seat], now)) return;
+    this.emoteTimes[seat] = [...this.emoteTimes[seat].filter(t => now - t < EMOTE_WINDOW_MS), now];
+    const msg: ServerMsg = { t: "emote", seat, i: i as number };
+    for (const ws of this.ctx.getWebSockets()) this.send(ws, msg);
+  }
 
   private seatOf(ws: WebSocket): number {
     const a = ws.deserializeAttachment() as Attachment | null;

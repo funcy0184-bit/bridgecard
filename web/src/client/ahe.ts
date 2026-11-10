@@ -43,6 +43,7 @@ interface Reaction {
   cooldown?: number;       // 同一個事件多久內不再講（毫秒）
   max?: number;            // 一場最多幾次
   perHand?: number;        // 一局最多幾次（加倍、再加倍：優先講一次就好）
+  direct?: boolean;        // 回你的話：不受閒聊間隔、一局上限限制（洗版由回話的冷卻管）
   emo: Emo;
   fx?: Tfx;
   when?: (f: Facts, m: Mem) => boolean;
@@ -84,8 +85,8 @@ export const REACTIONS: Reaction[] = [
 
   // ---- 王吃（較高機率） ----
   R("ruffMe", 2, 4, 1, "shock", ["不是欸，你到底還有幾張王牌？"], { key: "ruffMe:many", when: (_f, m) => m.playerRuffs >= 3, max: 1, fx: "shout" }),
-  R("ruffMe", 2, 4, 0.85, "shock", ["哭啊！這樣也行？", "不是欸，你王吃我？", "靠，被吃了。"], { fx: "shout" }),
-  R("ruffAhe", 2, 4, 0.75, "smug", ["嘿嘿，沒想到吧。", "王牌就是拿來用的。", "不好意思，我沒有那個花色。"], { fx: "pop" }),
+  R("ruffMe", 2, 4, 0.85, "shock", ["哭啊！這樣也行？", "不是欸，你王吃我？", "靠，被吃了。"], { fx: "shout", perHand: 2 }),
+  R("ruffAhe", 2, 4, 0.75, "smug", ["嘿嘿，沒想到吧。", "王牌就是拿來用的。", "不好意思，我沒有那個花色。"], { fx: "pop", perHand: 2 }),
 
   // ---- 連贏（這一局內；連勝中斷就不講） ----
   R("streakMe", 2, 5, 1, "shock", f => ["你今天是不是有偷練？", `欸欸欸，連贏 ${f.n} 墩了喔。`], { max: 3, fx: "pop" }),
@@ -132,11 +133,11 @@ export const REACTIONS: Reaction[] = [
   R("matchAhe", 2, 2, 1, "smug", f => (f.n ?? 0) <= 20 ? ["呼！這局差點翻車。"] : ["這次換我贏啦！", "今天手感太好了，不好意思啦。"]),
 
   // ---- 你回個話（表情）：阿禾照現在的局勢回 ----
-  R("emote:nice", 1, 7, 1, "smug", f => f.lastTrickAhe ? ["嘿嘿，你現在才知道？"] : ["你是在誇我還是誇你自己？", "欸，謝啦。"]),
-  R("emote:cry", 2, 7, 1, "smug", f => f.aheAhead ? ["現在才開始哭喔？"] : ["要哭的是我吧。"]),
-  R("emote:cocky", 2, 7, 1, "smug", f => f.aheAhead ? ["啊我就真的贏了啊。"] : ["我哪有囂張，我現在很低調。"]),
-  R("emote:pretty", 1, 7, 1, "smug", ["欸，謝啦。", "我也覺得。"]),
-  R("emote:again", 1, 7, 1, "smug", ["來啊，誰怕誰。", "好啊，我還沒打夠。"]),
+  R("emote:nice", 1, 7, 1, "smug", f => f.lastTrickAhe ? ["嘿嘿，你現在才知道？"] : ["你是在誇我還是誇你自己？", "欸，謝啦。"], { direct: true }),
+  R("emote:cry", 2, 7, 1, "smug", f => f.aheAhead ? ["現在才開始哭喔？"] : ["要哭的是我吧。"], { direct: true }),
+  R("emote:cocky", 2, 7, 1, "smug", f => f.aheAhead ? ["啊我就真的贏了啊。"] : ["我哪有囂張，我現在很低調。"], { direct: true }),
+  R("emote:pretty", 1, 7, 1, "smug", ["欸，謝啦。", "我也覺得。"], { direct: true }),
+  R("emote:again", 1, 7, 1, "smug", ["來啊，誰怕誰。", "好啊，我還沒打夠。"], { direct: true }),
 
   // ---- 幹話（稀有；一場最多 2 次；跨場不重複） ----
   R("nonsense", 3, 8, 1, "think", NONSENSE),
@@ -209,13 +210,13 @@ export class AheBrain {
       if (r.max !== undefined && (this.count.get(key) ?? 0) >= r.max) continue;
       if (r.perHand !== undefined && (this.handCount.get(r.id) ?? 0) >= r.perHand) return null;
       if (r.cooldown && t - (this.lastAt.get(r.id) ?? -1e12) < r.cooldown) return null;
-      if (this.level === "lite" && (r.pri > 4 || r.tone === 3)) return null;
+      if (this.level === "lite" && !r.direct && (r.pri > 4 || r.tone === 3)) return null;
       if (r.tone === 3 && this.nonsense >= NONSENSE_MAX) return null;
-      if (r.pri >= 5 && this.handIdle >= HAND_IDLE_MAX) return null;     // 這一局閒聊夠多了
-      if (r.pri >= 4 && this.handTotal >= HAND_MAX) return null;         // 這一局講夠多了（大事例外）
-      const gap = r.pri <= 4 ? 0 : r.pri >= 6 ? GAP_IDLE : GAP_ANY;
+      if (!r.direct && r.pri >= 5 && this.handIdle >= HAND_IDLE_MAX) return null;     // 這一局閒聊夠多了
+      if (!r.direct && r.pri >= 4 && this.handTotal >= HAND_MAX) return null;         // 這一局講夠多了（大事例外）
+      const gap = r.pri <= 4 ? 0 : r.direct ? 0 : r.pri >= 6 ? GAP_IDLE : GAP_ANY;
       if (t - this.lastSaidAt < gap) return null;
-      const chance = this.level === "lite" ? r.chance * 0.7 : r.chance;
+      const chance = this.level === "lite" && !r.direct ? r.chance * 0.7 : r.chance;     // 回你的話一定回
       if (chance < 1 && this.rng() >= chance) return null;
       const all = typeof r.lines === "function" ? r.lines(f, this.mem) : r.lines;
       if (!all.length) return null;
@@ -224,9 +225,8 @@ export class AheBrain {
       const pool = fresh.length ? fresh : all.slice().sort((a, b) => this.recent.indexOf(a) - this.recent.indexOf(b));
       const text = fresh.length ? pool[Math.floor(this.rng() * pool.length) % pool.length] : pool[0];
       this.count.set(key, (this.count.get(key) ?? 0) + 1);
-      this.handTotal++;
+      if (!r.direct) { this.handTotal++; if (r.pri >= 5) this.handIdle++; }
       this.handCount.set(r.id, (this.handCount.get(r.id) ?? 0) + 1);
-      if (r.pri >= 5) this.handIdle++;
       this.lastAt.set(r.id, t);
       this.lastSaidAt = t;
       this.recent = [...this.recent.filter(x => x !== text), text].slice(-RECENT);

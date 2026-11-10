@@ -145,6 +145,57 @@ console.log("關閉額外吐槽：完全不講，牌照打、結算照常");
   await ctx.close();
 }
 
+console.log("回個話（跟阿禾打）：你的泡泡、阿禾回一句、冷卻中按不了、不影響牌局");
+for (const [w, h] of [[360, 640], [390, 844]]) {
+  const { ctx, p, errs } = await open("full", w, h);
+  await sleep(2500);                                                     // 開場那句先講完
+  const hand0 = await p.evaluate(() => [...document.querySelectorAll("#hand .card")].map(c => c.dataset.id).join());
+  await p.click("#talkBtn"); await sleep(200);
+  const pop = await p.evaluate(() => { const r = document.getElementById("emotePop").getBoundingClientRect(), h = document.getElementById("hand").getBoundingClientRect(), b = document.getElementById("playBtn").getBoundingClientRect(); return { vis: !document.getElementById("emotePop").hidden, n: document.querySelectorAll("#emoteList button").length, clear: r.bottom <= h.top && r.bottom <= b.top }; });
+  ok(pop.vis && pop.n === 5 && pop.clear, `${w}×${h}：點「回個話」出現 5 句短句，不遮手牌和確認出牌`);
+  await p.locator('#emoteList button[data-emote="cocky"]').click();
+  await sleep(150);
+  const mine = await p.evaluate(() => ({ t: document.getElementById("myQuip").innerText, vis: !document.getElementById("myQuip").hidden, dis: document.getElementById("talkBtn").disabled,
+    clear: (() => { const r = document.getElementById("myQuip").getBoundingClientRect(), h = document.getElementById("hand").getBoundingClientRect(); return r.bottom <= h.top; })() }));
+  ok(mine.vis && mine.t.includes("別太囂張！") && mine.dis && mine.clear, `你的泡泡「${mine.t.replace(/\s+/g, "")}」出現在牌桌左下、不遮手牌；冷卻中按鈕先變淡`);
+  await sleep(1200);
+  const reply = await p.evaluate(() => ({ q: document.getElementById("quip").innerText, log: (window.__hbAhe ?? []).filter(l => l.id.startsWith("emote:")).map(l => l.text) }));
+  ok(reply.log.length === 1 && ["啊我就真的贏了啊。", "我哪有囂張，我現在很低調。"].includes(reply.log[0]) && reply.q.includes(reply.log[0]), `阿禾回：「${reply.log[0]}」`);
+  ok(hand0 === await p.evaluate(() => [...document.querySelectorAll("#hand .card")].map(c => c.dataset.id).join()), "回話不影響牌局（手牌沒變）");
+  await sleep(1800);
+  ok(!(await p.locator("#talkBtn").isDisabled()), "冷卻過了可以再回");
+  ok(errs.length === 0, "沒有錯誤");
+  await ctx.close();
+}
+
+console.log("回個話（朋友連線）：對方看到你的暱稱，阿禾不會插嘴");
+{
+  const mk = async name => {
+    const ctx = await b.newContext({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
+    const p = await ctx.newPage();
+    const errs = []; p.on("pageerror", e => errs.push(String(e)));
+    await p.addInitScript(n => { localStorage.setItem("hb-story-offered", "1"); localStorage.setItem("hb-name", n); localStorage.setItem("hb-web-settings", JSON.stringify({ fast: true })); }, name);
+    return { ctx, p, errs };
+  };
+  const A = await mk("阿明"), B = await mk("小美");
+  await A.p.goto(base + "/"); await A.p.click("#goOnline"); await A.p.click("#create");
+  await A.p.waitForSelector("#wait:not([hidden])");
+  const code = (await A.p.innerText("#bigCode")).replace(/\s/g, "");
+  await B.p.goto(base + "/"); await B.p.click("#goOnline"); await B.p.fill("#code", code); await B.p.click("#join");
+  await A.p.waitForSelector("#hand .card", { timeout: 15000 }); await B.p.waitForSelector("#hand .card", { timeout: 15000 });
+  await sleep(800);
+  await A.p.click("#talkBtn"); await sleep(150);
+  await A.p.locator('#emoteList button[data-emote="pretty"]').click();
+  await B.p.waitForFunction(() => !document.getElementById("quip").hidden, null, { timeout: 5000 }).catch(() => {});
+  const seen = await B.p.innerText("#quip").catch(() => "");
+  ok(seen.includes("阿明") && seen.includes("漂亮！"), `朋友那邊看到「${seen.replace(/\s+/g, "")}」（用你的暱稱，不是阿禾）`);
+  ok((await A.p.innerText("#myQuip")).includes("漂亮！"), "自己這邊也看到自己的泡泡");
+  const aheA = await A.p.evaluate(() => (window.__hbAhe ?? []).length), aheB = await B.p.evaluate(() => (window.__hbAhe ?? []).length);
+  ok(aheA === 0 && aheB === 0, "朋友連線時阿禾一句都不講");
+  ok(A.errs.length === 0 && B.errs.length === 0, "兩邊都沒有錯誤");
+  await A.ctx.close(); await B.ctx.close();
+}
+
 await b.close();
 console.log(fails ? `\n${fails} 項沒過` : "\n阿禾互動驗收全部通過");
 process.exit(fails ? 1 : 0);

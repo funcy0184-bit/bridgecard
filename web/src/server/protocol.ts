@@ -6,6 +6,7 @@ export type ClientMsg =
   | { t: "play"; card: number }
   | { t: "call"; call: number }                             // 叫品 0..34、Pass -1、加倍 -2、再加倍 -3
   | { t: "next" }                                           // 局末「下一局」／整場結束「再來一場」
+  | { t: "emote"; i: number }                               // 回個話（第 i 句短句；純社交，不影響牌局）
   | { t: "ping" };
 
 export interface SeatInfo { taken: boolean; online: boolean; name: string; }
@@ -18,7 +19,20 @@ export type ServerMsg =
   | { t: "full" }
   | { t: "gone" }                                           // 房間不存在（打錯房號或已過期）
   | { t: "error"; msg: string }
+  | { t: "emote"; seat: number; i: number }                 // 某個座位回了一句（照暱稱顯示，不是阿禾講的）
   | { t: "pong" };
+
+// 回個話：短句的數量（文字在用戶端，伺服器只檢查編號）；防洗版：同一個人間隔、短時間內次數
+export const EMOTE_COUNT = 5;
+export const EMOTE_GAP_MS = 2500;
+export const EMOTE_WINDOW_MS = 20000;
+export const EMOTE_WINDOW_MAX = 4;
+// 這一句能不能送：last = 這個人最近幾次的時間（毫秒）
+export function emoteAllowed(times: number[], now: number): boolean {
+  const recent = times.filter(t => now - t < EMOTE_WINDOW_MS);
+  if (recent.length && now - Math.max(...recent) < EMOTE_GAP_MS) return false;
+  return recent.length < EMOTE_WINDOW_MAX;
+}
 
 // 房號：4 碼，去掉容易看錯的 0 O 1 I L
 export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

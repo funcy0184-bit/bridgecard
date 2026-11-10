@@ -61,7 +61,7 @@ function rememberAttitude(a: string) {
 }
 // 第一幕結尾的幹話彩蛋：少量機率（?egg=1 一定出、?egg=0 一定不出，測試用）
 const EGG_PARAM = new URLSearchParams(location.search).get("egg");
-const rollEgg = () => EGG_PARAM === "1" ? true : EGG_PARAM === "0" ? false : Math.random() < 0.3;
+const rollEgg = () => EGG_PARAM === "1" ? true : EGG_PARAM === "0" ? false : Math.random() < 0.2;
 let egg = false;
 const ctx = (): Ctx => {
   const b = progress.answers.bid?.[0];

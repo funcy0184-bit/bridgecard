@@ -59,6 +59,23 @@ const ghost = player("ZZZZ", "x"); await ghost.ready;
 if (!ghost.msgs.some(m => m.t === "gone")) fail("不存在的房號應該回 gone");
 console.log("✓ 打錯房號會被告知房間不存在");
 
+// 回個話：轉給兩邊（標座位，不是阿禾講的）；連點只過第一句；亂傳的編號丟掉；牌局不受影響
+{
+  const before = JSON.stringify(host.state), evBefore = guest.events.length;
+  const got = () => guest.msgs.filter(m => m.t === "emote");
+  for (let k = 0; k < 5; k++) host.send({ t: "emote", i: 1 });
+  host.send({ t: "emote", i: 99 }); host.send({ t: "emote", i: -1 }); host.send({ t: "emote", i: "x" });
+  await sleep(400);
+  if (got().length !== 1 || got()[0].seat !== 0 || got()[0].i !== 1) fail(`回個話：連點 5 次應該只轉 1 句（收到 ${JSON.stringify(got())}）`);
+  if (!host.msgs.some(m => m.t === "emote" && m.seat === 0)) fail("回個話：自己也要收到（確認送出）");
+  await sleep(2600);
+  host.send({ t: "emote", i: 3 });
+  await sleep(400);
+  if (got().length !== 2 || got()[1].i !== 3) fail("回個話：隔 2.5 秒之後可以再說一句");
+  if (JSON.stringify(host.state) !== before || guest.events.length !== evBefore) fail("回個話不應該改變牌局");
+  console.log("✓ 回個話：轉給對方（標座位）、連點只過第一句、亂傳的編號丟掉、牌局不受影響");
+}
+
 let reconnected = false, leakChecks = 0;
 for (let i = 0; i < 4000; i++) {
   // 兩邊同時看到的手牌不能有交集（不外洩）

@@ -25,7 +25,8 @@ import { burstAt } from "./particles";
 import { BUILD, COACH_KEY, renderSettings } from "./settings-ui";
 import { LEAD_ADVICE, SUIT_NAME, followAdvice, illegalReason, trumpWord, whyTrick } from "../game/explain";
 import { emo, risk as riskOf } from "./tension";
-import { AheBrain, type Facts, type Said } from "./ahe";
+import { AheBrain, EMOTES, type Facts, type Said } from "./ahe";
+import { emoteAllowed, EMOTE_GAP_MS } from "../server/protocol";
 import { emote, textIn } from "./ahefx";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -281,6 +282,10 @@ function onMsg(m: ServerMsg) {
     case "gone":
       forgetRoom(conn?.code ?? "");
       goHome("找不到這桌，再確認一下房號。", true, true);
+      break;
+    case "emote":
+      // 回個話：自己的已經先顯示了；對方的照他的暱稱顯示（不是阿禾講的）
+      if (m.seat !== mySeat && Number.isInteger(m.i) && EMOTES[m.i]) oppEmote(EMOTES[m.i].text);
       break;
     case "error":
       banner(m.msg, 2500);
@@ -1239,13 +1244,14 @@ function renderRecord() {
 function popIn(el: HTMLElement) {
   if (fx.motionOn()) el.animate([{ opacity: 0, translate: "0 -6px" }, { opacity: 1, translate: "0 0" }], { duration: fx.ms(180), easing: "ease-out" });
 }
-function closePops() { closeStage(); closeTip(); closeRecord(); }
+function closePops() { closeStage(); closeTip(); closeRecord(); closeEmote(); }
 // 點空白處、✕、Esc 都能收起來；收起來就回到原本的牌局
 document.addEventListener("pointerdown", ev => {
   const t = ev.target as HTMLElement;
   if (stageOpen >= 0 && !t.closest("#stagePop, #phaseChip")) closeStage();
   if (!$("tipPop").hidden && !t.closest("#tipPop, .qbtn")) closeTip();
   if (!$("recordPop").hidden && !t.closest("#recordPop, #recordBtn")) closeRecord();
+  if (!$("emotePop").hidden && !t.closest("#emotePop, #talkBtn")) closeEmote();
 }, true);
 document.addEventListener("keydown", ev => { if (ev.key === "Escape") closePops(); });
 $("stagePop").querySelector("[data-pclose]")!.addEventListener("click", closeStage);
@@ -1693,6 +1699,64 @@ function showQuip(said: Said, delay: number) {
   }, fx.ms(delay));
 }
 function hideQuip() { clearTimeout(quipTimer); $("quip").hidden = true; quipPri = 9; quipUntil = 0; }
+
+// ---------------- 回個話：五句短句（純社交：不影響牌局、AI、計分或同步） ----------------
+const myEmotes: number[] = [];          // 我最近回話的時間（防洗版：間隔 2.5 秒、20 秒內最多 4 句）
+let myQuipTimer = 0, talkTimer = 0;
+for (const [i, e] of EMOTES.entries()) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = e.text; b.dataset.emote = e.key;
+  b.addEventListener("click", () => sendEmote(i));
+  $("emoteList").appendChild(b);
+}
+function openEmote() {
+  closePops();
+  const pop = $("emotePop"), opp = $("oppArea");
+  pop.style.top = `${opp.offsetTop + opp.offsetHeight + 2}px`;
+  pop.hidden = false;
+  $("talkBtn").setAttribute("aria-expanded", "true");
+  popIn(pop);
+  sfx.select();
+}
+function closeEmote() { $("emotePop").hidden = true; $("talkBtn").setAttribute("aria-expanded", "false"); }
+$("talkBtn").addEventListener("click", ev => { ev.stopPropagation(); if ($("emotePop").hidden) openEmote(); else closeEmote(); });
+function sendEmote(i: number) {
+  const now = Date.now();
+  closeEmote();
+  if (!emoteAllowed(myEmotes, now)) { fx.deny($("talkBtn")); return; }
+  myEmotes.push(now);
+  while (myEmotes.length > 8) myEmotes.shift();
+  const e = EMOTES[i];
+  showMyQuip(e.text);
+  // 冷卻中：按鈕先變淡，避免連點
+  const tb = $<HTMLButtonElement>("talkBtn");
+  tb.disabled = true;
+  clearTimeout(talkTimer);
+  talkTimer = window.setTimeout(() => { tb.disabled = false; }, EMOTE_GAP_MS);
+  if (conn?.solo) {
+    // 阿禾照現在的局勢回你一句
+    const last = trickLog.list.at(-1);
+    causeEv = null;
+    ahe(`emote:${e.key}`, { ...scoreFacts(), lastTrickAhe: !!last && last.winner !== mySeat }, 750);
+  } else conn?.send({ t: "emote", i });
+}
+function showMyQuip(text: string) {
+  const q = $("myQuip");
+  q.innerHTML = `<span class="who">你</span>${esc(text)}`;
+  q.hidden = false;
+  textIn(q, "pop");
+  clearTimeout(myQuipTimer);
+  myQuipTimer = window.setTimeout(() => { q.hidden = true; }, fx.settings.fast ? 1700 : 2200);
+}
+function oppEmote(text: string) {
+  const q = $("quip");
+  q.innerHTML = `<b>${esc(oppName())}</b>：${esc(text)}`;
+  q.hidden = false;
+  q.dataset.tone = "1";
+  textIn(q, "pop");
+  clearTimeout(quipTimer);
+  quipTimer = window.setTimeout(() => { q.hidden = true; }, 2200);
+}
 
 // 收一墩之後阿禾要不要講話：一墩最多一句，重要的先講
 function trickQuip(e: GameEvent, s: TableState, im: Impact) {
