@@ -911,3 +911,17 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   .keyinfo .ks { font-size: 14px; } .keyinfo .kt { font-size: 12px; } .keybar { padding: 3px 8px; gap: 6px; }
   .recbtn { padding: 0 8px; font-size: 13px; } .score { padding-left: 7px; }
 }
+
+/* ---------- 阿禾的表情：頭像旁冒一下的小記號（！♪？…＃），一下就收 ---------- */
+.emomark { position: absolute; z-index: 7; pointer-events: none; opacity: 0; font: 700 16px/1 var(--display); color: var(--wine);
+  text-shadow: 0 1px 0 #FBF4E4, 0 0 5px rgba(251,244,228,.95); }
+.emomark[data-emo="smug"] { color: #9A6A1E; }
+.emomark[data-emo="think"] { color: #4A3B2A; }
+.emomark[data-emo="sigh"] { color: #6A563E; letter-spacing: -.1em; }
+#oppArea .who { position: relative; }
+#oppArea .who .emomark { left: 20px; top: -5px; }
+.seller { position: relative; }
+.seller .emomark { left: 34px; top: -6px; font-size: 18px; }
+/* 阿禾的泡泡：吐槽（情緒）稍微強調，幹話用斜體 */
+.quip[data-tone="2"] { font-weight: 700; }
+.quip[data-tone="3"] { font-style: italic; color: #4A3B2A; }

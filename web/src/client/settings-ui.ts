@@ -15,7 +15,7 @@ export function reportText(): string {
     `頁面：${location.pathname}${location.search}`,
     `畫面大小：${innerWidth}×${innerHeight}（像素比 ${devicePixelRatio}）`,
     `裝置：${navigator.userAgent}`,
-    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、品質 ${s.quality}→${fx.quality()}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}`,
+    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、品質 ${s.quality}→${fx.quality()}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}、阿禾吐槽 ${s.talk}`,
   ].join("\n");
 }
 
@@ -112,9 +112,32 @@ export function renderSettings(box: HTMLElement) {
   }
   qrow.append(ql, qg);
 
+  // 阿禾吐槽：正常／精簡（只講重要的）／關閉（規則、錯誤、結算照常顯示）
+  const trow = document.createElement("div");
+  trow.className = "setting";
+  const tl = document.createElement("span");
+  tl.textContent = "阿禾吐槽";
+  const tg = document.createElement("div");
+  tg.className = "seg";
+  for (const [val, label] of [["full", "正常"], ["lite", "精簡"], ["off", "關閉"]] as const) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.dataset.talk = val;
+    b.setAttribute("aria-pressed", String(s.talk === val));
+    b.addEventListener("click", () => {
+      s.talk = val; fx.saveSettings();
+      for (const x of Array.from(tg.children)) x.setAttribute("aria-pressed", String(x === b));
+      sfx.select();
+    });
+    tg.appendChild(b);
+  }
+  trow.append(tl, tg);
+
   box.append(
     seg,
     qrow,
+    trow,
     toggle("加快動畫", () => s.fast, v => { s.fast = v; }),
     toggle("畫面震動", () => s.shake, v => { s.shake = v; }, () => { if (s.shake) fx.shake(box, 5, 220); }),
     toggle("粒子特效", () => s.particles, v => { s.particles = v; }),

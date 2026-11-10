@@ -25,6 +25,8 @@ import { burstAt } from "./particles";
 import { BUILD, COACH_KEY, renderSettings } from "./settings-ui";
 import { LEAD_ADVICE, SUIT_NAME, followAdvice, illegalReason, trumpWord, whyTrick } from "../game/explain";
 import { emo, risk as riskOf } from "./tension";
+import { AheBrain, type Facts, type Said } from "./ahe";
+import { emote, textIn } from "./ahefx";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const GOLD = "#F3D488", INK = "#FBF4E4", MUTED = "#D8C7A4", BAD = "#F2A0A0", GOOD = "#B5E3BE", RED = "#F5AAB3";
@@ -342,6 +344,12 @@ function onState(s: TableState) {
   else if (pulled >= 0 && !myTurn()) pulled = -1;
   if ($("table").hidden) show("table");
   if (first) say("");
+  // 跟阿禾打、剛開的一場（第一局、還沒出過牌）：開場那一句。發牌事件在第一次畫牌桌之前就到了，所以在這裡補講
+  if (first && conn?.solo && s.handNumber === 1 && s.phase === Phase.Draw && s.myScore === 0 && s.oppScore === 0 && s.stockCount === 26 && s.leadCard < 0) {
+    brain.newMatch(); dealNo++;
+    causeEv = { type: "NewHand", seat: s.leaderSeat, card: -1, value: 1, extra: 0 } as GameEvent;
+    ahe("matchStart", {}, 900);
+  }
   render(first);
 }
 
@@ -1479,9 +1487,18 @@ function matchTitle(iWon: boolean, margin: number, opp: string): string {
   if (!iWon) return `${opp}贏了這場`;
   return margin <= CLOSE_MARGIN ? "好險！贏了！" : margin >= BIG_MARGIN ? "今天手感很猛喔！" : "這桌你說了算！";
 }
-function matchQuip(iWon: boolean, margin: number): string {
-  if (iWon) return "好啦，這場算你厲害。";
-  return margin <= CLOSE_MARGIN ? "呼，差點被你追上。" : "這次換我贏啦！";
+// 結算單上阿禾的一句：整場結束（照分差和你開場說的話）／這局讓你逆轉／偶爾一句幹話
+function resultQuip(s: TableState, r: HandResult, matchOver: boolean, iWon: boolean, margin: number): string {
+  if (!conn?.solo) return "";
+  brain.level = fx.settings.talk;
+  const me = s.seat;
+  causeEv = null;
+  const log = (id: string, said: Said | null) => { if (said) aheLog.push({ id, text: said.text, cause: "result", me: r.scorer === me, extra: matchOver ? 1 : 0, value: margin, card: -1, hand: r.handNumber, deal: dealNo }); return said?.text ?? ""; };
+  if (matchOver) { matchEndedWinner = s.matchWinner; return log(iWon ? "matchMe" : "matchAhe", brain.say(iWon ? "matchMe" : "matchAhe", { n: margin })); }
+  const before = [s.myScore - (r.scorer === me ? r.points : 0), s.oppScore - (r.scorer === me ? 0 : r.points)];
+  if (r.scorer === me && before[0] <= before[1] && s.myScore > s.oppScore) return log("reversal", brain.say("reversal", {}));
+  if (Math.random() < 0.15) return log("nonsense", brain.say("nonsense", { aheAhead: s.oppScore > s.myScore, playerAhead: s.myScore > s.oppScore, aheLostLast: r.scorer === me }));
+  return "";
 }
 
 async function showResult(instant: boolean) {
@@ -1507,7 +1524,7 @@ async function showResult(instant: boolean) {
   title.className = ((matchOver ? iWon : good) ? "" : "lose") + ([...title.textContent].length > 8 ? " long" : "");
   // 阿禾的一句話：只有跟阿禾打、整場打完才講（朋友連線時對面是真人）
   const quip = $("resQuip");
-  const q = conn?.solo && matchOver ? matchQuip(iWon, margin) : "";
+  const q = resultQuip(s, r, matchOver, iWon, margin);
   quip.hidden = !q;
   quip.textContent = q ? `阿禾：「${q}」` : "";
   void iDecl;
@@ -1634,57 +1651,86 @@ const cardHtml = (id: number) => isRedCard(id) ? `<span class="red">${cardText(i
 // ---------------- 阿禾的一句話（只有跟阿禾打；朋友連線時對面是真人，不會冒出阿禾） ----------------
 // 一般贏墩大多只有動畫和音效；王吃、關鍵墩、連贏、快打成才比較會開口。
 // 小泡泡浮在阿禾旁邊，不擋操作；講完一句要隔一陣子，最近講過的不重複。
-let quipTimer = 0, lastQuipAt = -1e9;
-const quipSaidAt = new Map<string, number>();
+let quipTimer = 0, quipPri = 9, quipUntil = 0;
 const handOnce = new Set<string>();     // 這一局只講一次的（連贏、快打成）
 let oppStreak = 0;                      // 阿禾連續贏了幾墩
-function aheSay(text: string, o: { key?: boolean; chance?: number; delay?: number; once?: string } = {}) {
-  if (!conn?.solo) return;
-  const now = performance.now();
-  if (o.once && handOnce.has(o.once)) return;
-  if (!o.key && now - lastQuipAt < 6000) return;                     // 不要一直講（關鍵墩例外）
-  if (now - (quipSaidAt.get(text) ?? -1e9) < 45000) return;          // 同一句話短時間不重複
-  if (o.chance !== undefined && Math.random() >= o.chance) return;  // 一般事件：偶爾才講
-  lastQuipAt = now;
-  quipSaidAt.set(text, now);
-  if (o.once) handOnce.add(o.once);
+// 阿禾的嘴：台詞、條件、機率、冷卻、一場上限都在 ahe.ts；這裡只把「真的發生的事」交給它
+const brain = new AheBrain(Math.random, () => performance.now(), { get: k => store.get(k), set: (k, v) => store.set(k, v) });
+let matchEndedWinner = -1;              // 上一場誰贏（-1：還沒打完過）——「再來一場」時阿禾的反應
+const scoreFacts = (): Facts => st ? { aheAhead: st.oppScore > st.myScore, playerAhead: st.myScore > st.oppScore } : {};
+// 只有跟阿禾打才講（朋友連線時對面是真人）；同一時間只有一個泡泡，正在講重要的就不插嘴
+// 驗收用：每一句是被哪個事件觸發的（測試拿來比對台詞跟真的牌局一致）
+let causeEv: GameEvent | null = null;
+const aheLog: { id: string; text: string; cause: string; me: boolean; extra: number; value: number; card: number; hand: number; deal: number }[] = [];
+let dealNo = 0;                          // 第幾次發牌（重發也算）：驗收時用來算「一局講幾句」
+(globalThis as unknown as { __hbAhe?: typeof aheLog }).__hbAhe = aheLog;
+function ahe(id: string, f: Facts = {}, delay = 0): boolean {
+  if (!conn?.solo) return false;
+  brain.level = fx.settings.talk;
+  const said = brain.say(id, f);
+  if (!said) return false;
+  const c = causeEv;
+  aheLog.push({ id, text: said.text, cause: c?.type ?? "", me: !!c && c.seat === mySeat, extra: c?.extra ?? 0, value: c?.value ?? 0, card: c?.card ?? -1, hand: st?.handNumber ?? 0, deal: dealNo });
+  if (aheLog.length > 300) aheLog.shift();
+  showQuip(said, delay);
+  return true;
+}
+function showQuip(said: Said, delay: number) {
   setTimeout(() => {
     if (!conn?.solo) return;
+    const now = performance.now();
+    if (now < quipUntil && said.pri > quipPri) return;
     const q = $("quip");
-    q.innerHTML = `<span class="sr-only">阿禾：</span>${esc(text)}`;
+    q.innerHTML = `<span class="sr-only">阿禾：</span>${esc(said.text)}`;
     q.hidden = false;
-    if (fx.motionOn()) q.animate([{ opacity: 0, translate: "-6px 0", scale: "0.92" }, { opacity: 1, translate: "0 0", scale: "1" }], { duration: fx.ms(220), easing: "cubic-bezier(.2,.9,.3,1.2)" });
+    q.dataset.tone = String(said.tone);
+    textIn(q, said.fx);
+    emote($("oppArea").querySelector<HTMLElement>(".who"), $("oppStamp"), said.emo);
+    const dur = Math.min(2600, Math.max(1500, 1100 + [...said.text].length * 70)) * (fx.settings.fast ? 0.8 : 1);
+    quipPri = said.pri; quipUntil = now + dur;
     clearTimeout(quipTimer);
-    quipTimer = window.setTimeout(() => { q.hidden = true; }, fx.settings.fast ? 1900 : 2800);
-  }, fx.ms(o.delay ?? 0));
+    quipTimer = window.setTimeout(() => { q.hidden = true; quipPri = 9; }, dur);
+  }, fx.ms(delay));
 }
-function hideQuip() { clearTimeout(quipTimer); $("quip").hidden = true; }
+function hideQuip() { clearTimeout(quipTimer); $("quip").hidden = true; quipPri = 9; quipUntil = 0; }
 
 // 收一墩之後阿禾要不要講話：一墩最多一句，重要的先講
 function trickQuip(e: GameEvent, s: TableState, im: Impact) {
-  if (!conn?.solo || s.phase !== Phase.Play || s.declarer < 0) return;
+  if (!conn?.solo) return;
   const winnerMe = e.seat === s.seat;
+  const delay = 520;
+  const facts: Facts = { ...scoreFacts(), aheLostLast: winnerMe, lastTrickAhe: !winnerMe };
+  if (s.phase !== Phase.Play || s.declarer < 0) {
+    // 搶牌：一般贏墩偶爾講；很少很少會冒一句幹話
+    if (!ahe(winnerMe ? "trickMe" : "trickAhe", facts, delay) && Math.random() < 0.04) ahe("nonsense", facts, delay);
+    return;
+  }
+  const ruff = e.extra === 1;
+  if (ruff && winnerMe) brain.note("playerRuff");
   const iDecl = s.declarer === s.seat;
   const need = tricksNeeded(s.highestBid);
   const declBefore = iDecl ? s.myTricks : s.oppTricks;          // 狀態還沒更新：這墩之前
   const declAfter = declBefore + (e.seat === s.declarer ? 1 : 0);
   const defAfter = (iDecl ? s.oppTricks : s.myTricks) + (e.seat === s.declarer ? 0 : 1);
   const stillOpen = defAfter < 14 - need;                          // 防守方還沒把合約打倒
-  const delay = 520;
-  if (im.outcome === "set") { aheSay(winnerMe ? "好啦，這局算你厲害。" : "哎呀，差一點。", { key: true, delay }); return; }
-  if (im.outcome === "made") return;                               // 打成的大場面交給特效和結算單
-  if (im.kind === "pivot") { aheSay(winnerMe ? "喔？這樣也行！" : "好險，差點就被你翻了。", { key: true, delay }); return; }
-  if (e.extra === 1) { aheSay(winnerMe ? "哇，這樣也能搶！" : "嘿，沒想到吧！", { chance: 0.75, delay }); return; }
-  if (stillOpen && need - declAfter === 1) { aheSay(iDecl ? "再一墩就夠了。" : "就快了喔。", { once: "near", delay }); return; }
-  if (winnerMe && streak >= 3) { aheSay("欸，你今天手感不錯喔。", { once: "streakMe", delay }); return; }
-  if (!winnerMe && oppStreak >= 3) { aheSay("這幾墩我就不客氣了。", { once: "streakOpp", delay }); return; }
-  // 一般贏墩：大多不講。你跟在阿禾後面把這墩搶下來，才偶爾稱讚一句
-  if (winnerMe && s.leaderSeat !== s.seat) aheSay("欸，這張出得漂亮。", { chance: 0.25, delay });
-  else if (!winnerMe) aheSay("這墩我收下啦。", { chance: 0.2, delay });
+  const lastTrick = s.myTricks + s.oppTricks === 12;
+  if (im.outcome === "made" || im.outcome === "set") {
+    // 合約在這墩定案：還有墩數就講「達標／打不成了」（不提前結束）；最後一墩交給一局結束那一句
+    if (!lastTrick) ahe(im.outcome === "made" ? "reached" : "setLocked", { iDecl }, delay);
+    return;
+  }
+  if (im.kind === "pivot") { ahe(winnerMe ? "keyMe" : "keyAhe", facts, delay); return; }
+  if (ruff) { ahe(winnerMe ? "ruffMe" : "ruffAhe", facts, delay); return; }
+  if (stillOpen && need - declAfter === 1 && !handOnce.has("near")) { handOnce.add("near"); ahe("nearDecl", { iDecl }, delay); return; }
+  if (winnerMe && streak >= 3 && !handOnce.has("streakMe")) { handOnce.add("streakMe"); ahe("streakMe", { n: streak }, delay); return; }
+  if (!winnerMe && oppStreak >= 3 && !handOnce.has("streakOpp")) { handOnce.add("streakOpp"); ahe("streakAhe", { n: oppStreak }, delay); return; }
+  // 一般贏墩：大多不講
+  if (!ahe(winnerMe ? "trickMe" : "trickAhe", facts, delay) && Math.random() < 0.04) ahe("nonsense", facts, delay);
 }
 
 
 function onEvent(e: GameEvent) {
+  causeEv = e;
   const me = e.seat === mySeat;
   const side = me ? myAnchor() : oppAnchor();
   const who = esc(nameOf(e.seat));
@@ -1700,7 +1746,15 @@ function onEvent(e: GameEvent) {
       emo.clear();
       fx.popup(e.value > 0 ? `第 ${e.value} 局 · 發牌！` : "發牌！", centerAnchor(), { size: 28, color: INK, flags: ["pop"], hold: 600 });
       tick(`第 ${e.value} 局開始，${me ? "你" : esc(oppName())}先出`);
-      if (!me) aheSay("那我先來囉。", { chance: 0.5, delay: 1100 });
+      brain.newHand();
+      dealNo++;
+      if (e.value <= 1) {
+        // 新的一場：阿禾的記憶清空（教學裡說的開場態度留著）
+        const again = matchEndedWinner >= 0;
+        brain.newMatch();
+        ahe(again ? "rematch" : "matchStart", { aheLostLast: matchEndedWinner === mySeat }, 900);
+        matchEndedWinner = -1;
+      } else if (!(me ? ahe("nextHand", {}, 1100) : ahe("aheLeads", {}, 1100)) && Math.random() < 0.06) ahe("nonsense", scoreFacts(), 1400);
       break;
 
     case "CardPlayed":
@@ -1730,6 +1784,7 @@ function onEvent(e: GameEvent) {
     case "FaceUpTaken":
       takeFaceUp(e);
       sfx.faceUp(me);
+      if (rankOf(e.card) >= 12) ahe(me ? "faceUpMe" : "faceUpAhe", scoreFacts(), 600);
       if (rankOf(e.card) >= 11 || me)
         fx.popup(me ? `搶到 ${cardText(e.card)}！` : `${cardText(e.card)} 被${oppName()}拿走`, side,
           { size: me ? 28 : 22, color: me ? GOLD : MUTED, flags: me ? ["pop", "wave"] : ["pop"], delay: 420 });
@@ -1755,8 +1810,8 @@ function onEvent(e: GameEvent) {
       const raise = !!st && st.highestBid >= 0;
       const tier = bidTier(bidLevel(e.value));
       // 阿禾的反應：你叫到 4 線以上（要贏 10 墩以上）才問你是不是很有把握；阿禾蓋過你的叫牌才說要叫高一點
-      if (me && bidLevel(e.value) >= 4) aheSay("喔？你這麼有把握？", { key: true, delay: 700 });
-      else if (!me && raise && st!.highestBidder === st!.seat) aheSay("那我再叫高一點。", { chance: 0.6, delay: 500 });
+      if (me && (bidLevel(e.value) >= 4 || (raise && st!.highestBidder !== st!.seat))) ahe("bidHighMe", {}, 700);
+      else if (!me && raise && st!.highestBidder === st!.seat) ahe("bidRaiseAhe", {}, 500);
       emo.bid(e.value, raise);
       const tension = emo.pressure;
       const target = $(me ? "bidMeCard" : "bidOppCard");
@@ -1788,7 +1843,7 @@ function onEvent(e: GameEvent) {
       // 加倍：紅色衝擊、低頻敲擊、短暫局部震動；桌緣進入升溫狀態（×2 徽章蓋章）
       emo.double();
       setTimeout(() => { refreshAura(); auraUpgrade(1, document.querySelector("#bidContract .mult, #keyInfo .mult")); }, fx.ms(520));
-      if (!me) aheSay("那我可要加倍了。", { key: true, delay: 500 });
+      if (me) { brain.note("playerDouble"); ahe("doubleMe", {}, 500); } else ahe("doubleAhe", {}, 500);
       fx.popup("加倍！", side, { size: 50, color: "#F08A96", flags: ["pop", "shake"], hold: 900 });
       doubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
       fx.buzz([40, 30, 40]);
@@ -1798,7 +1853,7 @@ function onEvent(e: GameEvent) {
       // 再加倍：雙重衝擊波、金紅粒子、短促亮光、更重的音效；桌緣進入高壓狀態（×4 徽章蓋章）
       emo.redouble();
       setTimeout(() => { refreshAura(); auraUpgrade(2, document.querySelector("#bidContract .mult, #keyInfo .mult")); }, fx.ms(560));
-      if (me) aheSay("你還敢再加倍？行！", { key: true, delay: 600 });
+      ahe(me ? "redoubleMe" : "redoubleAhe", {}, 600);
       fx.popup("再加倍！！", side, { size: 54, color: GOLD, flags: ["pop", "shake"], hold: 1000 });
       redoubleFx($(me ? "bidMeCard" : "bidOppCard"), $("felt"));
       fx.buzz([50, 30, 50, 30, 90]);
@@ -1819,8 +1874,7 @@ function onEvent(e: GameEvent) {
         const t = bidStrain(e.value), first = nameOf(1 - e.seat);
         coach("contract", "合約成立", `${nameOf(e.seat)}當莊家，要贏 ${tricksNeeded(e.value)} 墩，${t === Strain.NoTrump ? "本局無王" : `${SUIT_SYMBOL[t]} 是王牌`}。第一墩由莊家的對手（${first}）先出。`);
       }
-      // 你當莊家：阿禾把壓力丟回給你；阿禾當莊家、由你先出時就不多話
-      if (me) aheSay("好，這局就看你了。", { key: true, delay: 1600 });
+      ahe(me ? "contractMe" : "contractAhe", {}, 1600);
       break;
     }
     case "GameOver": {
@@ -1830,6 +1884,13 @@ function onEvent(e: GameEvent) {
       const iDecl = e.seat === mySeat;
       const text = made ? (iDecl ? "打成！" : `${oppName()}打成`) : (iDecl ? `倒 ${e.extra - e.value} 墩` : "守住了！");
       fx.popup(text, centerAnchor(), { size: good ? 70 : 40, color: good ? GOLD : MUTED, flags: good ? ["pop", "wave"] : ["pop"], hold: 1500, delay: 650 });
+      {
+        // 阿禾對這一局的反應：誰當莊、打成沒、加倍是誰喊的、超／倒幾墩，全部照真的結果
+        const d = st?.doubled ?? 0;
+        const f: Facts = { doubled: d, byPlayer: !iDecl, under: Math.max(0, e.extra - e.value), over: Math.max(0, e.value - e.extra) };
+        if (!iDecl) brain.note("aheHand", made);
+        ahe(iDecl ? (made ? "madeMe" : "downMe") : (made ? "madeAhe" : "downAhe"), f, 1300);
+      }
       const r0 = riskOf(st?.highestBid ?? -1, st?.doubled ?? 0);
       if (good) {
         // 蓄力（桌緣往中間收）→ 停頓 → 爆發 → 收斂到結算單

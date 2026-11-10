@@ -21,6 +21,7 @@ export interface FxSettings {
   muted: boolean;         // 一鍵靜音
   coach: boolean;         // 對局中的新手提示（每個階段第一次出現一次）
   quality: Quality;       // 特效品質
+  talk: "full" | "lite" | "off";   // 阿禾吐槽：正常互動／精簡互動／關閉額外吐槽（規則、錯誤、結算照常顯示）
 }
 export const INTENSITY_LABELS = ["關閉", "簡化", "標準", "強"];
 const KEY = "hb-web-settings";
@@ -33,7 +34,7 @@ export const lowEnd = (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?
 export const settings: FxSettings = loadSettings();
 
 function loadSettings(): FxSettings {
-  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.15, muted: false, coach: true, quality: "auto" };
+  const def: FxSettings = { intensity: reduced ? 1 : 2, fast: false, shake: !reduced, particles: !reduced, vibrate: true, sfx: 0.8, music: 0.15, muted: false, coach: true, quality: "auto", talk: "full" };
   let s: FxSettings = def;
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
@@ -42,6 +43,7 @@ function loadSettings(): FxSettings {
   } catch { /* 用預設值 */ }
   if (![0, 1, 2, 3].includes(s.intensity)) s.intensity = def.intensity;
   if (!["auto", "lite", "standard", "full"].includes(s.quality)) s.quality = "auto";
+  if (!["full", "lite", "off"].includes(s.talk)) s.talk = "full";
   s.sfx = clamp01(Number(s.sfx)); s.music = clamp01(Number(s.music));
   return s;
 }

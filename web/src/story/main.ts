@@ -17,6 +17,7 @@ import {
 import { illegalReason, LEAD_ADVICE, followAdvice } from "../game/explain";
 import { Call, Strain, bidLevel, callText } from "../game/cards";
 import { doubleFx, redoubleFx } from "../client/feedback";
+import { emote, textIn } from "../client/ahefx";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const GOLD = "#F2C46A", BAD = "#FF8A8A", GOOD = "#7FD6A2", MUTED = "#AAB5CC", RED = "#FF9BA8";
@@ -538,7 +539,14 @@ function sayLine(ln: Line) {
   $("who").textContent = ln.who === "ahe" ? "阿禾" : "旁白";
   $("narrator").classList.toggle("narr", ln.who === "narr");
   logLine(ln);
+  const fresh = typedTarget !== ln.text;
   speak($("spoken"), ln.text, scheduleAuto);
+  // 新的一句：阿禾的表情跟著動一下；驚訝彈一下、吐槽放大小抖（平常的話只淡入）
+  if (fresh && ln.who === "ahe") {
+    const host = document.querySelector<HTMLElement>("#narrator .seller");
+    emote(host, host?.querySelector("img") ?? null, ln.emo ?? (ln.fx === "shout" ? "shock" : undefined));
+    if (ln.fx && ln.fx !== "fade") textIn($("spoken"), ln.fx);
+  }
 }
 
 function renderNarrator() {
