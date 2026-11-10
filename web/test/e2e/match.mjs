@@ -41,7 +41,12 @@ function player(code, name, token = null) {
     }
     fail("沒有回覆：" + JSON.stringify(o));
   };
-  p.game = o => p.cmd({ ...o, ver: p.ver, gid: p.gid });
+  // 牌局指令：成功之後等新的牌桌到了再往下（伺服器先回 ack、再送牌桌；真的網路上兩個會分開到，跟手機畫面一樣要等牌桌）
+  p.game = async o => {
+    const r = await p.cmd({ ...o, ver: p.ver, gid: p.gid });
+    if (r.t === "ack") for (let i = 0; i < 150 && p.stateVer < r.ver; i++) await sleep(20);
+    return r;
+  };
   return p;
 }
 

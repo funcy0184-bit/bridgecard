@@ -10,7 +10,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const errors = [];
 const shot = async (page, name) => { await page.screenshot({ path: `${SHOTS}/${name}.png` }); console.log("  📸", name); };
 
-const browser = await chromium.launch();
+// 測正式網址、而且這台機器要走代理才出得去：HB_PROXY=http://代理位址
+const browser = await chromium.launch(process.env.HB_PROXY ? { proxy: { server: process.env.HB_PROXY } } : {});
 async function phone(device, label) {
   const ctx = await browser.newContext({ ...devices[device] });
   const page = await ctx.newPage();
