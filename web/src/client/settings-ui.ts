@@ -151,7 +151,7 @@ export function renderSettings(box: HTMLElement) {
   reset.type = "button"; reset.className = "btn ghost small"; reset.textContent = "重設這支手機的進度";
   reset.addEventListener("click", () => {
     if (!confirm("要清掉這支手機上的教學進度、跟阿禾打到一半的那局，還有「第一次玩」的提示嗎？（設定會留著，朋友的牌桌不受影響）")) return;
-    for (const k of ["hb.story.v3", "hb.story.v2", "hb-solo-v1", "hb-story-offered", "hb-news-seen", COACH_KEY]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
+    for (const k of ["hb.story.v4", "hb.story.v3", "hb.story.v2", "hb-ahe-mem", "hb-solo-v1", "hb-story-offered", "hb-news-seen", COACH_KEY]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
     location.href = "/";
   });
   foot.append(ver, copy, reset);

@@ -152,15 +152,15 @@ function goHome(msg = "", err = false, toOnline = false) {
 
 // ---------------- 07 阿禾的故事（教學）入口 ----------------
 
-const STORY_KEY = "hb.story.v3";      // 跟 /story/ 用同一個進度鍵
+const STORY_KEY = "hb.story.v4";      // 跟 /story/ 用同一個進度鍵
 const OFFER_KEY = "hb-story-offered";
 function storyProgress(): { page: number; finished: boolean; answers: Record<string, unknown> } | null {
   try {
     const p = JSON.parse(store.get(STORY_KEY) ?? "null");
-    return p && p.v === 3 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished, answers: p.answers ?? {} } : null;
+    return p && p.v === 4 && Number.isInteger(p.page) ? { page: p.page, finished: !!p.finished, answers: p.answers ?? {} } : null;
   } catch { return null; }
 }
-const ACT_STEPS = [["grab", "grab2"], ["bid", "bid2"], ["follow", "ruff", "flipA", "flipB", "trumps", "nt"], ["last", "down"]];
+const ACT_STEPS = [["grab", "grab2"], ["bid", "bid2"], ["follow", "ruff", "flipA", "flipB", "trumps", "nt"], ["last", "dbl"]];
 const ACT_OF_PAGE = [1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4];
 function refreshStoryCard() {
   const p = storyProgress();

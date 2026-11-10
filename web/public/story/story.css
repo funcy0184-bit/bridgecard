@@ -368,3 +368,31 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .sbid .smore { display: flex; justify-content: center; }
 .auct.mini { font-size: 12px; text-align: center; opacity: .9; }
 .auct.mini span { margin: 0 2px; } .auct.mini i { margin: 0 4px; font-style: normal; opacity: .6; }
+
+/* ---------- 阿禾問你：A／B／C 選項（像在跟朋友回話，不像考卷） ---------- */
+.choices { width: 100%; display: flex; flex-direction: column; gap: 7px; }
+.s-choice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 9px 14px; border: 0; border-radius: 12px; cursor: pointer; text-align: left; text-decoration: none;
+  font: 500 15.5px/1.35 var(--display); color: #2B2118; background: rgba(255,250,235,.92);
+  box-shadow: inset 0 0 0 1.5px rgba(185,138,62,.75), 0 2px 0 rgba(0,0,0,.18); transition: transform .12s, background .15s; }
+.s-choice i { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 700 12px/1 var(--display); font-style: normal;
+  color: #F7E9CC; background: var(--wine); box-shadow: 0 0 0 1px var(--gold-hi); }
+.s-choice.info { background: rgba(240,231,210,.85); color: #4A4130; }
+.s-choice.info i { background: #8A7A5C; }
+.s-choice.s-go { color: #F7E9CC; background: var(--wine); box-shadow: inset 0 0 0 1px rgba(226,184,96,.85), inset 0 0 0 3px var(--wine), inset 0 0 0 3.7px rgba(226,184,96,.55), 0 3px 0 rgba(0,0,0,.4); }
+.s-choice.s-go i { color: var(--wine); background: var(--gold-pale); }
+.s-choice:active { transform: translateY(2px) scale(.985); }
+@media (hover: hover) and (pointer: fine) { .s-choice:hover { background: #FFF8E6; } .s-choice.s-go:hover { background: var(--wine-hi, #963443); } }
+/* 叫牌格：每一格下面寫要贏幾墩 */
+.sgrid button { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 44px; line-height: 1.1; }
+.sgrid button small { font: 500 10.5px/1.2 var(--body); color: #6A563E; letter-spacing: 0; }
+.sgrid button.sel small { color: #2A1B05; }
+.splate .big .x, .auct .x { margin-left: 6px; font-size: .6em; padding: 0 6px; border-radius: 3px; color: #F7E9CC; background: var(--wine); vertical-align: middle; }
+/* 手機：選項改成會換行的小籤，阿禾的問題和手牌都要看得到 */
+@media (max-width: 700px) {
+  .choices { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .s-choice { width: auto; flex: 1 1 auto; min-height: 38px; padding: 6px 12px 6px 8px; gap: 7px; font-size: 14.5px; border-radius: 10px; }
+  .s-choice i { width: 20px; height: 20px; font-size: 11px; }
+  .narrator[data-choosing="1"] .ntext { flex: 0 0 auto; min-height: 2.2em; }
+  .narrator[data-choosing="1"] #more { display: none; }
+  .narrator[data-choosing="1"] { max-height: 58%; }
+}

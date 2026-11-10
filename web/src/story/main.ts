@@ -11,31 +11,37 @@ import { PLAY_T, contact, flightMs, presentImpact, pullUp, slamFly } from "../cl
 import { burstAt, shower } from "../client/particles";
 import { renderSettings } from "../client/settings-ui";
 import {
-  ACTS, AHE, CONTRACT, LINES, ME, Outcome, STEPS, StepId, StepRun,
-  act, bidAllowed, bidMeaning, bidReaction, firstStepOfAct, needsReply, outcomeOf, replay, reply, settle, start, TALK, Line, trumpText, yourTurnToBid,
+  ACTS, AHE, CONTRACT, Choice, Ctx, DOUBLE_LINES, LINES, MAX_BID_LEVEL, ME, Outcome, REDEAL_LINES, STEPS, StepId, StepRun,
+  act, aheDoubled, answer, bidAllowed, bidMeaning, bidReaction, firstStepOfAct, needsReply, outcomeOf, replay, reply, settle, start, TALK, Line, trumpText, yourTurnToBid,
 } from "./script";
 import { illegalReason, LEAD_ADVICE, followAdvice } from "../game/explain";
-import { Call, Strain, bidLevel } from "../game/cards";
+import { Call, Strain, bidLevel, callText } from "../game/cards";
+import { doubleFx, redoubleFx } from "../client/feedback";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const GOLD = "#F2C46A", BAD = "#FF8A8A", GOOD = "#7FD6A2", MUTED = "#AAB5CC", RED = "#FF9BA8";
 
 // ---------------- 進度（新版儲存鍵：舊的九頁故事進度不會把你帶到錯的地方） ----------------
 
-const KEY = "hb.story.v3";
+const KEY = "hb.story.v4";
 interface Progress {
-  v: 3;
+  v: 4;
   page: number;
   answers: Partial<Record<StepId, number[]>>;
   seen: Partial<Record<StepId, Outcome[]>>;
+  picks: Record<string, string>;        // 你一路的選擇（開場態度、想不想搶、怎麼叫……）：阿禾之後會偶爾提起
   finished: boolean;
 }
 
 function loadProgress(): Progress {
-  const p: Progress = { v: 3, page: 0, answers: {}, seen: {}, finished: false };
+  const p: Progress = { v: 4, page: 0, answers: {}, seen: {}, picks: {}, finished: false };
   try {
+    // 舊版（v3）只沿用「四幕都打完了」：牌局內容改過，舊的出牌紀錄不能重播
+    const old = JSON.parse(localStorage.getItem("hb.story.v3") ?? "null");
+    if (old?.finished) p.finished = true;
     const s = JSON.parse(localStorage.getItem(KEY) ?? "null");
-    if (!s || s.v !== 3) return p;
+    if (!s || s.v !== 4) return p;
+    if (s.picks && typeof s.picks === "object") for (const [k, v] of Object.entries(s.picks)) if (typeof v === "string") p.picks[k] = v;
     if (Number.isInteger(s.page) && STEPS[s.page]) p.page = s.page;
     for (const st of STEPS) {
       const a = s.answers?.[st.id];
@@ -49,6 +55,17 @@ function loadProgress(): Progress {
 }
 const progress = loadProgress();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch { /* 無痕模式：這次看完就不記了 */ } }
+function rememberAttitude(a: string) {
+  try { const m = JSON.parse(localStorage.getItem("hb-ahe-mem") ?? "{}") ?? {}; m.attitude = a; localStorage.setItem("hb-ahe-mem", JSON.stringify(m)); } catch { /* 無痕模式 */ }
+}
+// 第一幕結尾的幹話彩蛋：少量機率（?egg=1 一定出、?egg=0 一定不出，測試用）
+const EGG_PARAM = new URLSearchParams(location.search).get("egg");
+const rollEgg = () => EGG_PARAM === "1" ? true : EGG_PARAM === "0" ? false : Math.random() < 0.3;
+let egg = false;
+const ctx = (): Ctx => {
+  const b = progress.answers.bid?.[0];
+  return { picks: progress.picks, egg, bidCall: b !== undefined && b >= 0 ? b : undefined };
+};
 
 // ---------------- 目前這一步 ----------------
 
@@ -71,9 +88,12 @@ function clearStage() {
 }
 
 // 對話：intro（旁白＋阿禾一句一句帶進來）→ prompt（輪到你）→ outro（阿禾一句一句說明）→ done
-type Mode = "intro" | "prompt" | "outro" | "done";
+type Mode = "intro" | "prompt" | "aside" | "outro" | "done";
 let mode: Mode = "prompt";
 let lines: Line[] = [];
+let askLine: Line = { who: "ahe", text: "" };      // 輪到你時阿禾問的那一句（可能帶選項）
+let afterAside: (() => void) | null = null;          // 插話講完要做的事（例如加倍後選了「再加倍」）
+const answered = new WeakSet<Line>();
 let li = 0;
 let autoTimer = 0;
 let talkLog: Line[] = [];
@@ -94,15 +114,19 @@ function goto(page: number, scroll = true, skipIntro = false) {
   fresh.clear();
   talkLog = [];
   clearTimeout(autoTimer);
+  afterAside = null;
+  egg = st.id === "grab2" && rollEgg();
   const o = outcomeOf(run);
+  const intro = TALK[st.id].intro(ctx());
+  askLine = intro.at(-1)!;
   if (run.done && o) {
     // 已經打過：直接看結果（重新整理也回到這裡）
-    lines = TALK[st.id].outro(o, run); li = lines.length - 1; mode = "done";
+    lines = TALK[st.id].outro(o, run, ctx()); li = lines.length - 1; mode = "done";
     talkLog = lines.slice();
   } else if (skipIntro) {
-    lines = [TALK[st.id].intro.at(-1)!]; li = 0; mode = "prompt";
+    lines = [askLine]; li = 0; mode = "prompt";
   } else {
-    lines = TALK[st.id].intro; li = 0; mode = lines.length > 1 ? "intro" : "prompt";
+    lines = intro; li = 0; mode = lines.length > 1 ? "intro" : "prompt";
   }
   if (st.act !== shownAct && !run.done && !skipIntro) actCard(st.act);
   shownAct = st.act;
@@ -133,7 +157,7 @@ function record() {
   const id = step().id;
   progress.answers[id] = run.actions.slice();
   if (o) progress.seen[id] = [...new Set([...(progress.seen[id] ?? []), o])];
-  if (id === "down") progress.finished = true;
+  if (id === "dbl") progress.finished = true;
   save();
 }
 
@@ -218,12 +242,12 @@ function renderTrickBoard(v: TableState) {
   board.appendChild(figure(`阿禾 · ${aheLeads ? "①先出" : "②後出"}`, slot("slotOpp", aheCard, { won: won === AHE, empty: aheLeads ? "" : "② 阿禾" })));
   board.appendChild(figure(`你 · ${aheLeads ? "②後出" : "①先出"}`, slot("slotMe", myCard, { won: won === ME, empty: aheLeads ? "② 換你" : "① 你先出" })));
 
-  if (st.id === "last" || st.id === "down") {
+  if (st.id === "last" || st.id === "dbl") {
     const need = tricksNeeded(v.highestBid);
     const tally = document.createElement("div");
     tally.className = "tally";
     tally.id = "tallyBox";
-    tally.innerHTML = `<span>已贏 ／ 要贏（墩）</span><strong id="tally">${v.myTricks} ／ ${need}</strong><small>阿禾 ${v.oppTricks} 墩</small>` +
+    tally.innerHTML = `<span>已贏 ／ 要贏（墩）${v.doubled ? " · 被加倍" : ""}</span><strong id="tally">${v.myTricks} ／ ${need}</strong><small>阿禾 ${v.oppTricks} 墩</small>` +
       (run.done && v.result ? `<em class="pts">${v.result.made ? "這局" : "阿禾"} +${v.result.points} 分</em>` : "");
     board.appendChild(tally);
   }
@@ -232,21 +256,24 @@ function renderTrickBoard(v: TableState) {
 function renderBidBoard(v: TableState) {
   const board = $("sBoard");
   board.replaceChildren();
-  const calls = v.auctionCalls.map((c, i) => `<span>${v.auctionSeats[i] === ME ? "你" : "阿禾"} <b class="${c >= 0 && isRedBid(c) ? "red" : ""}">${c >= 0 ? bidText(c) : "Pass"}</b></span>`);
-  if (yourTurnToBid(run) && !busy) {
-    // 叫牌格（1～3 線）：還在競叫中；送出前先解釋
+  const callHtml = (c: number) => c >= 0 ? `<b class="${isRedBid(c) ? "red" : ""}">${bidText(c)}</b>` : c === Call.Pass ? "<b>Pass</b>" : `<b class="x">${callText(c)}</b>`;
+  const calls = v.auctionCalls.map((c, i) => `<span>${v.auctionSeats[i] === ME ? "你" : "阿禾"} ${callHtml(c)}</span>`);
+  if (yourTurnToBid(run) && !busy && !aheDoubled(run)) {
+    // 叫牌格：每一格寫著要贏幾墩；還在競叫中；送出前先解釋
     const box = document.createElement("div");
     box.className = "sbid";
     if (calls.length) { const a = document.createElement("div"); a.className = "auct mini"; a.innerHTML = calls.join("<i>→</i>") + "<i>→</i><span class=\"wait\">你…</span>"; box.appendChild(a); }
     const grid = document.createElement("div");
     grid.className = "sgrid";
-    for (let i = 0; i < 15; i++) {
+    const maxLv = step().id === "bid2" ? 3 : MAX_BID_LEVEL;
+    for (let i = 0; i < maxLv * 5; i++) {
       const b = document.createElement("button");
       b.type = "button";
-      b.textContent = bidText(i);
+      b.innerHTML = `${bidText(i)}<small>${tricksNeeded(i)} 墩</small>`;
+      b.setAttribute("aria-label", `${bidText(i)}，要贏 ${tricksNeeded(i)} 墩`);
       b.dataset.bid = String(i);
       if (isRedBid(i)) b.classList.add("red");
-      if (i === CONTRACT && run.actions.length === 0) b.classList.add("goal");
+      if (i === CONTRACT && step().id === "bid2" && run.actions.length === 0) b.classList.add("goal");
       if (i === selBid) b.classList.add("sel");
       b.disabled = v.highestBid >= 0 && i <= v.highestBid;          // 一定要比前面叫的高
       grid.appendChild(b);
@@ -263,8 +290,7 @@ function renderBidBoard(v: TableState) {
     call.hidden = !(selBid !== NO_BID && bidAllowed(run, selBid));
     const small = document.createElement("p");
     small.className = "smore";
-    const passOk = bidAllowed(run, Call.Pass);
-    if (passOk) {
+    if (bidAllowed(run, Call.Pass)) {
       const pass = document.createElement("button");
       pass.type = "button"; pass.className = "sgridpass" + (selBid === Call.Pass ? " sel" : ""); pass.dataset.bid = String(Call.Pass); pass.textContent = "不叫 Pass";
       small.appendChild(pass);
@@ -273,7 +299,7 @@ function renderBidBoard(v: TableState) {
     board.appendChild(box);
     return;
   }
-  // 等阿禾／合約已確定：叫牌紀錄＋合約
+  // 等阿禾／被加倍了／合約已確定：叫牌紀錄＋合約
   const plate = document.createElement("div");
   plate.className = "splate";
   const list = calls.slice();
@@ -282,12 +308,13 @@ function renderBidBoard(v: TableState) {
   if (run.done && v.declarer >= 0) {
     const need = tricksNeeded(v.highestBid);
     const iDecl = v.declarer === ME;
+    const dbl = v.doubled ? `<span class="x">${v.doubled >= 2 ? "再加倍 ×4" : "加倍 ×2"}</span>` : "";
     plate.innerHTML +=
-      `<div class="big ${isRedBid(v.highestBid) ? "red" : ""}">${bidText(v.highestBid)}</div>` +
+      `<div class="big ${isRedBid(v.highestBid) ? "red" : ""}">${bidText(v.highestBid)}${dbl}</div>` +
       `<div class="who">合約確定 · ${iDecl ? "你" : "阿禾"}是莊家 · ${trumpText(v.highestBid)}</div>` +
       `<div class="goal" id="goal">${iDecl ? "你" : "阿禾"}要贏 ${need} 墩｜已贏 ${iDecl ? v.myTricks : v.oppTricks} 墩</div>` +
       `<div class="lead">由${v.leaderSeat === AHE ? "阿禾" : "你"}先出（防守方先出）</div>`;
-  } else if (!run.done) plate.innerHTML += `<div class="who">還在競叫中</div>`;
+  } else if (!run.done) plate.innerHTML += `<div class="who">${aheDoubled(run) ? `你叫 ${bidText(v.highestBid)}，阿禾加倍了 · 還在競叫中` : "還在競叫中"}</div>`;
   board.appendChild(plate);
 }
 
@@ -302,7 +329,7 @@ function renderStat(v: TableState) {
 function renderHand(v: TableState) {
   const st = step(), box = $("sHand");
   const legal = new Set(v.legal);
-  const canPlay = st.kind === "play" && !run.trick && !run.done && !busy && mode !== "intro" && v.legal.length > 0;
+  const canPlay = st.kind === "play" && !(run.trick && run.trick.follow < 0 && run.trick.leader === ME) && !(run.trick && run.trick.follow >= 0) && !run.done && !busy && mode === "prompt" && v.legal.length > 0;
   box.classList.toggle("locked", !canPlay);
   box.replaceChildren(...v.hand.map(id => {
     const el = fx.cardEl(id);
@@ -383,41 +410,125 @@ function scheduleAuto() {
   clearTimeout(autoTimer);
 }
 void readTime;
+// 這一句有沒有還沒回答的選項（開場、搶不搶、叫牌計畫……要先選；幹話彩蛋可以略過）
+const mustChoose = (ln: Line | undefined) => !!ln?.choices && !answered.has(ln) && ln.ask !== "egg";
 function advance() {
   clearTimeout(autoTimer);
   if (typing) { finishTyping(); return; }
   if (mode === "intro") {
+    if (mustChoose(lines[li])) return;                  // 先選一個
     li++;
-    if (li >= lines.length - 1) { li = lines.length - 1; mode = "prompt"; }
+    if (li >= lines.length - 1) { li = lines.length - 1; mode = "prompt"; askLine = lines[li]; }
+  } else if (mode === "aside") {
+    li++;
+    if (li >= lines.length) { endAside(); return; }
   } else if (mode === "outro") {
+    if (mustChoose(lines[li])) return;
     li++;
-    if (li >= lines.length) { li = lines.length - 1; mode = "done"; }
+    if (li >= lines.length || (li === lines.length - 1 && lines[li].choices)) { li = Math.min(li, lines.length - 1); mode = "done"; }   // 最後一句帶選項：直接看結果＋選項
   } else return;
   sfx.type();
+  if (mode === "prompt") renderTable(); // 輪到你了：能出的牌亮起來
   renderNarrator();
   if (mode === "prompt" || mode === "done") revealNarrator();
 }
-// 點牌桌時阿禾還在講：直接跳到輪到你
+// 插話講完：回到輪到你（或做插話前說好的事，例如送出再加倍）
+function endAside() {
+  mode = "prompt";
+  lines = [askLine]; li = 0;
+  const then = afterAside; afterAside = null;
+  render();
+  revealNarrator();
+  then?.();
+}
+// 點牌桌時阿禾還在講：直接跳到輪到你（還沒選的問題就先不選）
 function skipToPrompt() {
+  if (mode === "aside") { finishTyping(); endAside(); return; }
   if (mode !== "intro") return;
   clearTimeout(autoTimer);
   finishTyping();
   li = lines.length - 1;
   mode = "prompt";
+  askLine = lines[li];
+  renderTable();
   renderNarrator();
 }
 function skipTalk() {
   clearTimeout(autoTimer);
   finishTyping();
-  if (mode === "intro") skipToPrompt();
+  if (mode === "intro" || mode === "aside") skipToPrompt();
   else if (mode === "outro") { li = lines.length - 1; mode = "done"; renderNarrator(); }
 }
 function startOutro() {
   const o = outcomeOf(run);
   if (!o) { render(); return; }
-  lines = TALK[step().id].outro(o, run); li = 0; mode = "outro";
+  lines = TALK[step().id].outro(o, run, ctx()); li = 0; mode = "outro";
   render();
 }
+// 第四幕兩墩：第一墩打完，阿禾講兩句再換你
+function startMid() {
+  const mid = TALK[step().id].mid;
+  if (!mid) { mode = "prompt"; render(); return; }
+  lines = mid(run, ctx()); li = 0; mode = "intro";
+  askLine = lines.at(-1)!;
+  if (lines.length === 1) mode = "prompt";
+  render();
+  revealNarrator();
+}
+// 一段插話（不動牌局）：講完回到原本的問題
+function aside(said: Line[], then: (() => void) | null = null) {
+  if (!said.length) { then?.(); return; }
+  lines = said; li = 0; mode = "aside"; afterAside = then;
+  render();
+  revealNarrator();
+}
+
+// 選了一個選項：記下來 → 阿禾回應（插話）→ 選牌／選叫牌／送出加倍回應／開練習局
+function choose(ln: Line, ch: Choice) {
+  if (busy) return;
+  finishTyping();
+  const ask = ln.ask!;
+  progress.picks[ask] = ch.key; save();
+  if (ask === "attitude") rememberAttitude(ch.key);
+  sfx.select(); fx.buzz(8);
+  if (ch.do === "solo") { location.href = "/?solo=new&coach=1"; return; }
+  if (ch.do === "chapters") { openChapters(); return; }
+  const said = answer(ask, ch.key, run, ctx());
+  if (mode === "prompt") {
+    if (ch.card !== undefined) {
+      // 幫你把這張牌選起來（之後一樣按「確認出牌」）；不能出的就說為什麼
+      const el = document.querySelector<HTMLElement>(`#sHand .card[data-id="${ch.card}"]`);
+      if (el) onCardTap(ch.card, el, said);
+      return;
+    }
+    if (ch.call !== undefined) selBid = ch.call;
+    if (ch.do === "redouble" || ch.do === "play") { const call = ch.do === "redouble" ? Call.Redouble : Call.Pass; aside(said, () => { selBid = call; void confirmBid(); }); return; }
+    aside(said);
+    return;
+  }
+  // 對話中的問題：把回應插在這句後面，接著往下講
+  answered.add(ln);
+  const more: Line[] = [...said];
+  if (ch.info && ln.choices) {
+    // 想多聽一點（例如「你是不是偷放水？」）：講完再問一次，剩下的選項
+    const again: Line = { ...ln, choices: ln.choices.filter(c => !c.info) };
+    more.push(again);
+  }
+  lines.splice(li + 1, 0, ...more);
+  if (mode === "done") mode = "outro";
+  li++;
+  if (mode === "intro" && li >= lines.length - 1) { li = lines.length - 1; mode = "prompt"; askLine = lines[li]; }
+  else if (mode === "outro" && (li >= lines.length || (li === lines.length - 1 && lines[li].choices))) { li = Math.min(li, lines.length - 1); mode = "done"; }
+  if (ask === "plan" && ch.call !== undefined) selBid = ch.call;
+  renderTable();
+  renderNarrator();
+  revealNarrator();
+}
+function openChapters() {
+  if (narrow()) { document.body.classList.add("show-chapters"); fx.slideIn($("contentsBox"), "up"); }
+  else $("contentsBox").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function logLine(ln: Line) {
   const last = talkLog.at(-1);
   if (!last || last.text !== ln.text) talkLog.push(ln);
@@ -433,16 +544,17 @@ function sayLine(ln: Line) {
 function renderNarrator() {
   const st = step(), L = LINES[st.id];
   const o = outcomeOf(run);
-  const spoken = $("spoken"), more = $("more"), fb = $("feedback");
+  const more = $("more"), fb = $("feedback");
   $("narrator").dataset.mode = mode;
   clearTimeout(autoTimer);
-  if (mode === "intro" || mode === "outro") {
+  if (mode === "intro" || mode === "outro" || mode === "aside") {
     sayLine(lines[li]);
-    more.textContent = mode === "intro" ? "點一下繼續 ▸（點牌桌可以直接開始）" : "點一下繼續 ▸";
-    more.className = "tapnext";
+    const choosing = mustChoose(lines[li]);
+    more.textContent = choosing ? "選一個回他 ▾" : mode === "intro" ? "點一下繼續 ▸（點牌桌可以直接開始）" : "點一下繼續 ▸";
+    more.className = choosing ? "hint" : "tapnext";
     fb.className = ""; fb.textContent = "";
   } else if (mode === "done" && run.done && o) {
-    sayLine(lines[li] ?? { who: "ahe", text: L.reply(o) });
+    sayLine(lines[li] ?? { who: "ahe", text: "" });
     more.textContent = "";
     more.className = "more";
     fb.className = "ok";
@@ -454,15 +566,16 @@ function renderNarrator() {
       fb.appendChild(t);
     }
   } else if (retryLine) {
-    sayLine({ who: "ahe", text: retryLine });
+    sayLine({ who: "ahe", text: retryLine, emo: "shock", fx: "pop" });
     more.textContent = "換另一張試試。";
     more.className = "hint";
     fb.className = "retry";
     fb.textContent = illegalReason(run.game.hands[ME], run.game.leadCard, selCard) ?? "";
   } else {
-    const second = st.id === "bid2" && run.actions.length === 1;      // 情況 B：阿禾叫 2♠ 之後
-    sayLine({ who: "ahe", text: second ? L.ask2! : L.ask });
-    more.textContent = second ? L.hint2! : L.hint;
+    // 輪到你：阿禾問的那一句（可能帶選項）＋一行操作提示
+    sayLine(askLine);
+    const second = (st.id === "bid2" && run.actions.length === 1) || aheDoubled(run) || (st.kind === "play" && run.history.length > 0);
+    more.textContent = second && L.hint2 ? L.hint2 : L.hint;
     more.className = "hint";
     if (st.kind === "bid" && selBid !== NO_BID) {
       // 你點了哪個叫牌，阿禾就照那個叫牌回你；不允許的再補一句
@@ -485,7 +598,6 @@ function renderNarrator() {
       fb.textContent = g.leadCard < 0 ? LEAD_ADVICE : followAdvice(g.hands[ME], g.leadCard, trump, g.phase === Phase.Draw);
     } else { fb.className = ""; fb.textContent = ""; }
   }
-  void spoken;
   renderControls(o);
 }
 
@@ -499,14 +611,39 @@ function btn(text: string, cls: string, onClick: () => void, arrow = false) {
   return b;
 }
 
+// 選項按鈕：A／B／C（「來啊，打一場！」是連到練習局的連結）
+function choiceButtons(ln: Line): HTMLElement[] {
+  return (ln.choices ?? []).map((ch, i) => {
+    const letter = "ABC"[i] ?? "";
+    if (ch.do === "solo") {
+      const a = document.createElement("a");
+      a.className = "s-choice s-go"; a.id = "toSolo"; a.href = "/?solo=new&coach=1";
+      a.innerHTML = `<i>${letter}</i>${ch.label}`;
+      a.addEventListener("click", () => { progress.picks[ln.ask!] = ch.key; save(); });
+      return a;
+    }
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "s-choice" + (ch.info ? " info" : "");
+    b.dataset.choice = ch.key;
+    b.innerHTML = `<i>${letter}</i>`;
+    b.append(document.createTextNode(ch.label));
+    b.addEventListener("click", ev => { ev.stopPropagation(); choose(ln, ch); });
+    return b;
+  });
+}
+
 function renderControls(o: Outcome | null) {
   const box = $("controls"), st = step(), L = LINES[st.id];
   box.replaceChildren();
-  if (mode === "intro" || mode === "outro") {
-    const cta = lines[li]?.cta;
-    if (cta) box.appendChild(btn(cta, "s-emph", () => { finishTyping(); advance(); }));      // 例如開場的「好啊，來吧！」
-    box.appendChild(btn(mode === "intro" ? "跳過，直接開始" : "跳過對話", "s-minor", skipTalk));
-  } else if (!run.done && st.kind === "play" && selCard >= 0 && !busy && !run.trick) {
+  const cur = mode === "prompt" ? askLine : lines[li];
+  // 輪到你、已經選好一張能出的牌：選項先收起來，讓「確認出牌」看得到
+  const showChoices = !!cur?.choices && !busy && (mode === "prompt" ? !run.done && (selCard < 0 || !!retryLine) : !answered.has(cur));
+  if (showChoices) { const g = document.createElement("div"); g.className = "choices"; g.append(...choiceButtons(cur)); box.appendChild(g); }
+  $("narrator").dataset.choosing = showChoices ? "1" : "";
+  if (mode === "intro" || mode === "outro" || mode === "aside") {
+    // 阿禾正在問你：回答就會往下，不另外放「跳過」（短螢幕放不下，也避免跳過問題）
+    if (!showChoices) box.appendChild(btn(mode === "intro" ? "跳過，直接開始" : "跳過對話", "s-minor", skipTalk));
+  } else if (!run.done && st.kind === "play" && selCard >= 0 && !busy && !(run.trick && run.trick.follow >= 0) && !(run.trick && run.trick.leader === ME)) {
     // 選牌 → 確認出牌（跟正式牌桌一樣）：送出前可以再點一下收回
     const legalSel = !illegalReason(run.game.hands[ME], run.game.leadCard < 0 ? null : run.game.leadCard, selCard);
     const b = btn(`確認出牌 ${cardText(selCard)}`, "s-emph", () => void playSelected());
@@ -514,16 +651,8 @@ function renderControls(o: Outcome | null) {
     b.disabled = !legalSel;
     box.appendChild(b);
   } else if (run.done && o) {
-    if (st.id === "down") {
-      const a = document.createElement("a");
-      a.className = "s-emph";
-      a.href = "/?solo=new&coach=1";        // 開一局有對局提示的練習
-      a.id = "toSolo";
-      a.innerHTML = '開一場有提示的練習局 <span aria-hidden="true">→</span>';
-      box.append(a, btn(L.retry, "s-minor", restartStory));
-    } else {
-      box.append(btn(L.next!, "s-emph", () => goto(progress.page + 1), true), btn(L.retry, "s-minor", retryStep));
-    }
+    if (L.next) box.append(btn(L.next, "s-emph", () => goto(progress.page + 1), true));
+    box.append(btn(L.retry, "s-minor", retryStep));
   }
   if (progress.page > 0) box.appendChild(btn("上一頁", "s-back", () => goto(progress.page - 1)));
 }
@@ -555,17 +684,20 @@ function revealNarrator() {
 const anchor = (who: number) => $(who === ME ? "aMe" : "aOpp");
 
 // 點一張牌：選起來（再點一下收回、點別張換過去）；按「確認出牌」才真的出
-function onCardTap(id: number, el: HTMLElement) {
-  if (mode === "intro") { skipToPrompt(); fx.bounce(el); return; }
-  if (busy || step().kind !== "play" || run.trick || run.done) return;
+// 點一張牌：選起來（再點一下收回、點別張換過去）；按「確認出牌」才真的出
+// said：從選項來的（阿禾已經準備好要講的話，例如「欸欸欸！！你還有紅心啊！」）
+function onCardTap(id: number, el: HTMLElement, said: Line[] = []) {
+  if (mode === "intro" || mode === "aside") { skipToPrompt(); fx.bounce(el); if (!said.length) return; }
+  if (busy || step().kind !== "play" || run.done || (run.trick && (run.trick.follow >= 0 || run.trick.leader === ME))) return;
   retryLine = "";
-  if (selCard === id) { selCard = -1; sfx.hover(); renderHand(view()); renderNarrator(); return; }
+  if (selCard === id && !said.length) { selCard = -1; sfx.hover(); renderHand(view()); renderNarrator(); return; }
   selCard = id;
   const why = illegalReason(run.game.hands[ME], run.game.leadCard < 0 ? null : run.game.leadCard, id);
   if (why) {
-    // 不能出的牌：可以選起來看，但說清楚為什麼不能出
+    // 不能出的牌：可以選起來看，但說清楚為什麼不能出（阿禾照真的領出花色講）
     fx.deny(el); sfx.deny(); fx.buzz(40);
-    retryLine = LINES[step().id].illegal ?? "「這張還不能出喔。」";
+    const ls = (said.length ? said.map(l => l.text) : LINES[step().id].illegal?.(run)) ?? ["「這張還不能出喔。」"];
+    retryLine = ls.join("");
     triedIllegal = true;
   } else { sfx.select(); fx.buzz(8); }
   renderHand(view());
@@ -574,7 +706,7 @@ function onCardTap(id: number, el: HTMLElement) {
 
 async function playSelected() {
   const id = selCard;
-  if (busy || id < 0 || step().kind !== "play" || run.trick || run.done) return;
+  if (busy || id < 0 || step().kind !== "play" || run.done || (run.trick && (run.trick.follow >= 0 || run.trick.leader === ME))) return;
   const el = document.querySelector<HTMLElement>(`#sHand .card[data-id="${id}"]`);
   const r = act(run, id);
   if (!r.ok || !el) return;
@@ -629,11 +761,38 @@ async function playSelected() {
   const evs = settle(run);
   await animateSettle(evs, before);
   if (my !== epoch) return;
+  if (!run.done) {
+    // 兩墩的段落：還有下一墩。阿禾先出的話，他的牌飛上桌
+    const wonAt = evs.findIndex(e => e.type === "TrickWon");
+    const led = evs.slice(wonAt + 1).find(e => e.type === "CardPlayed" && e.seat === AHE);
+    renderTable();
+    if (led) await aheLeadFly(led.card);
+    if (my !== epoch) return;
+    busy = false;
+    startMid();
+    return;
+  }
   record();
   busy = false;
   startOutro();
   if (justFinished) { const t = document.getElementById("tally"); if (t) fx.punch(t, 0.3, 420); }
   revealNarrator();
+}
+
+async function aheLeadFly(card: number) {
+  const fan = $("sOppFan");
+  const src = (fan.lastElementChild as HTMLElement | null) ?? fan;
+  const f = src.getBoundingClientRect();
+  const slotEl = $("slotOpp");
+  const keep = slotEl.firstElementChild as HTMLElement | null;
+  if (keep) keep.style.visibility = "hidden";
+  const back = fx.backEl();
+  sfx.slap(1, (fx.motionOn() ? fx.ms(PLAY_T.pull) + flightMs(PLAY_T.fly + 40) : 0) / 1000);
+  await slamFly(back, f, slotEl.getBoundingClientRect(), { dur: PLAY_T.fly + 40, lift: 24, flipAt: () => fx.flipTo(back, card) });
+  back.remove();
+  if (keep) keep.style.visibility = "";
+  const opp = slotEl.firstElementChild;
+  if (opp) contact(opp, $("stable"), 1);
 }
 
 async function animateSettle(evs: GameEvent[], before: TableState) {
@@ -705,8 +864,8 @@ async function animateSettle(evs: GameEvent[], before: TableState) {
 // ---------------- 叫牌 ----------------
 
 function selectBid(i: number) {
-  if (mode === "intro") { skipToPrompt(); return; }
-  if (busy || run.done || !yourTurnToBid(run)) return;
+  if (mode === "intro" || mode === "aside") { skipToPrompt(); return; }
+  if (busy || run.done || !yourTurnToBid(run) || aheDoubled(run)) return;
   selBid = selBid === i ? NO_BID : i;          // 再點一下收回
   sfx.select();
   fx.buzz(8);
@@ -727,26 +886,51 @@ async function confirmBid() {
   fx.buzz(15);
   renderTable();
   renderNarrator();
-  // 叫牌籌碼：從你這邊上浮，落到叫牌紀錄上你那一格（跟正式牌桌同一套演出）；Pass 只蓋個章
+  // 叫牌籌碼：從你這邊上浮，落到叫牌紀錄上你那一格（跟正式牌桌同一套演出）；Pass 只蓋個章；再加倍是重擊
   const spans = document.querySelectorAll("#sBoard .splate .auct span");
-  const mine = spans[run.actions.length === 1 ? 0 : spans.length - 2] ?? null;
+  const mine = spans[spans.length - 2] ?? spans[0] ?? null;
   if (call >= 0 && mine) await bidChip(bidText(call), isRedBid(call), bidTier(bidLevel(call)), $("aMe").getBoundingClientRect(), mine, $("stable"), 0.15);
+  else if (call === Call.Redouble) { fx.popup("再加倍！！", $("aMe"), { size: 46, color: GOLD, flags: ["pop", "shake"], hold: 900 }); redoubleFx(mine ?? $("aMe"), $("stable")); fx.buzz([50, 30, 50]); }
   else { fx.popup("Pass", $("aMe"), { size: 28, color: MUTED }); sfx.pass(); }
   if (my !== epoch) return;
   await fx.wait(fx.ms(650));
   if (my !== epoch) return;
-  // 阿禾照劇本回應（Pass 或往上叫）
+  // 阿禾照劇本回應（Pass、往上叫，或加倍）
   const evs = settle(run);
   const aheBid = evs.find(e => e.type === "BidMade" && e.seat === AHE);
+  const aheDbl = evs.find(e => e.type === "Doubled" && e.seat === AHE);
   if (aheBid) { fx.popup(bidText(aheBid.value), $("aOpp"), { size: 34, color: isRedBid(aheBid.value) ? RED : GOLD, flags: ["pop"] }); sfx.bid(bidTier(bidLevel(aheBid.value)), 0.3); }
+  else if (aheDbl) { fx.popup("加倍！", $("aOpp"), { size: 46, color: "#F08A96", flags: ["pop", "shake"], hold: 900 }); }
   else if (evs.some(e => e.type === "Passed" && e.seat === AHE)) { fx.popup("Pass", $("aOpp"), { size: 30, color: MUTED }); sfx.pass(); }
+  if (run.redeal) {
+    // 兩個人一開始都不叫：照規則重發。教學裡發回同一手，讓你再選一次
+    await fx.wait(fx.ms(500));
+    if (my !== epoch) return;
+    run = start(step());
+    busy = false;
+    const again = TALK.bid.intro(ctx()).slice(-2);
+    lines = [...REDEAL_LINES, ...again]; li = 0; mode = "intro";
+    askLine = lines.at(-1)!;
+    render();
+    revealNarrator();
+    return;
+  }
   renderTable();
+  if (aheDbl) { const t = document.querySelector("#sBoard .splate .auct span:last-of-type"); doubleFx(t ?? $("aOpp"), $("stable")); fx.buzz([40, 30, 40]); }
   await fx.wait(fx.ms(420));
   if (my !== epoch) return;
   if (!run.done) {
-    // 還在競叫：輪到你再選一次（阿禾已經說話了）
     busy = false;
-    record();
+    if (aheDbl) {
+      // 阿禾加倍：他先嗆一句，再問你要再加倍、直接打，還是先問加倍是什麼
+      lines = DOUBLE_LINES.map(l => ({ ...l })); li = 0; mode = "intro";
+      askLine = lines.at(-1)!;
+      render();
+      revealNarrator();
+      return;
+    }
+    // 還在競叫（阿禾叫更高）：輪到你再選一次
+    askLine = { who: "ahe", text: LINES[step().id].ask2 ?? LINES[step().id].ask, emo: "smug" };
     renderTable();
     renderNarrator();
     revealNarrator();
@@ -754,7 +938,7 @@ async function confirmBid() {
   }
   // 合約確定：在牌桌中央蓋章，再落進合約欄
   const v = view();
-  await contractSlam(bidText(v.highestBid), isRedBid(v.highestBid), `莊家：${v.declarer === ME ? "你" : "阿禾"} · 要贏 ${tricksNeeded(v.highestBid)} 墩`, 0, $("stable"), document.querySelector("#sBoard .splate .big"));
+  await contractSlam(bidText(v.highestBid), isRedBid(v.highestBid), `莊家：${v.declarer === ME ? "你" : "阿禾"} · 要贏 ${tricksNeeded(v.highestBid)} 墩`, v.doubled, $("stable"), document.querySelector("#sBoard .splate .big"));
   if (my !== epoch) return;
   const g = document.getElementById("goal");
   if (g) fx.punch(g, 0.12, 320);
@@ -785,7 +969,7 @@ $("sBoard").addEventListener("click", ev => {
 $("restart").addEventListener("click", restartStory);
 $("narrator").addEventListener("click", ev => {
   if ((ev.target as HTMLElement).closest("button, a")) return;
-  if (mode === "intro" || mode === "outro") advance(); else finishTyping();
+  if (mode === "intro" || mode === "outro" || mode === "aside") advance(); else finishTyping();
 });
 const setDlg = $<HTMLDialogElement>("setDlg");
 $("setBtn").addEventListener("click", () => { renderSettings($("setBox")); setDlg.showModal(); sfx.slide(); });
@@ -796,7 +980,7 @@ document.addEventListener("pointerdown", ev => {
   if (b) sfx.press();
 }, { passive: true });
 // 章節目錄：手機上是從下面滑上來的抽屜，電腦上捲到下面
-const narrow = () => matchMedia("(max-width: 700px)").matches;
+function narrow() { return matchMedia("(max-width: 700px)").matches; }
 $("navChapters").addEventListener("click", ev => {
   ev.preventDefault();
   if (narrow()) { document.body.classList.toggle("show-chapters"); if (document.body.classList.contains("show-chapters")) fx.slideIn($("contentsBox"), "up"); return; }

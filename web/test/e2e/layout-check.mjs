@@ -69,7 +69,15 @@ for (const [name, w, h] of SIZES) {
   const results = [];
   const check = async (label, keys = []) => { await p.waitForTimeout(350); results.push([label, await p.evaluate(probe, keys)]); };
   const mode = () => p.evaluate(() => document.getElementById("narrator")?.dataset.mode);
-  const story = async () => { for (let i = 0; i < 30 && ["intro", "outro"].includes(await mode()); i++) { await p.locator("#spoken").click(); await p.waitForTimeout(40); } };
+  let sawChoice = false;
+  // 一句一句點下去；遇到阿禾問你（A／B／C）：檢查一次版面，再選第一個
+  const story = async () => {
+    for (let i = 0; i < 40 && ["intro", "outro", "aside"].includes(await mode()); i++) {
+      const ch = p.locator("#controls .s-choice").first();
+      if (await ch.isVisible()) { if (!sawChoice) { await check("故事：阿禾問你（選項）", ["#narrator", "#spoken", "#controls .choices"]); sawChoice = true; } await ch.click(); await p.waitForTimeout(80); continue; }
+      await p.locator("#spoken").click(); await p.waitForTimeout(40);
+    }
+  };
 
   // 封面、選單、朋友連線、等朋友
   await p.goto(base + "/"); await check("封面", [".cv-top", "#titleCard", "#storyCard", "#solo", "#goOnline"]);
