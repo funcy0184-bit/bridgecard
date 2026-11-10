@@ -200,7 +200,9 @@ try {
   ok("剛按加倍就斷網：對手看到斷線提示、牌局暫停；回來之後兩邊都是「已加倍」、繼續叫牌");
 
   // ---- 出牌第 9 墩斷線：暫停面板 → 可以選 → 繼續等 → 回來 ----
-  await playUntil(async () => { const s = await S(A); return s.st.phase === 2 && tricks(s) === 8 && s.st.leadCard < 0; }, "出牌第 9 墩");
+  // 打到出牌第 9 墩以後（「剛好第 9 墩開頭」那一瞬間很短，輪詢可能剛好錯過，所以第 9 墩之後都算）
+  const late = async () => { const s = await S(A); return s.st.phase === 2 && tricks(s) >= 8; };
+  await playUntil(late, "出牌第 9 墩", { onStep: late });
   await drop(B, ctxB);
   await waitText(A, "#banner", "暫停", 5000, "房主沒看到暫停提示");
   await A.waitForSelector("#pause:not([hidden])", { timeout: T.NOTICE_MS + 4000 }).catch(() => bail("斷線超過提示時間，沒出現暫停面板"));
@@ -214,7 +216,7 @@ try {
   if (await A.isVisible("#pause:not([hidden])")) await bail("按繼續等之後面板沒收起來");
   await back(ctxB);
   await waitText(A, "#banner", "回來啦", 10000, "朋友回來，房主沒看到「回來啦」");
-  ok(`出牌第 9 墩斷網：房主先看到暫停提示 → ${T.NOTICE_MS / 1000} 秒出現暫停面板 → ${T.CHOICE_MS / 1000} 秒可以選（倒數：${clock.trim()}）→ 按繼續等 → 朋友回來繼續`);
+  ok(`出牌第 ${tricks(await S(A)) + 1} 墩斷網：房主先看到暫停提示 → ${T.NOTICE_MS / 1000} 秒出現暫停面板 → ${T.CHOICE_MS / 1000} 秒可以選（倒數：${clock.trim()}）→ 按繼續等 → 朋友回來繼續`);
 
   // ---- 結算動畫中重新整理 ----
   await playUntil(async () => await A.isVisible("#result:not([hidden])"), "第 1 局結算");

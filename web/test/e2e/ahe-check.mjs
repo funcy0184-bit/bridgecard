@@ -182,6 +182,11 @@ console.log("回個話（朋友連線）：對方看到你的暱稱，阿禾不�
   await A.p.waitForSelector("#wait:not([hidden])");
   const code = (await A.p.innerText("#bigCode")).replace(/\s/g, "");
   await B.p.goto(base + "/"); await B.p.click("#goOnline"); await B.p.fill("#code", code); await B.p.click("#join");
+  // 第 2 版：兩人入座後都要按「準備好了」才開打
+  await A.p.waitForFunction(() => !document.getElementById("readyBtn").disabled, null, { timeout: 15000 });
+  await A.p.click("#readyBtn"); await sleep(300);
+  await B.p.waitForFunction(() => !document.getElementById("readyBtn").disabled, null, { timeout: 15000 });
+  await B.p.click("#readyBtn");
   await A.p.waitForSelector("#hand .card", { timeout: 15000 }); await B.p.waitForSelector("#hand .card", { timeout: 15000 });
   await sleep(800);
   await A.p.click("#talkBtn"); await sleep(150);

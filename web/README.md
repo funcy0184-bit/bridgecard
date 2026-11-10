@@ -220,6 +220,7 @@ node test/e2e/match.mjs
 node test/e2e/reconnect.mjs
 ```
 
+- 自動測試用的是模擬手機和本機伺服器；**真的 iPhone Safari、不同網路、鎖螢幕／切背景**要照 `test/MANUAL-online.md` 手動測
 - 斷線時間軸集中在 `src/server/protocol.ts` 的 `TIMING`（正式：30 秒提示、2 分鐘可以選、10 分鐘判中離、開局前 10 分鐘讓座、牌局保留 24 小時、戰績保留 7 天）；本機測試可以用 `wrangler dev --var NOTICE_MS:2500 --var CHOICE_MS:5000 --var FORFEIT_MS:14000 …` 縮短（正式環境不設定）
 
   - `two-phones.mjs`：兩支模擬手機（預設 iPhone 13 + Pixel 7）真的點畫面，從開房一路打到結算，順便截圖到 `test-results/`。換機型：`HB_DEVICE_A="iPhone SE" HB_DEVICE_B="Galaxy S9+" node test/e2e/two-phones.mjs`
