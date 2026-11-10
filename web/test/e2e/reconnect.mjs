@@ -277,6 +277,14 @@ try {
   const want = matchOver1 ? 2 : 1;
   if (!statsA.includes(`共 ${want} 場`) || !statsB.includes(`共 ${want} 場`)) await bail(`戰績重複或沒記（應該共 ${want} 場）：${statsA} / ${statsB}`);
   await shot(B, "timeout-lose");
+  // 精彩回顧：結果面板上按一下就看得到（只有公開資訊）
+  await B.click("#meRecap");
+  await B.waitForSelector("#recap:not([hidden])", { timeout: 3000 }).catch(() => bail("回顧面板沒打開"));
+  await B.waitForFunction(() => !document.getElementById("recapSub").textContent.includes("整理中"), null, { timeout: 4000 }).catch(() => bail("回顧沒有送回來"));
+  const nItems = await B.locator("#recapList li").count();
+  await shot(B, "recap");
+  await B.click("#recap [data-close]");
+  ok(`結果面板的「精彩回顧」：${nItems ? `${nItems} 則` : "這場沒有大轉折（顯示鼓勵的話）"}`);
   ok(`朋友斷線超過 ${T.FORFEIT_MS / 1000} 秒：照規則判房主贏；朋友回來看到「你斷線超過…」；戰績只記一次（${statsA}）`);
 
   // ---- 再來一場 ----
@@ -291,6 +299,7 @@ try {
   await sleep(800);
   await A.click("#menuBtn");
   await A.waitForSelector("#forfeitBtn:not([hidden])");
+  await waitText(A, "#menuStats", `共 ${want} 場`, 2000, "選單裡沒有同桌戰績");
   if (!(await A.textContent("#leaveBtn")).includes("暫時離開")) await bail("對局中的選單應該有「暫時離開」");
   await A.click("#forfeitBtn");
   await A.waitForSelector("#home:not([hidden])", { timeout: 8000 }).catch(() => bail("認輸之後沒回首頁"));

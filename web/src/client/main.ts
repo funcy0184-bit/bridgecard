@@ -9,7 +9,7 @@ import {
 import { GameEvent, Phase, TableState } from "../game/game";
 import { beats, isTrump } from "../game/rules";
 import { breakdown, contractText, declarerPreview, defenderPreview, madePoints, pointsPerUndertrick, PER_OVERTRICK, type HandResult } from "../game/scoring";
-import { CODE_LENGTH, MODES, Mode, Notice, RoomView, SeatInfo, ServerMsg, isValidCode, normalizeCode } from "../server/protocol";
+import { CODE_LENGTH, Highlight, MODES, Mode, Notice, RoomView, SeatInfo, ServerMsg, isValidCode, normalizeCode } from "../server/protocol";
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
 import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
@@ -149,7 +149,7 @@ function goHome(msg = "", err = false, toOnline = false) {
   conn?.close(); conn = null;
   clearTimeout(resultTimer);
   resultSig.skip = true;
-  for (const id of ["result", "menu", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal", "pause", "matchEnd"]) $(id).hidden = true;
+  for (const id of ["result", "menu", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal", "pause", "matchEnd", "recap"]) $(id).hidden = true;
   clearInterval(pauseTimer); pauseTimer = 0;
   hideCoach(true);
   history.replaceState(null, "", "/");
@@ -304,6 +304,9 @@ function onMsg(m: ServerMsg) {
     case "reject":
       onReject(m.code, m.msg);
       break;
+    case "recap":
+      showRecap(m.gid, m.items);
+      break;
     case "full":
       forgetRoom(conn?.code ?? "");
       goHome("這桌已經坐滿或開打了，請朋友再開一桌。", true, true);
@@ -365,6 +368,7 @@ function applyRoom(r: RoomView, notice?: Notice, who = -1) {
   if (st && started && screen === "table") { renderHand(); renderTurn(); renderActions(); }   // 暫停／繼續：手牌能不能出跟著變
   renderPause();
   renderMatchEnd();
+  renderResStats();
 }
 
 function roomNotice(notice: Notice | undefined, name: string, prev: RoomView["result"] = null) {
@@ -454,6 +458,7 @@ function renderMatchEnd() {
   const me = seats[mySeat], other = seats[1 - mySeat];
   b.disabled = !other?.taken || meBusy;
   b.textContent = !other?.taken ? `${opp}已經離開了` : me?.rematch ? `等${opp}按…（點一下取消）` : other.rematch ? `${opp}想再來一場！按這裡開打` : "再來一場！";
+  $("meRecap").hidden = !r!.gid;
   if ($("matchEnd").hidden) { $("matchEnd").hidden = false; sfx.slide(); }
 }
 let meBusy = false;
@@ -471,6 +476,63 @@ function leaveRoom(msg: string) {
   if (c) forgetRoom(c.code);
   goHome(msg);
 }
+
+// ---------------- 同桌戰績、精彩回顧（朋友連線） ----------------
+// 戰績只算現在這兩個人（座位憑證，不是暱稱）、確認打完或照規則判的場次；有人離開座位就是另一組
+// 顯示在：整場結算單、認輸／逾時的結果面板、對局中的選單。回顧只用兩邊都看過的公開資訊（伺服器整理）
+function statsLine(r: RoomView): string {
+  const s = r.stats;
+  if (!s.played) return "";
+  const opp = oppName(), w = s.wins;
+  let t = `同桌戰績：你 ${w[mySeat]} 勝 · ${opp} ${w[1 - mySeat]} 勝（共 ${s.played} 場）`;
+  if (s.streak && s.streak.n >= 2) t += ` · ${s.streak.seat === mySeat ? "你" : opp}連贏 ${s.streak.n} 場`;
+  return t;
+}
+// 結算單（整場打完）也顯示同桌戰績＋回顧按鈕
+function renderResStats() {
+  const on = !!room && !!st && st.matchWinner >= 0 && !!room.stats.played;
+  $("resStats").hidden = !on;
+  $("recapBtn").hidden = !on;
+  if (on) $("resStats").textContent = statsLine(room!);
+}
+
+let recapFor = "";
+function openRecap() {
+  const r = room;
+  if (!r?.gid || !conn) return;
+  recapFor = r.gid;
+  $("recapSub").textContent = "整理中…";
+  $("recapList").replaceChildren();
+  openModal("recap");
+  if (!conn.send({ t: "recap", gid: r.gid })) $("recapSub").textContent = "連線中斷了，重新連上再看。";
+}
+function showRecap(gid: string, items: Highlight[]) {
+  if (gid !== recapFor || $("recap").hidden) return;
+  $("recapSub").textContent = items.length ? "這一場的關鍵時刻（只看兩邊都看過的牌）" : "這場沒什麼大轉折，下一場打出精彩的！";
+  $("recapList").replaceChildren(...items.map(h => {
+    const li = document.createElement("li");
+    const p = document.createElement("p");
+    p.textContent = h.text;
+    li.appendChild(p);
+    if (h.cards) {
+      const rc = document.createElement("div");
+      rc.className = "rc";
+      h.cards.forEach((id, i) => {
+        const f = document.createElement("figure");
+        f.appendChild(miniCard(id));
+        const cap = document.createElement("figcaption");
+        const seat = h.seats?.[i] ?? -1;
+        cap.textContent = seat === mySeat ? "你" : seat >= 0 ? oppName() : "";
+        f.appendChild(cap);
+        rc.appendChild(f);
+      });
+      li.appendChild(rc);
+    }
+    return li;
+  }));
+}
+$("recapBtn").addEventListener("click", ev => { ev.stopPropagation(); openRecap(); });
+$("meRecap").addEventListener("click", openRecap);
 
 // ---------------- 等朋友：名牌滑入、郵票蓋章、準備、玩法 ----------------
 
@@ -1827,6 +1889,7 @@ async function showResult(instant: boolean) {
   next.disabled = false;
   next.textContent = matchOver ? "再來一場！" : "再來一局！";
   $("result").hidden = false;
+  renderResStats();
   $("skipHint").hidden = sig.skip;
   emo.clear();
 
@@ -2431,6 +2494,10 @@ function openMenu() {
   $("restartSolo").hidden = !(inTable && conn?.solo);
   const live = inTable && !conn?.solo && (room?.status === "IN_GAME" || room?.status === "PAUSED");
   $("forfeitBtn").hidden = !live;
+  // 同桌戰績（再來一場打第二場以後，選單裡看得到這兩個人到目前的戰績）
+  const sl = inTable && !conn?.solo && room ? statsLine(room) : "";
+  $("menuStats").hidden = !sl;
+  $("menuStats").textContent = sl;
   $("leaveBtn").textContent = conn?.solo ? "回首頁" : live ? "暫時離開（位子留著）" : "離開這桌";
   openModal("menu");
 }
@@ -2466,7 +2533,7 @@ $("restartSolo").addEventListener("click", () => {
   $("menu").hidden = true;
   if (conn instanceof LocalTable) conn.restart();     // 會發 NewHand：牌桌照新局的流程清空重畫
 });
-for (const m of ["menu", "rulesModal", "storyOffer", "homeMenu", "newsModal"]) {
+for (const m of ["menu", "rulesModal", "storyOffer", "homeMenu", "newsModal", "recap"]) {
   const modal = $(m);
   modal.addEventListener("click", ev => {
     if (ev.target === modal || (ev.target as HTMLElement).closest("[data-close]")) modal.hidden = true;

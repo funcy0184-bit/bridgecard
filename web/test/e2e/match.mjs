@@ -144,5 +144,25 @@ await sleep(300);
 const rc = A.msgs.slice(k).find(m => m.t === "recap");
 if (!rc || rc.gid !== gid1 || !rc.items.length) fail("拿不到上一場的回顧");
 ok(`上一場的精彩回顧 ${rc.items.length} 則：${rc.items.map(x => x.kind).join("、")}`);
+// 回顧不外洩：裡面每一張牌，兩邊都在那一場親眼看過被打出來；兩個人拿到的回顧一模一樣
+{
+  const played = p => new Set(p.msgs.filter(m => m.t === "event" && m.gid === gid1 && m.e.type === "CardPlayed").map(m => m.e.card));
+  const [pa, pb] = [played(A), played(B)];
+  for (const h of rc.items) for (const c of h.cards ?? []) {
+    if (!pa.has(c) || !pb.has(c)) fail(`回顧裡的牌 ${c} 不是兩邊都看過的`);
+  }
+  const kb = B.msgs.length;
+  B.send({ t: "recap", gid: gid1 });
+  await sleep(300);
+  const rb = B.msgs.slice(kb).find(m => m.t === "recap");
+  if (JSON.stringify(rb?.items) !== JSON.stringify(rc.items)) fail("兩個人拿到的回顧不一樣（回顧應該只看公開資訊，跟誰問無關）");
+  const ke = A.msgs.length;
+  A.send({ t: "recap", gid: "not-a-match" });
+  await sleep(200);
+  const re = A.msgs.slice(ke).find(m => m.t === "recap");
+  if (!re || re.items.length) fail("不存在的場次應該回空的回顧");
+  const cards = rc.items.flatMap(h => h.cards ?? []);
+  ok(`回顧不外洩：出現的 ${cards.length} 張牌全部是兩邊都看過被打出來的（暗牌只有真的被打出來之後才可能出現在回顧裡）；兩個人拿到的回顧一模一樣；不存在的場次回空的`);
+}
 console.log("全部通過");
 process.exit(0);

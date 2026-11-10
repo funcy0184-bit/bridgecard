@@ -236,6 +236,8 @@
         <div class="tot opp" id="totOpp"><small id="rtOppName">阿禾</small><b id="rtOpp">0</b></div>
       </div>
       <div id="resTotal" class="restotal"></div>
+      <p class="h2hline" id="resStats" hidden></p>
+      <button id="recapBtn" class="btn ghost small recapbtn" type="button" hidden>這場的精彩回顧</button>
       <div class="row">
         <button id="nextBtn" class="btn wine big" type="button">再來一局！</button>
         <button id="resHome" class="btn paper" type="button">回首頁</button>
@@ -248,6 +250,7 @@
   <div id="menu" class="modal" hidden>
     <div class="sheet">
       <h3><span id="menuTitle">設定</span> <span class="chip" id="roomChip" hidden></span></h3>
+      <p class="h2hline" id="menuStats" hidden></p>
       <div id="settingsBox" class="settings"></div>
       <div class="row">
         <button class="btn paper close" data-close type="button">關閉</button>
@@ -280,6 +283,17 @@
       <p class="clock" id="meStats"></p>
       <button class="btn wine big" id="meRematch" type="button">再來一場！</button>
       <button class="btn ghost" id="meLeave" type="button">離開這桌</button>
+      <button class="btn ghost small recapbtn" id="meRecap" type="button">這場的精彩回顧</button>
+    </div>
+  </div>
+
+  <!-- 朋友連線：這一場的精彩回顧（只用兩邊都看過的公開資訊） -->
+  <div id="recap" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="recapTitle">
+      <h3 id="recapTitle">精彩回顧</h3>
+      <p class="clock" id="recapSub"></p>
+      <ol class="recap" id="recapList"></ol>
+      <button class="btn paper close" data-close type="button">關閉</button>
     </div>
   </div>
 

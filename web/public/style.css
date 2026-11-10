@@ -400,6 +400,16 @@ input::placeholder { color: rgba(90,70,40,.45); }
 #pause .row .btn { flex: 1; padding-inline: 8px; }
 .sheet .clock { margin: 0; font-size: 13.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 #pause, #matchEnd { align-items: center; }
+/* 同桌戰績、精彩回顧 */
+.h2hline { margin: 0; text-align: center; font-size: 13.5px; color: var(--ink-soft); }
+.recapbtn { align-self: center; }
+#result .recapbtn, #matchEnd .recapbtn { color: var(--wine); box-shadow: inset 0 0 0 1px rgba(122,39,50,.5); }
+ol.recap { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+ol.recap li { display: flex; gap: 10px; align-items: center; }
+ol.recap p { margin: 0; flex: 1; font-size: 14px; line-height: 1.6; }
+ol.recap .rc { display: flex; gap: 6px; flex: none; --cw: 36px; }
+ol.recap figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--ink-soft); }
+#recap { z-index: 31; }
 
 /* 設定 */
 .settings { display: flex; flex-direction: column; gap: 10px; }
