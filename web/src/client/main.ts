@@ -66,7 +66,8 @@ const oppName = () => seats[1 - mySeat]?.name || (mySeat === 0 ? "朋友" : "房
 const nameOf = (s: number) => s === mySeat ? "你" : oppName();
 const myTurn = () => !!st && st.currentSeat === st.seat && !(st.leadCard >= 0 && st.followCard >= 0) && st.phase !== Phase.Finished;
 const myBidTurn = () => !!st && st.phase === Phase.Bidding && myTurn();
-const canPlayNow = () => !!st && (st.phase === Phase.Draw || st.phase === Phase.Play) && myTurn() && st.legal.length > 0 && !waiting;
+const paused = () => room?.status === "PAUSED";      // 朋友連線：有人斷線，牌局暫停（伺服器也會擋）
+const canPlayNow = () => !!st && (st.phase === Phase.Draw || st.phase === Phase.Play) && myTurn() && st.legal.length > 0 && !waiting && !paused();
 
 // 畫面切換：紙張滑入；牌桌從中心展開。重複進同一個畫面不重播
 function show(id: "home" | "online" | "wait" | "table") {
@@ -85,7 +86,8 @@ function show(id: "home" | "online" | "wait" | "table") {
 function setWaiting(on: boolean) {
   waiting = on;
   clearTimeout(waitTimer);
-  if (on) waitTimer = window.setTimeout(() => { waiting = false; unpull(); }, 3000);   // 保險：3 秒沒回應就解鎖
+  // 保險：太久沒回應就解鎖（朋友連線順便要一次最新狀態；指令本身斷線重連後會用同一個編號重送，不會重複生效）
+  if (on) waitTimer = window.setTimeout(() => { waiting = false; unpull(); if (conn && !conn.solo) conn.send({ t: "sync" }); }, conn?.solo ? 3000 : 6000);
 }
 
 // ---------------- 01 首頁 ----------------
@@ -289,7 +291,7 @@ function onMsg(m: ServerMsg) {
       // 完整快照：直接跳到最新的樣子，不補播之前的動畫
       lastEid = m.eid;
       applyRoom(m.r);
-      if (m.s && started) onState(m.s);
+      if (m.s && started) onState(m.s, true);
       break;
     case "event":
       if (typeof m.eid === "number") { if (m.eid <= lastEid) break; lastEid = m.eid; }   // 重複收到的不再演一次
@@ -355,6 +357,7 @@ function applyRoom(r: RoomView, notice?: Notice, who = -1) {
   if (notice === "started") banner(wasStarted ? "新的一場，開打！" : "兩邊都準備好了，開打！", 1800);
   else if (who >= 0 && who !== mySeat) roomNotice(notice, whoName || oppName());
   renderRematch();
+  if (st && started && screen === "table") { renderHand(); renderTurn(); renderActions(); }   // 暫停／繼續：手牌能不能出跟著變
 }
 
 function roomNotice(notice: Notice | undefined, name: string) {
@@ -496,8 +499,15 @@ function flashLabel(b: HTMLElement, text: string) {
 
 // ---------------- 狀態 → 畫面 ----------------
 
-function onState(s: TableState) {
-  const first = !st;
+// jump：斷線回來、版本過期時伺服器給的完整快照 → 直接畫成最新的樣子，不補播中間的動畫
+function onState(s: TableState, jump = false) {
+  if (jump && st) {
+    inFlight.clear(); freshCards.clear(); chipPending.clear();
+    staged = -1; selCard = -1; dealing = false;
+    clearTimeout(bidRevealTimer); bidRevealTimer = 0;
+    auctionShown = s.auctionCalls.length;
+  }
+  const first = !st || jump;
   st = s;
   setWaiting(false);
   if (pulled >= 0 && !s.hand.includes(pulled)) pulled = -1;   // 已經打出去了
@@ -845,6 +855,7 @@ function unpull() { if (pulled >= 0) { pulled = -1; if (st) renderHand(); } }
 function reasonFor(): string {
   const s = st;
   if (!s) return "";
+  if (paused()) return `${esc(oppName())}斷線了，牌局先暫停，等他回來。`;
   if (s.leadCard >= 0 && s.followCard >= 0) return "這墩還在算，等一下喔。";
   if (!myTurn()) return `等${esc(oppName())}出完這張。`;
   if (s.leaderSeat !== s.seat && s.leadCard >= 0) {
@@ -1503,6 +1514,7 @@ function pickStrain(s: number) {
 
 function sendCall(call: number) {
   if (!myBidTurn() || waiting || !conn) return;
+  if (paused()) { banner(`${oppName()}斷線了，牌局先暫停，等他回來再叫。`, 2400); sfx.deny(); return; }
   selBid = -1; selStrain = -1;
   setWaiting(true);
   if (!act({ t: "call", call })) setWaiting(false);

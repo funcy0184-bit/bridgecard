@@ -208,6 +208,12 @@ node test/e2e/rooms.mjs
 node test/e2e/persist.mjs
 ```
 
+  - `match.mjs`：雲端權威的完整一場（經典牌局）：打到有人到目標分數（叫牌混著加倍、再加倍），每一步檢查兩邊一致（分數、墩數、階段、輪到誰、叫牌、明牌）、牌桌狀態沒有多餘欄位（對手手牌、牌堆不送）、對手摸的暗牌看不到、房間廣播沒有憑證；沒入座的連線拿不到資料；整場結算記一場戰績、兩人都按才再來一場
+
+```bash
+node test/e2e/match.mjs
+```
+
   - `two-phones.mjs`：兩支模擬手機（預設 iPhone 13 + Pixel 7）真的點畫面，從開房一路打到結算，順便截圖到 `test-results/`。換機型：`HB_DEVICE_A="iPhone SE" HB_DEVICE_B="Galaxy S9+" node test/e2e/two-phones.mjs`
   - `story-walk.mjs`：一支模擬手機走完阿禾的四幕（兩種搶牌、換一張試試、重新整理續讀、叫 2♥、不能出的 ♥2、王吃與墊牌、8／8 +20 分），再按「自己跟電腦打一局」打完一整局、中途重新整理、換牌桌顏色。換機型：`HB_DEVICE="iPhone SE" node test/e2e/story-walk.mjs`
 
