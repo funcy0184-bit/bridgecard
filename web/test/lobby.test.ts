@@ -155,7 +155,7 @@ describe("C1 房間：準備、模式、房主", () => {
     markOffline(m, 0, T0);
     expect(m.seats[0]!.ready).toBe(false);
     expect(setReady(m, 0, true)).toMatchObject({ ok: false, code: "BAD_STATE" });
-    markOnline(m, 0);
+    markOnline(m, 0, T0);
     expect(setReady(m, 0, true)).toEqual({ ok: true, value: { start: false } });
   });
 });
@@ -177,9 +177,9 @@ describe("C1 房間：對局、結算、再來一場", () => {
     expect(markOffline(m, 1, T0 + 5)).toBe(false);     // 已經算斷線：不重算時間
     expect(m.seats[1]!.offlineSince).toBe(T0);
     markOffline(m, 0, T0 + 10);
-    markOnline(m, 1);
+    markOnline(m, 1, T0 + 20);
     expect(m.status).toBe("PAUSED");                   // 還有一個人沒回來
-    markOnline(m, 0);
+    markOnline(m, 0, T0 + 30);
     expect(m.status).toBe("IN_GAME");
   });
 
@@ -244,6 +244,15 @@ describe("C4 時間軸：中離、讓座、過期（只排一個鬧鐘）", () =
     const m = playing();
     markOffline(m, 0, T0); markOffline(m, 1, T0);
     expect(deadlines(m, t, false).forfeitAt).toBeNull();
+  });
+
+  it("兩邊都斷線、一個人 15 分鐘後回來：另一個人從「他回來」才開始算 10 分鐘，不會一回來就判", () => {
+    const m = playing();
+    markOffline(m, 0, T0); markOffline(m, 1, T0);
+    markOnline(m, 0, T0 + 15 * 60_000);
+    const d = deadlines(m, t, false);
+    expect(d.forfeitSeat).toBe(1);
+    expect(d.forfeitAt).toBe(T0 + 15 * 60_000 + t.forfeit);
   });
 
   it("開局前斷線：10 分鐘後讓出座位，不判中離", () => {

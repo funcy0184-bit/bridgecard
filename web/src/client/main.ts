@@ -149,7 +149,8 @@ function goHome(msg = "", err = false, toOnline = false) {
   conn?.close(); conn = null;
   clearTimeout(resultTimer);
   resultSig.skip = true;
-  for (const id of ["result", "menu", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal"]) $(id).hidden = true;
+  for (const id of ["result", "menu", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal", "pause", "matchEnd"]) $(id).hidden = true;
+  clearInterval(pauseTimer); pauseTimer = 0;
   hideCoach(true);
   history.replaceState(null, "", "/");
   show(toOnline ? "online" : "home");
@@ -249,7 +250,7 @@ function enter(code: string) {
     if (s === "reconnecting") { dropped = true; banner("連線斷了一下，重新連線中…（這時候按的不會送出）"); }
     else if (s === "open") {
       // 真的斷過、而且重新連上了，才說「回來啦」（對手還斷著的話，下面的同步會換成對手斷線的提示）
-      if (dropped) banner("連上了！接著打。", 1600);
+      if (dropped) banner("連上了！", 1600);
       dropped = false;
     } else if (s === "closed" && (screen === "table" || screen === "wait")) {
       banner(lastErr || "這個分頁的連線結束了，重新整理一下再進來。");
@@ -344,25 +345,35 @@ function onReject(code: string, msg: string) {
 
 function applyRoom(r: RoomView, notice?: Notice, who = -1) {
   const before = seats.map(x => x?.taken);
+  const prevResult = room?.result ?? null;
   const whoName = who >= 0 ? (seats[who]?.name || r.seats[who]?.name || "") : "";
   const wasStarted = started;
   if (r.status === "CLOSED") { forgetRoom(r.code); goHome("這桌已經關了。", true, true); return; }
   const nowStarted = PLAYING.has(r.status);
   // 打完一場、對方離開了：牌桌收起來，回到等人的畫面（座位、房號都還在）
   if (wasStarted && !nowStarted) { const seat = mySeat, eid = lastEid; resetTable(); mySeat = seat; lastEid = eid; $("result").hidden = true; }
+  // 再來一場：上一場的牌桌整個收掉，新的一場從頭畫（不接著上一場的動畫）
+  if (notice === "started" && wasStarted) { const seat = mySeat, eid = lastEid; resetTable(); mySeat = seat; lastEid = eid; for (const id of ["result", "matchEnd", "pause"]) $(id).hidden = true; }
+  skew = r.now - Date.now();
   room = r; seats = r.seats; started = nowStarted;
   if (!started) showWait(before);
   else if (st && screen !== "table") show("table");
   renderNames(); renderPresence();
   if (notice === "started") banner(wasStarted ? "新的一場，開打！" : "兩邊都準備好了，開打！", 1800);
-  else if (who >= 0 && who !== mySeat) roomNotice(notice, whoName || oppName());
+  else if (who >= 0 && who !== mySeat) roomNotice(notice, whoName || oppName(), prevResult);
   renderRematch();
   if (st && started && screen === "table") { renderHand(); renderTurn(); renderActions(); }   // 暫停／繼續：手牌能不能出跟著變
+  renderPause();
+  renderMatchEnd();
 }
 
-function roomNotice(notice: Notice | undefined, name: string) {
+function roomNotice(notice: Notice | undefined, name: string, prev: RoomView["result"] = null) {
   switch (notice) {
-    case "left": banner(`${name}離開了這桌。`, 2600); break;
+    case "left":
+      // 對手認輸之後離開：結果要講清楚（這時候牌桌已經收起來了）
+      if (prev?.reason === "forfeit" && prev.winner === mySeat) banner(`${name}認輸離開了，這場算你贏（戰績記下來了）。`, 4200);
+      else banner(`${name}離開了這桌。`, 2600);
+      break;
     case "mode": banner(`房主把玩法換成「${MODES[room!.mode].label}」，兩邊都要重新按準備。`, 2800); break;
     case "forfeit": banner(`${name}認輸離開了，這場算你贏。`, 3200); break;
     case "timeout": banner(`${name}斷線太久，照規則這場算你贏。`, 3200); break;
@@ -378,6 +389,87 @@ function renderRematch() {
   const me = seats[mySeat], opp = seats[1 - mySeat];
   nb.textContent = me?.rematch ? `等${oppName()}按…（點一下取消）` : opp?.rematch ? `${oppName()}想再來一場！按這裡開打` : "再來一場！";
   nb.classList.toggle("on", !!me?.rematch);
+}
+
+// ---------------- 斷線暫停（朋友連線）：30 秒清楚提示、2 分鐘可以選、超過時限照規則判 ----------------
+// 時間都用伺服器的鐘（手機的鐘可能不準）：skew = 伺服器時間 − 手機時間
+let skew = 0, pauseTimer = 0, pauseHiddenFor = "";
+const serverNow = () => Date.now() + skew;
+const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
+const minutes = (ms: number) => ms >= 60_000 ? `${Math.round(ms / 60_000)} 分鐘` : `${Math.round(ms / 1000)} 秒`;
+
+function renderPause() {
+  const r = room, opp = seats[1 - mySeat];
+  const on = !!r && r.status === "PAUSED" && screen === "table" && !!opp?.taken && opp.offlineSince !== null && seats[mySeat]?.offlineSince === null;
+  if (!on) { $("pause").hidden = true; clearInterval(pauseTimer); pauseTimer = 0; return; }
+  if (!pauseTimer) pauseTimer = window.setInterval(renderPause, 1000);
+  const t = r!.timing, now = serverNow();
+  // 中離倒數從伺服器說的時間點算（兩邊都斷過線時，是從你回來才開始）
+  const start = r!.forfeitAt !== null && r!.forfeitSeat === 1 - mySeat ? r!.forfeitAt - t.forfeit : opp!.offlineSince!;
+  const gone = now - start;
+  const stage = gone >= t.choice ? 2 : gone >= t.notice ? 1 : 0;
+  if (stage === 0) { $("pause").hidden = true; return; }   // 剛斷線：上面的提示條就夠了（常常馬上就回來）
+  const key = `${start}:${stage}`;
+  const name = oppName();
+  $("pauseTitle").textContent = `${name}斷線了`;
+  $("pauseText").textContent = stage === 2
+    ? `已經等了 ${minutes(gone)}。可以繼續等，或先離開（牌局幫你留著，${name}回來後你再回到這桌接著打）。`
+    : `牌局先暫停，${name}回來就能接著打（剛剛打到哪裡都留著）。`;
+  $("pauseClock").textContent = r!.forfeitAt !== null
+    ? `已經等了 ${mmss(gone)} · 再 ${mmss(r!.forfeitAt - now)} 沒回來，照規則這場算你贏`
+    : `已經等了 ${mmss(gone)}`;
+  $("pauseChoice").hidden = stage < 2;
+  $("pauseHide").hidden = stage >= 2;
+  const was = $("pause").hidden;
+  $("pause").hidden = pauseHiddenFor === key;
+  if (was && !$("pause").hidden) sfx.slide();
+}
+$("pauseHide").addEventListener("click", () => { pauseHiddenFor = currentPauseKey(); $("pause").hidden = true; });
+$("pauseWait").addEventListener("click", () => { pauseHiddenFor = currentPauseKey(); $("pause").hidden = true; banner(`好，繼續等${oppName()}。`, 1600); });
+$("pauseLeave").addEventListener("click", () => {
+  goHome(`牌局幫你留著。${oppName()}回來之後，到「找朋友玩」按「回到這桌」就能接著打。`);
+});
+function currentPauseKey() {
+  const r = room, opp = seats[1 - mySeat];
+  if (!r || !opp || opp.offlineSince === null) return "";
+  const start = r.forfeitAt !== null && r.forfeitSeat === 1 - mySeat ? r.forfeitAt - r.timing.forfeit : opp.offlineSince;
+  const gone = serverNow() - start;
+  return `${start}:${gone >= r.timing.choice ? 2 : 1}`;
+}
+
+// 整場因為認輸或斷線逾時結束（照規則打到目標分數的，用原本的結算單）
+function renderMatchEnd() {
+  const r = room;
+  const on = !!r && (r.status === "SETTLEMENT" || r.status === "REMATCH") && !!r.result && r.result.reason !== "target" && screen === "table";
+  if (!on) { $("matchEnd").hidden = true; return; }
+  $("result").hidden = true;
+  const iWon = r!.result!.winner === mySeat, opp = oppName(), why = r!.result!.reason;
+  $("meTitle").textContent = iWon ? "這場算你贏" : `這場算${opp}贏`;
+  $("meText").textContent = why === "forfeit"
+    ? (iWon ? `${opp}認輸了。` : `你認輸了，這場算${opp}贏。`)
+    : (iWon ? `${opp}斷線超過 ${minutes(r!.timing.forfeit)} 沒回來，照規則這場算你贏。` : `你斷線超過 ${minutes(r!.timing.forfeit)}，照規則這場算${opp}贏。`);
+  const w = r!.stats.wins;
+  $("meStats").textContent = `同桌戰績：你 ${w[mySeat]} 勝 · ${opp} ${w[1 - mySeat]} 勝（共 ${r!.stats.played} 場）`;
+  const b = $<HTMLButtonElement>("meRematch");
+  const me = seats[mySeat], other = seats[1 - mySeat];
+  b.disabled = !other?.taken || meBusy;
+  b.textContent = !other?.taken ? `${opp}已經離開了` : me?.rematch ? `等${opp}按…（點一下取消）` : other.rematch ? `${opp}想再來一場！按這裡開打` : "再來一場！";
+  if ($("matchEnd").hidden) { $("matchEnd").hidden = false; sfx.slide(); }
+}
+let meBusy = false;
+$("meRematch").addEventListener("click", () => {
+  if (meBusy) return;
+  meBusy = true; renderMatchEnd();
+  if (!act({ t: "rematch", ready: !seats[mySeat]?.rematch }, () => { meBusy = false; renderMatchEnd(); })) { meBusy = false; renderMatchEnd(); }
+});
+$("meLeave").addEventListener("click", () => leaveRoom("你離開了這桌。"));
+
+// 離開這桌（整場已經結束、或開局前）：讓出座位、這支手機忘掉這桌
+function leaveRoom(msg: string) {
+  const c = conn;
+  if (c instanceof Connection && c.isOpen) c.command({ t: "leave" });   // 送出就走（連線關掉前一定會先送出去）
+  if (c) forgetRoom(c.code);
+  goHome(msg);
 }
 
 // ---------------- 等朋友：名牌滑入、郵票蓋章、準備、玩法 ----------------
@@ -512,7 +604,7 @@ function onState(s: TableState, jump = false) {
   setWaiting(false);
   if (pulled >= 0 && !s.hand.includes(pulled)) pulled = -1;   // 已經打出去了
   else if (pulled >= 0 && !myTurn()) pulled = -1;
-  if ($("table").hidden) show("table");
+  if ($("table").hidden) { show("table"); renderPause(); renderMatchEnd(); }
   if (first) say("");
   // 跟阿禾打、剛開的一場（第一局、還沒出過牌）：開場那一句。發牌事件在第一次畫牌桌之前就到了，所以在這裡補講
   if (first && conn?.solo && s.handNumber === 1 && s.phase === Phase.Draw && s.myScore === 0 && s.oppScore === 0 && s.stockCount === 26 && s.leadCard < 0) {
@@ -1820,13 +1912,7 @@ $("nextBtn").addEventListener("click", () => {
 $("resHome").addEventListener("click", () => {
   resultSig.skip = true;
   // 朋友連線、整場已經打完：離開就讓出座位（戰績留在這桌）；還沒打完就幫你留著位子
-  const c = conn;
-  if (room && st && st.matchWinner >= 0 && c instanceof Connection && c.isOpen) {
-    c.command({ t: "leave" });          // 送出就走（連線關掉前一定會先送出去）
-    forgetRoom(c.code);
-    goHome("你離開了這桌。");
-    return;
-  }
+  if (room && st && st.matchWinner >= 0) { leaveRoom("你離開了這桌。"); return; }
   goHome(conn?.solo ? "這局幫你存好了，按「跟阿禾打」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
 });
 
@@ -1859,6 +1945,11 @@ let causeEv: GameEvent | null = null;
 const aheLog: { id: string; text: string; cause: string; me: boolean; extra: number; value: number; card: number; hand: number; deal: number }[] = [];
 let dealNo = 0;                          // 第幾次發牌（重發也算）：驗收時用來算「一局講幾句」
 (globalThis as unknown as { __hbAhe?: typeof aheLog }).__hbAhe = aheLog;
+// 驗收用：看自己這一邊的牌桌與房間（只有自己看得到的東西）、模擬網路斷掉
+Object.assign(globalThis, {
+  __hbState: () => ({ st, room, seat: mySeat, screen, waiting }),
+  __hbDrop: () => { if (conn instanceof Connection) conn.simulateDrop(); },
+});
 function ahe(id: string, f: Facts = {}, delay = 0): boolean {
   if (!conn?.solo) return false;
   brain.level = fx.settings.talk;
@@ -2338,7 +2429,9 @@ function openMenu() {
   $("menuTitle").textContent = inTable ? "選單" : "設定";
   $("leaveBtn").hidden = !inTable;
   $("restartSolo").hidden = !(inTable && conn?.solo);
-  $("leaveBtn").textContent = conn?.solo ? "回首頁" : "離開這桌";
+  const live = inTable && !conn?.solo && (room?.status === "IN_GAME" || room?.status === "PAUSED");
+  $("forfeitBtn").hidden = !live;
+  $("leaveBtn").textContent = conn?.solo ? "回首頁" : live ? "暫時離開（位子留著）" : "離開這桌";
   openModal("menu");
 }
 $("menuBtn").addEventListener("click", openMenu);
@@ -2352,8 +2445,21 @@ $("muteBtn").addEventListener("click", () => { fx.settings.muted = !fx.settings.
 renderMute();
 $("leaveBtn").addEventListener("click", () => {
   // 朋友連線：先問一聲（位子會留著）；跟阿禾打會自動存檔，直接回首頁
-  if (!conn?.solo && !confirm("確定要離開這桌嗎？（位子會幫你留著）")) return;
+  const live = !conn?.solo && (room?.status === "IN_GAME" || room?.status === "PAUSED");
+  if (!conn?.solo && room && !live && room.status !== "WAITING" && room.status !== "READY") { leaveRoom("你離開了這桌。"); return; }   // 整場已經結束：直接讓座
+  if (live && !confirm(`確定要暫時離開嗎？位子會幫你留著；不過${oppName()}在線上的話，${minutes(room!.timing.forfeit)}內沒回來，照規則這場算${oppName()}贏。`)) return;
+  if (!conn?.solo && !live && !confirm("確定要離開這桌嗎？（位子會幫你留著）")) return;
   goHome(conn?.solo ? "這局幫你存好了，按「跟阿禾打」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
+});
+// 認輸離開：先確認；伺服器判自己負（只算一次）→ 讓出座位 → 回首頁
+$("forfeitBtn").addEventListener("click", () => {
+  const opp = oppName();
+  if (!confirm(`確定要認輸離開嗎？這場會算${opp}贏，戰績會記下來。`)) return;
+  $("menu").hidden = true;
+  act({ t: "leave", forfeit: true }, r => {
+    if (r.ok || r.code === "BAD_STATE") leaveRoom(`你認輸了，這場算${opp}贏。`);
+    else banner(r.msg, 2600);
+  });
 });
 $("restartSolo").addEventListener("click", () => {
   if (!confirm("要重新開始嗎？這局進度不會保留。")) return;

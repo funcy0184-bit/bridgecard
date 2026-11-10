@@ -137,6 +137,9 @@ export class Connection {
     this.retryTimer = window.setTimeout(() => { if (!this.stopped) this.open(); }, base * (0.7 + Math.random() * 0.6));
   }
 
+  // 測試用：模擬網路斷掉（跟真的斷線走同一條重連路線）
+  simulateDrop() { this.kick(); }
+
   // 這條連線看起來死了：不等瀏覽器慢慢發現，直接當斷線處理
   private kick() {
     const ws = this.ws;

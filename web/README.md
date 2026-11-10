@@ -214,6 +214,14 @@ node test/e2e/persist.mjs
 node test/e2e/match.mjs
 ```
 
+  - `reconnect.mjs`：斷線、重新整理、重連（兩支模擬手機真的點畫面；自己開一個 wrangler dev，斷線時間軸用 `--var` 縮短成提示 2.5 秒／可以選 5 秒／判中離 14 秒）：等待室房主重新整理、開局前斷線太久讓座、邀請連結加入、搶牌中／叫牌中／結算動畫中重新整理、剛加倍完斷網、出牌第 9 墩斷網（暫停面板 → 可以選 → 繼續等 → 回來）、兩人都斷網、同一人開第二個分頁、伺服器整個重開（手機自己重連）、斷線逾時照規則判（只算一次）、再來一場、選單認輸離開、沒人的房間過期收掉
+
+```bash
+node test/e2e/reconnect.mjs
+```
+
+- 斷線時間軸集中在 `src/server/protocol.ts` 的 `TIMING`（正式：30 秒提示、2 分鐘可以選、10 分鐘判中離、開局前 10 分鐘讓座、牌局保留 24 小時、戰績保留 7 天）；本機測試可以用 `wrangler dev --var NOTICE_MS:2500 --var CHOICE_MS:5000 --var FORFEIT_MS:14000 …` 縮短（正式環境不設定）
+
   - `two-phones.mjs`：兩支模擬手機（預設 iPhone 13 + Pixel 7）真的點畫面，從開房一路打到結算，順便截圖到 `test-results/`。換機型：`HB_DEVICE_A="iPhone SE" HB_DEVICE_B="Galaxy S9+" node test/e2e/two-phones.mjs`
   - `story-walk.mjs`：一支模擬手機走完阿禾的四幕（兩種搶牌、換一張試試、重新整理續讀、叫 2♥、不能出的 ♥2、王吃與墊牌、8／8 +20 分），再按「自己跟電腦打一局」打完一整局、中途重新整理、換牌桌顏色。換機型：`HB_DEVICE="iPhone SE" node test/e2e/story-walk.mjs`
 

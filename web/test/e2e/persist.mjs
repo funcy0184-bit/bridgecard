@@ -189,6 +189,33 @@ try {
     if (dup.t !== "reject" || dup.code !== "STALE") fail("同時按下一局，第二下應該被當成過期（不會連開兩局）：" + JSON.stringify(dup));
     ok("按下一局開第 2 局；另一個人慢一步按的下一局被當成過期，不會連開兩局");
   }
+
+  // ---- 兩張牌剛好都上桌（還沒結算這一墩）時伺服器重開：回來之後這一墩照樣結算 ----
+  if (A2.state.matchWinner < 0) {     // 第 1 局就有人到目標分數（很少見）就跳過
+    let lastAck = null;
+    for (let i = 0; i < 400; i++) {
+      const p = turnOf([A2, B2]);
+      if (!p) { await sleep(40); continue; }
+      const s = p.state;
+      if (s.phase !== 0 && s.phase !== 2) { await sleep(40); continue; }
+      const following = s.leadCard >= 0;
+      const r = await p.game({ t: "play", card: s.legal[0] });
+      if (r.t === "ack" && following) { lastAck = p; break; }
+      await sleep(15);
+    }
+    if (!lastAck) fail("等不到兩張牌都上桌");
+    await stop();                                   // 伺服器 1.3 秒後才會結算這一墩：在那之前關掉
+    const stock0 = A2.state.stockCount, tricks0 = A2.state.myTricks + A2.state.oppTricks, phase0 = A2.state.phase;
+    await start();
+    const A3 = player(code, "阿明", tokA); await A3.joined;
+    const B3 = player(code, "小美", tokB); await B3.joined;
+    for (let i = 0; i < 80 && !(A3.state && A3.state.leadCard < 0 && A3.state.followCard < 0); i++) await sleep(100);
+    const s3 = A3.state;
+    const advanced = phase0 === 0 ? s3.stockCount === stock0 - 2 || s3.phase !== 0 : s3.myTricks + s3.oppTricks === tricks0 + 1;
+    if (s3.leadCard >= 0 || !advanced) fail(`重開機前兩張牌都上桌，回來之後這一墩沒結算（牌堆 ${stock0}→${s3.stockCount}，墩 ${tricks0}→${s3.myTricks + s3.oppTricks}）`);
+    if (A3.state.myScore !== B3.state.oppScore) fail("結算這一墩後兩邊不一致");
+    ok("兩張牌剛好都上桌、還沒結算時伺服器重開：回來之後這一墩照樣結算，兩邊一致");
+  }
   console.log("全部通過");
 } catch (e) {
   if (!String(e?.message ?? "").length) console.error(e);

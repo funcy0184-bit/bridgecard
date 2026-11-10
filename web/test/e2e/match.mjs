@@ -15,7 +15,7 @@ const ALLOWED = new Set(["seat", "phase", "hand", "legal", "oppCount", "faceUp",
 
 let n = 0;
 function player(code, name, token = null) {
-  const p = { name, seat: -1, token, state: null, room: null, ver: 0, gid: null, msgs: [], states: [] };
+  const p = { name, seat: -1, token, state: null, stateVer: -1, room: null, ver: 0, gid: null, msgs: [], states: [] };
   p.ws = new WebSocket(`${WS}/api/rooms/${code}/ws`);
   p.joined = new Promise(res => {
     p.ws.onopen = () => p.ws.send(JSON.stringify({ t: "hello", v: 2, token, name }));
@@ -23,9 +23,9 @@ function player(code, name, token = null) {
       const m = JSON.parse(ev.data);
       p.msgs.push(m);
       if (m.t === "welcome") { p.seat = m.seat; p.token = m.token; }
-      if (m.t === "resync") { p.room = m.r; p.ver = m.ver; p.gid = m.r.gid; if (m.s) p.state = m.s; res(); }
+      if (m.t === "resync") { p.room = m.r; p.ver = m.ver; p.gid = m.r.gid; if (m.s) { p.state = m.s; p.stateVer = m.ver; } res(); }
       if (m.t === "room") { p.room = m.r; p.ver = m.r.ver; p.gid = m.r.gid; }
-      if (m.t === "state") { p.state = m.s; p.ver = m.ver; p.gid = m.gid ?? p.gid; p.states.push({ ver: m.ver, s: m.s }); }
+      if (m.t === "state") { p.state = m.s; p.stateVer = m.ver; p.ver = m.ver; p.gid = m.gid ?? p.gid; p.states.push({ ver: m.ver, s: m.s }); }
       if (m.t === "event") p.ver = m.ver;
       if (["full", "gone", "error"].includes(m.t)) res();
     };
@@ -70,7 +70,7 @@ let checks = 0, doubles = 0, redoubles = 0, hands = new Set();
 const p2 = [A, B];
 function consistent() {
   const [a, b] = [A.state, B.state];
-  if (!a || !b || A.ver !== B.ver) return;
+  if (!a || !b || A.stateVer !== B.stateVer) return;      // 只比同一個版本的牌桌（事件先到、牌桌晚幾毫秒到）
   checks++;
   for (const s of [a, b]) for (const k of Object.keys(s)) if (!ALLOWED.has(k)) fail("牌桌狀態多了不該送的欄位：" + k);
   if (a.hand.some(c => b.hand.includes(c))) fail("兩邊手牌重疊");

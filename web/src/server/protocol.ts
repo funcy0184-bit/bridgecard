@@ -66,6 +66,7 @@ export interface RoomView {
   result: { winner: number; reason: EndReason } | null;   // 這一場怎麼結束的（整場結算時）
   stats: PairStats;                                         // 同桌戰績（只算現在這兩個人）
   timing: { notice: number; choice: number; forfeit: number };   // 斷線多久提示／可以選離開／判負（毫秒）
+  forfeitAt: number | null; forfeitSeat: number;            // 對局中有人斷線：伺服器時間幾點會照規則判他中離（沒有就是 null）
 }
 export type Notice = "joined" | "left" | "ready" | "mode" | "disconnected" | "reconnected" | "started" | "forfeit" | "timeout" | "rematch" | "host";
 

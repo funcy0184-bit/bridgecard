@@ -16,6 +16,7 @@ export interface SeatMeta {
   ready: boolean;
   rematch: boolean;
   offlineSince: number | null; // 斷線開始的時間（存起來：房間重開機後也能算中離）
+  onlineAt?: number;           // 最近一次連上的時間（兩邊都斷過線時，中離從「對方回來」才開始算）
   joinedAt: number;
 }
 
@@ -153,17 +154,19 @@ export function markOffline(m: RoomMeta, seat: number, now: number) {
   if (m.status === "IN_GAME") m.status = "PAUSED";
   return true;
 }
-export function markOnline(m: RoomMeta, seat: number) {
+export function markOnline(m: RoomMeta, seat: number, now: number) {
   const s = m.seats[seat];
   if (!s) return false;
   const was = s.offlineSince !== null;
   s.offlineSince = null;
+  if (was || s.onlineAt === undefined) s.onlineAt = now;
   if (m.status === "PAUSED" && m.seats.every(x => !x || x.offlineSince === null)) m.status = "IN_GAME";
   return was;
 }
 
 // 下一個要處理的時間點（只排一個鬧鐘，不每秒醒來檢查）
 //   中離：對局中某一方斷線超過 forfeit、而且另一方在線上 → 判負
+//         （兩邊都斷過線：從「另一方回來」開始算，不會一回來就把還沒回來的人判掉）
 //   開局前：斷線超過 seatHold → 讓出座位
 //   過期：進行中的牌局最後動作後 resumeKeep；只剩戰績的房間 recordKeep
 export interface Deadlines { forfeitAt: number | null; forfeitSeat: number; releaseAt: number | null; releaseSeat: number; expireAt: number }
@@ -173,7 +176,7 @@ export function deadlines(m: RoomMeta, t: { forfeit: number; seatHold: number; r
     if (!s || s.offlineSince === null) return;
     const other = m.seats[1 - i];
     if (inMatch(m) && other && other.offlineSince === null) {
-      const at = s.offlineSince + t.forfeit;
+      const at = Math.max(s.offlineSince, other.onlineAt ?? 0) + t.forfeit;
       if (forfeitAt === null || at < forfeitAt) { forfeitAt = at; forfeitSeat = i; }
     }
     if (m.status === "WAITING" || m.status === "READY") {

@@ -254,6 +254,32 @@
         <button class="btn ghost" id="leaveBtn" type="button">離開這桌</button>
       </div>
       <button class="btn ghost small" id="restartSolo" type="button" hidden>重新發牌，從頭打一場</button>
+      <button class="btn ghost small" id="forfeitBtn" type="button" hidden>認輸離開（這場算對方贏）</button>
+    </div>
+  </div>
+
+  <!-- 朋友連線：對手斷線，牌局暫停（30 秒清楚提示、2 分鐘可以選、超過時限照規則判） -->
+  <div id="pause" class="modal" hidden>
+    <div class="sheet offer" role="alertdialog" aria-labelledby="pauseTitle">
+      <h3 id="pauseTitle">牌局暫停</h3>
+      <p id="pauseText"></p>
+      <p class="clock" id="pauseClock" aria-live="polite"></p>
+      <div class="row" id="pauseChoice" hidden>
+        <button class="btn paper" id="pauseWait" type="button">繼續等</button>
+        <button class="btn ghost" id="pauseLeave" type="button">先離開（牌局保留）</button>
+      </div>
+      <button class="btn ghost small" id="pauseHide" type="button">先收起來</button>
+    </div>
+  </div>
+
+  <!-- 朋友連線：整場因為認輸或斷線逾時結束 -->
+  <div id="matchEnd" class="modal" hidden>
+    <div class="sheet offer" role="dialog" aria-labelledby="meTitle">
+      <h3 id="meTitle"></h3>
+      <p id="meText"></p>
+      <p class="clock" id="meStats"></p>
+      <button class="btn wine big" id="meRematch" type="button">再來一場！</button>
+      <button class="btn ghost" id="meLeave" type="button">離開這桌</button>
     </div>
   </div>
 

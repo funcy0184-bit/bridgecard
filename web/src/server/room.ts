@@ -180,7 +180,7 @@ export class Room extends DurableObject<Env> {
         other.close(4000, "replaced");
       }
     }
-    const back = markOnline(m, seat);
+    const back = markOnline(m, seat, now);
     m.lastActive = now;
     this.store.commit({ meta: m });
     this.send(ws, { t: "welcome", v: PROTOCOL_VERSION, seat, token: isNew ? fresh : msg.token!, code: m.code, gid: m.gid });
@@ -396,6 +396,7 @@ export class Room extends DurableObject<Env> {
       seats: m.seats.map((s, i) => ({ taken: !!s, online: online[i], name: s?.name ?? "", ready: !!s?.ready, rematch: !!s?.rematch, offlineSince: s?.offlineSince ?? null })),
       stats: pairStats(this.recordList(), [m.seats[0]?.pid ?? null, m.seats[1]?.pid ?? null]),
       timing: { notice: this.timing.notice, choice: this.timing.choice, forfeit: this.timing.forfeit },
+      ...(({ forfeitAt, forfeitSeat }) => ({ forfeitAt, forfeitSeat }))(deadlines(m, this.timing, false)),
     };
   }
 

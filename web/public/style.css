@@ -395,6 +395,11 @@ input::placeholder { color: rgba(90,70,40,.45); }
 .sheet.offer img { transform: rotate(-4deg); filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
 #restartSolo { align-self: center; color: var(--ink); box-shadow: inset 0 0 0 1px rgba(185,138,62,.6); }
 #menu .btn.ghost, #menu #leaveBtn { color: var(--wine); box-shadow: inset 0 0 0 1px rgba(122,39,50,.5); }
+#menu #forfeitBtn { align-self: center; }
+#pause .btn.ghost, #matchEnd .btn.ghost { color: var(--wine); box-shadow: inset 0 0 0 1px rgba(122,39,50,.5); }
+#pause .row .btn { flex: 1; padding-inline: 8px; }
+.sheet .clock { margin: 0; font-size: 13.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+#pause, #matchEnd { align-items: center; }
 
 /* 設定 */
 .settings { display: flex; flex-direction: column; gap: 10px; }
