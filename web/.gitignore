@@ -1,4 +1,6 @@
 node_modules/
+# 另開工作區時用連結共用套件：連結本身也不要進版控
+node_modules
 .wrangler/
 .dev.vars
 # 部署時由 wrangler 的 build 指令產生
