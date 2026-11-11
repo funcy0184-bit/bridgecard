@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["src/game", "src/server", "test"]
+  "include": ["src/game", "src/server", "src/laststand", "test"]
 }
