@@ -83,8 +83,9 @@ for (const [name, w, h] of SIZES) {
   await p.goto(base + "/"); await check("封面", [".cv-top", "#titleCard", "#storyCard", "#solo", "#goOnline"]);
   await p.click("#goMenu"); await check("封面選單", ["#homeMenu .sheet"]); await p.click("#homeMenu [data-close]");
   await p.click("#goNews"); await check("最新消息", ["#newsModal .sheet"]); await p.click("#newsModal [data-close]");
-  await p.click("#goOnline"); await check("朋友連線", ["#create", "#join"]);
-  await p.click("#create"); await p.waitForSelector("#wait:not([hidden])"); await check("等朋友", ["#bigCode", "#share", "#cancelWait"]);
+  await p.click("#goOnline"); await check("朋友連線", ["#name", "#nameCount", "#create", "#join"]);
+  await p.fill("#name", "阿明");
+  await p.click("#create"); await p.waitForSelector("#wait:not([hidden])"); await check("等朋友", ["#bigCode", "#plateMe", "#share", "#readyBtn", "#cancelWait"]);
   await p.click("#cancelWait");
   // 故事：開場 → 輪到你 → 出牌後的說明 → 完成；叫牌；章節抽屜；設定
   await p.goto(base + "/story/"); await p.waitForTimeout(200); await check("故事開場（第一幕紙條）", ["#narrator", "#spoken", "#sHand"]);

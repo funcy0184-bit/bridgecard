@@ -59,8 +59,8 @@ ok(`開房：房號 ${code}（6 碼、不含 0 O 1 I L）`);
   ok("連開 8 桌，房號都不一樣");
 }
 const info0 = await (await fetch(`${BASE}/api/rooms/${code}`)).json();
-if (JSON.stringify(info0) !== JSON.stringify({ exists: true, status: "WAITING", seats: [false, false], started: false })) fail("查房結果不對：" + JSON.stringify(info0));
-ok("查房只回：在不在、狀態、哪些位子有人、開打了沒（沒有任何私人資料）");
+if (JSON.stringify(info0) !== JSON.stringify({ exists: true, status: "WAITING", seats: [false, false], started: false, host: "", mode: "classic" })) fail("查房結果不對：" + JSON.stringify(info0));
+ok("查房只回：在不在、狀態、哪些位子有人、開打了沒、房主暱稱、玩法（沒有憑證、沒有牌局資料）");
 
 // ---------- 加入 ----------
 const host = player(code, "阿明"); await host.joined;

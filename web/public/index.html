@@ -68,16 +68,23 @@
       <img src="/art/stamp-ahe.svg" alt="" width="34" height="41" class="mini-stamp">
     </header>
     <div class="paper sheetpaper">
-      <label class="field"><span>你要叫什麼？</span>
-        <input id="name" maxlength="10" placeholder="例如：阿明" autocomplete="nickname" enterkeyhint="done">
+      <!-- 從邀請連結進來：先看到是誰開的桌，房號已經帶好 -->
+      <div class="invite" id="inviteCard" hidden>
+        <p class="invite-k">朋友找你打牌</p>
+        <p class="invite-t" id="inviteText">查這桌中…</p>
+      </div>
+      <label class="field" for="name"><span class="fieldhead">你的暱稱 <small class="count" id="nameCount">0/16</small></span>
+        <input id="name" maxlength="64" placeholder="例如：阿明" autocomplete="nickname" enterkeyhint="done" aria-describedby="nameErr">
       </label>
+      <p class="fielderr" id="nameErr" role="alert" hidden></p>
       <button id="resume" class="btn paper" hidden></button>
       <button id="create" class="btn wine big" type="button">開一桌</button>
-      <div class="or"><span>有朋友開桌了？輸入房號就能加入</span></div>
+      <div class="or" id="orLine"><span>有朋友開桌了？輸入房號就能加入</span></div>
       <div class="join">
         <input id="code" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="房號" aria-label="朋友給的房號" enterkeyhint="go">
         <button id="join" class="btn paper" type="button">加入牌桌</button>
       </div>
+      <button id="inviteExit" class="linkbtn" type="button" hidden>不是這桌？自己開一桌</button>
       <p id="homeMsg" class="msg" role="status" aria-live="polite"></p>
       <p class="foot">不用註冊，傳個連結就能一起玩。</p>
     </div>
@@ -88,7 +95,14 @@
     <p class="label">房號</p>
     <div id="bigCode" class="bigcode" aria-live="polite"></div>
     <div class="plates">
-      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b></span><em class="ok">已入座</em></div>
+      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b></span><button class="rename" id="renameBtn" type="button" aria-label="改我的暱稱" hidden>✎ 改名</button><em class="ok">已入座</em></div>
+      <form class="renamebox" id="renameBox" hidden>
+        <label class="field" for="renameInput"><span class="fieldhead">改你的暱稱 <small class="count" id="renameCount">0/16</small></span>
+          <input id="renameInput" maxlength="64" autocomplete="nickname" enterkeyhint="done" aria-describedby="renameErr">
+        </label>
+        <p class="fielderr" id="renameErr" role="alert" hidden></p>
+        <div class="row"><button class="btn paper small" id="renameCancel" type="button">取消</button><button class="btn wine small" id="renameOk" type="submit">好</button></div>
+      </form>
       <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b></span><em class="ok">已入座</em></div>
     </div>
     <div class="modes" id="modePick" role="radiogroup" aria-label="玩法（房主選）">

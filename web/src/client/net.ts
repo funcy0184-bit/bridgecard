@@ -33,7 +33,7 @@ export async function createRoom(): Promise<string> {
   return (await res.json()).code;
 }
 
-export interface RoomInfo { exists: boolean; seats?: boolean[]; started?: boolean; status?: string }
+export interface RoomInfo { exists: boolean; seats?: boolean[]; started?: boolean; status?: string; host?: string; mode?: string }
 export async function roomInfo(code: string): Promise<RoomInfo> {
   const res = await fetch(`/api/rooms/${encodeURIComponent(code)}`);
   if (res.status === 404) return { exists: false };
@@ -43,8 +43,8 @@ export async function roomInfo(code: string): Promise<RoomInfo> {
 
 export type ConnStatus = "connecting" | "open" | "reconnecting" | "closed";
 const GAME_CMDS = new Set(["play", "call", "next"]);
-// 這些關閉代碼代表「不要再重連了」：被新分頁取代、自己離開、房間不在、坐滿、關了、版本不對、太頻繁
-const FINAL_CLOSE = new Set([4000, 4001, 4404, 4409, 4410, 4426, 4429]);
+// 這些關閉代碼代表「不要再重連了」：被新分頁取代、自己離開、房間不在、坐滿、關了、暱稱不合格、版本不對、太頻繁
+const FINAL_CLOSE = new Set([4000, 4001, 4404, 4409, 4410, 4422, 4426, 4429]);
 
 export const newCid = () => [...crypto.getRandomValues(new Uint8Array(9))].map(b => b.toString(16).padStart(2, "0")).join("");
 
@@ -101,7 +101,7 @@ export class Connection {
         store.set(LAST_ROOM_KEY, this.code);
         this.onStatus("open");
       }
-      if (m.t === "full" || m.t === "gone" || m.t === "closed" || (m.t === "error" && (m.code === "VERSION" || m.code === "RATE"))) this.stopped = true;
+      if (m.t === "full" || m.t === "gone" || m.t === "closed" || (m.t === "error" && (m.code === "VERSION" || m.code === "RATE" || m.code === "NAME"))) this.stopped = true;
       this.onMessage(m);
       // 進房、同步完：之前送出但不知道有沒有生效的指令，用同一個編號再送一次（生效過的伺服器會直接回原本的結果）
       if (m.t === "resync" && this.inflight.size) for (const [, x] of this.inflight) this.raw(x.m);

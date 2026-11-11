@@ -8,10 +8,10 @@ import { GameEvent, GameSnapshot, HoneymoonGame, Phase } from "../game/game";
 import { illegalReason } from "../game/explain";
 import {
   ClientMsg, EMOTE_COUNT, EMOTE_WINDOW_MS, MODES, Notice, PROTOCOL_VERSION, RejectCode, RoomView, ServerMsg, TIMING, Timing,
-  cleanName, emoteAllowed,
+  checkName, emoteAllowed,
 } from "./protocol";
 import {
-  RoomMeta, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, setMode, setReady, setRematch, startMatch,
+  RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, seatOfToken, setMode, setName, setReady, setRematch, startMatch,
 } from "./lobby";
 import { RoomStore, randomId, randomToken, sha256 } from "./store";
 import { RecordRow, highlights, pairStats } from "./records";
@@ -83,7 +83,9 @@ export class Room extends DurableObject<Env> {
     }
     if (url.pathname === "/info") {
       const m = this.meta;
-      return Response.json(m ? { exists: true, status: m.status, seats: m.seats.map(s => !!s), started: m.status !== "WAITING" && m.status !== "READY" } : { exists: false });
+      // 邀請畫面用：房主的暱稱（顯示用）、玩法、哪些位子有人；沒有憑證、沒有牌局
+      return Response.json(m ? { exists: true, status: m.status, seats: m.seats.map(s => !!s), started: m.status !== "WAITING" && m.status !== "READY",
+        host: m.seats[m.host]?.name ?? "", mode: m.mode } : { exists: false });
     }
     if (req.headers.get("Upgrade") === "websocket") {
       const pair = new WebSocketPair();
@@ -127,6 +129,7 @@ export class Room extends DurableObject<Env> {
     switch (msg.t) {
       case "ready": this.onReady(ws, seat, cid, !!msg.ready); break;
       case "mode": this.onMode(ws, seat, cid, msg.mode); break;
+      case "name": this.onName(ws, seat, cid, msg.name); break;
       case "rematch": this.onRematch(ws, seat, cid, !!msg.ready); break;
       case "leave": this.onLeave(ws, seat, cid, !!msg.forfeit); break;
       case "play": case "call": case "next": this.onGame(ws, seat, cid, msg); break;
@@ -164,7 +167,14 @@ export class Room extends DurableObject<Env> {
     const m = this.meta;
     if (!m) { this.send(ws, { t: "gone" }); ws.close(4404, "gone"); return; }
     const now = Date.now();
-    const r = join(m, th, { tokenHash: freshHash, pid: randomId() }, cleanName(msg.name, ""), now);
+    // 新的人要坐下：暱稱一定要合格（拿憑證回來的人沿用原本的暱稱，這次送來的名字不管）
+    let name = "";
+    if (seatOfToken(m, th) < 0 && canSeatNew(m)) {
+      const v = checkName(msg.name);
+      if (!v.ok) { this.send(ws, { t: "error", code: "NAME", msg: v.msg }); ws.close(4422, "name"); return; }
+      name = v.name;
+    }
+    const r = join(m, th, { tokenHash: freshHash, pid: randomId() }, name, now);
     if (!r.ok) {
       if (r.code === "CLOSED") { this.send(ws, { t: "closed", msg: "這桌已經關了。" }); ws.close(4410, "closed"); }
       else { this.send(ws, { t: "full" }); ws.close(4409, "full"); }
@@ -210,6 +220,17 @@ export class Room extends DurableObject<Env> {
     if (r.value.changed) this.broadcastRoom("mode", seat);
   }
 
+  // 改自己的暱稱（伺服器檢查、存檔，再同步給同桌）
+  private onName(ws: WebSocket, seat: number, cid: string | undefined, raw: unknown) {
+    const v = checkName(raw);
+    if (!v.ok) return this.reject(ws, seat, cid, "NAME_INVALID", v.msg);
+    const r = setName(this.meta!, seat, v.name);
+    if (!r.ok) return this.reject(ws, seat, cid, r.code, r.msg);
+    this.commitRoom(seat, cid);
+    this.ack(ws, cid);
+    if (r.value.changed) this.broadcastRoom("name", seat);
+  }
+
   private onRematch(ws: WebSocket, seat: number, cid: string | undefined, want: boolean) {
     const m = this.meta!;
     const r = setRematch(m, seat, want);
@@ -249,7 +270,7 @@ export class Room extends DurableObject<Env> {
   private onGame(ws: WebSocket, seat: number, cid: string | undefined, msg: Extract<ClientMsg, { t: "play" | "call" | "next" }>) {
     const m = this.meta!, g = this.game;
     if (!g || !(m.status === "IN_GAME" || m.status === "PAUSED")) return this.reject(ws, seat, cid, "BAD_STATE", "現在沒有進行中的牌局。");
-    if (m.status === "PAUSED") return this.reject(ws, seat, cid, "PAUSED", "對方連線中斷，牌局先暫停，等他回來。");
+    if (m.status === "PAUSED") return this.reject(ws, seat, cid, "PAUSED", `${m.seats[1 - seat]?.name || "對方"}連線中斷，牌局先暫停，等他回來。`);
     if ((msg.gid && msg.gid !== m.gid) || (typeof msg.ver === "number" && msg.ver !== m.ver))
       return this.reject(ws, seat, cid, "STALE", "牌桌已經更新了，幫你同步到最新。");
     if (msg.t === "next") {

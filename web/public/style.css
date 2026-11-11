@@ -150,8 +150,28 @@ input::placeholder { color: rgba(90,70,40,.45); }
 .msg.err { color: #9E1F2E; font-weight: 700; }
 .foot { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin: 0; }
 
+/* 暱稱：字數、錯誤提示；邀請卡 */
+.fieldhead { display: flex; justify-content: space-between; align-items: baseline; }
+.count { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.count.over { color: #9E1F2E; font-weight: 700; }
+input.bad { box-shadow: inset 0 0 0 2px #9E1F2E; }
+.fielderr { margin: -6px 0 0; font-size: 13.5px; color: #9E1F2E; font-weight: 700; }
+.invite { text-align: center; padding: 10px 12px; border-radius: 8px; background: rgba(122,39,50,.08); box-shadow: inset 0 0 0 1px rgba(122,39,50,.35); }
+.invite p { margin: 0; }
+.invite-k { font-size: 12.5px; letter-spacing: .3em; color: var(--wine); }
+.invite-t { font: 500 17px var(--display); color: var(--ink); line-height: 1.6; }
+.linkbtn { align-self: center; border: 0; background: none; font: inherit; font-size: 13.5px; color: var(--wine); text-decoration: underline; padding: 6px; cursor: pointer; }
+/* 鍵盤跳出來、畫面變矮時：可以捲動，不會把上面切掉 */
+#online { overflow-y: auto; }
+
 /* ---------------- 等朋友 ---------------- */
-#wait { justify-content: center; align-items: stretch; gap: 14px; text-align: center; }
+#wait { justify-content: flex-start; align-items: stretch; gap: 14px; text-align: center; overflow-y: auto; }
+#wait > :first-child { margin-top: auto; }
+#wait > :last-child { margin-bottom: auto; }
+.rename { flex: none; border: 0; border-radius: 14px; padding: 4px 9px; font: inherit; font-size: 12.5px; color: var(--wine); background: rgba(122,39,50,.08);
+  box-shadow: inset 0 0 0 1px rgba(122,39,50,.4); cursor: pointer; }
+.renamebox { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; clip-path: var(--torn-a); background: var(--paper); color: var(--ink); text-align: left; }
+.renamebox .row .btn { flex: 1; }
 .label { margin: 0; color: var(--muted); letter-spacing: .4em; }
 .bigcode { display: flex; justify-content: center; gap: 7px; }
 .bigcode span { width: 48px; height: 64px; display: grid; place-items: center; font: 700 34px var(--display); clip-path: var(--torn-b);

@@ -1,9 +1,9 @@
 // 房間狀態機（C1）、同桌戰績與精彩回顧（C4）：純函式測試
 import { describe, expect, it } from "vitest";
 import {
-  RoomMeta, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, setMode, setReady, setRematch, startMatch,
+  RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, setMode, setName, setReady, setRematch, startMatch,
 } from "../src/server/lobby";
-import { MODES, TIMING, isValidCode, CODE_ALPHABET } from "../src/server/protocol";
+import { MODES, NAME_MAX, TIMING, checkName, isValidCode, nameLength, CODE_ALPHABET } from "../src/server/protocol";
 import { LoggedEvent, RecordRow, highlights, isPublic, pairStats } from "../src/server/records";
 import { HoneymoonGame, Phase } from "../src/game/game";
 import { seededRng } from "../src/game/cards";
@@ -42,14 +42,15 @@ describe("C1 房間：建立、加入、座位", () => {
     expect(m.status).toBe("READY");
   });
 
-  it("第三個人擠不進來；拿著憑證回來的人回原座位（不會變成新的人）", () => {
+  it("第三個人擠不進來；拿著憑證回來的人回原座位、原本的暱稱（不會變成新的人，也不會被這次的名字蓋掉）", () => {
     const m = twoSeated();
     expect(join(m, null, fresh(3), "路人", T0)).toEqual({ ok: false, code: "FULL" });
     expect(join(m, "h-假的", fresh(4), "路人", T0)).toEqual({ ok: false, code: "FULL" });
-    const back = join(m, "h2", fresh(5), "小美2", T0);
+    const back = join(m, "h2", fresh(5), "別的名字", T0);
     expect(back).toEqual({ ok: true, value: { seat: 1, isNew: false } });
     expect(m.seats[1]!.pid).toBe("p2");              // 還是同一個人
-    expect(m.seats[1]!.name).toBe("小美2");
+    expect(m.seats[1]!.name).toBe("小美");            // 重新整理不會改名
+    expect(m.seats.filter(Boolean).length).toBe(2);   // 沒有多出第三個玩家
   });
 
   it("暱稱不是身分：跟房主取一樣的名字也只會拿到空位，拿不到房主的座位", () => {
@@ -344,5 +345,84 @@ describe("C4 精彩回顧：只用公開事件", () => {
       const log = simulateMatch(seed);
       expect(highlights(log.filter(isPublic), ["甲", "乙"])).toEqual(highlights(log, ["甲", "乙"]));
     }
+  });
+});
+
+describe("C1 暱稱：規則", () => {
+  const ok = (raw: string) => { const r = checkName(raw); if (!r.ok) throw new Error(r.msg); return r.name; };
+  const bad = (raw: unknown) => { const r = checkName(raw); expect(r.ok).toBe(false); return r.ok ? "" : r.code; };
+  it("繁體中文、英文、數字、一般符號、表情符號都可以；頭尾空白去掉、中間連續空白變一個", () => {
+    expect(ok("  阿明  ")).toBe("阿明");
+    expect(ok("Ming 小 明")).toBe("Ming 小 明");
+    expect(ok("小美   Lin")).toBe("小美 Lin");
+    expect(ok("Player_2.0")).toBe("Player_2.0");
+    expect(ok("阿明♠️")).toBe("阿明♠️");
+    expect(ok("橋牌王👑")).toBe("橋牌王👑");
+    expect(ok("O'Neil-陳")).toBe("O'Neil-陳");
+  });
+  it("空白、只有空白、不是文字：不接受", () => {
+    expect(bad("")).toBe("EMPTY");
+    expect(bad("   ")).toBe("EMPTY");
+    expect(bad("\u3000\t\n")).toBe("EMPTY");
+    expect(bad(undefined)).toBe("EMPTY");
+    expect(bad(123)).toBe("EMPTY");
+  });
+  it(`最多 ${NAME_MAX} 個字（中文一個字、一個 emoji 組合都算 1）；超過要提示縮短，不偷偷截斷`, () => {
+    expect(ok("一".repeat(16))).toBe("一".repeat(16));
+    expect(bad("一".repeat(17))).toBe("TOO_LONG");
+    expect(ok("a".repeat(16))).toHaveLength(16);
+    expect(bad("a".repeat(17))).toBe("TOO_LONG");
+    expect(nameLength("👨‍👩‍👧‍👦")).toBe(1);                  // 家庭 emoji（好幾個碼點）算一個字
+    expect(ok("小美👨‍👩‍👧‍👦🎉")).toBeTruthy();
+    expect(nameLength("小美👨‍👩‍👧‍👦🎉")).toBe(4);
+    // 防「亂碼字」：一個字疊上幾百個附加符號會把版面弄壞，所以另外限制總碼點數
+    expect(bad("a" + "\u0301".repeat(60))).toBe("TOO_LONG");
+    const r = checkName("一".repeat(20));
+    expect(!r.ok && r.msg).toContain("縮短");
+  });
+  it("HTML／程式碼的符號不接受；看不見的控制字元直接拿掉", () => {
+    expect(bad("<script>")).toBe("BAD_CHARS");
+    expect(bad("阿明<b>")).toBe("BAD_CHARS");
+    expect(bad('a"b')).toBe("BAD_CHARS");
+    expect(bad("a`b")).toBe("BAD_CHARS");
+    expect(bad("a{b}")).toBe("BAD_CHARS");
+    expect(ok("阿\u200B明")).toBe("阿明");                    // 零寬空白
+    expect(ok("\u202E阿明")).toBe("阿明");                     // 文字方向控制
+    expect(ok("阿\u0000明")).toBe("阿 明");                    // 控制字元變空白
+  });
+});
+
+describe("C1 暱稱：修改、鎖定", () => {
+  it("還沒按準備可以改自己的；按了準備要先取消；對局開始到這場結束都鎖定", () => {
+    const m = twoSeated();
+    expect(setName(m, 0, "阿明明")).toEqual({ ok: true, value: { changed: true } });
+    expect(m.seats[0]!.name).toBe("阿明明");
+    expect(m.seats[1]!.name).toBe("小美");                     // 只改到自己的
+    expect(setName(m, 0, "阿明明")).toEqual({ ok: true, value: { changed: false } });
+    setReady(m, 0, true);
+    expect(setName(m, 0, "又改")).toMatchObject({ ok: false, code: "NAME_LOCKED" });
+    setReady(m, 0, false);
+    expect(setName(m, 0, "又改")).toMatchObject({ ok: true });
+    setReady(m, 0, true); setReady(m, 1, true); startMatch(m, "g1");
+    expect(setName(m, 1, "小美美")).toMatchObject({ ok: false, code: "NAME_LOCKED" });
+    finishMatch(m, 0, "target");
+    expect(setName(m, 1, "小美美")).toMatchObject({ ok: false, code: "NAME_LOCKED" });
+    expect(setName(m, 1, "小美美")).toMatchObject({ ok: false });
+  });
+  it("不在座位上不能改；兩人同名也可以（用房主／訪客分辨，身分看憑證）", () => {
+    const m = newRoom("ABCDEF", T0);
+    join(m, null, fresh(1), "小明", T0);
+    expect(setName(m, 1, "x")).toMatchObject({ ok: false, code: "NOT_SEATED" });
+    join(m, null, fresh(2), "小明", T0);
+    expect(m.seats.map(s => s!.name)).toEqual(["小明", "小明"]);
+    expect(m.seats[0]!.tokenHash).not.toBe(m.seats[1]!.tokenHash);
+  });
+  it("只有開局前、還有空位時才需要檢查新來的人的暱稱", () => {
+    const m = newRoom("ABCDEF", T0);
+    expect(canSeatNew(m)).toBe(true);
+    join(m, null, fresh(1), "甲", T0);
+    expect(canSeatNew(m)).toBe(true);
+    join(m, null, fresh(2), "乙", T0);
+    expect(canSeatNew(m)).toBe(false);
   });
 });

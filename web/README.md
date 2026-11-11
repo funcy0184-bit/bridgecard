@@ -220,6 +220,17 @@ node test/e2e/match.mjs
 node test/e2e/reconnect.mjs
 ```
 
+  - `names.mjs`：雙方暱稱（連線層）：空白／太長／HTML 符號擋下且不佔座位、查房看得到房主暱稱（邀請畫面用）、改名只能改自己的、按了準備／開打／結算時鎖定、重連帶別的名字不會改名也不會多一個玩家、同名照樣入座、再來一場名字還在
+  - `names-ui.mjs`：雙方暱稱（瀏覽器真的點：房主桌機、朋友手機）：空白／17 個字的提示、注音選字 Enter 不送出、邀請連結看到誰開的桌且房號帶好、手動輸入房號也要填暱稱、改名即時同步、鍵盤跳出來（可視高度 420）時欄位和按鈕點得到、同名用房主／訪客分辨、對局／回個話／結算都用暱稱、重新整理名字還在、沒有阿禾
+
+```bash
+node test/e2e/names.mjs
+```
+
+```bash
+node test/e2e/names-ui.mjs
+```
+
 - 自動測試用的是模擬手機和本機伺服器；**真的 iPhone Safari、不同網路、鎖螢幕／切背景**要照 `test/MANUAL-online.md` 手動測
 - 斷線時間軸集中在 `src/server/protocol.ts` 的 `TIMING`（正式：30 秒提示、2 分鐘可以選、10 分鐘判中離、開局前 10 分鐘讓座、牌局保留 24 小時、戰績保留 7 天）；本機測試可以用 `wrangler dev --var NOTICE_MS:2500 --var CHOICE_MS:5000 --var FORFEIT_MS:14000 …` 縮短（正式環境不設定）
 

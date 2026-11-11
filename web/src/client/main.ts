@@ -9,7 +9,7 @@ import {
 import { GameEvent, Phase, TableState } from "../game/game";
 import { beats, isTrump } from "../game/rules";
 import { breakdown, contractText, declarerPreview, defenderPreview, madePoints, pointsPerUndertrick, PER_OVERTRICK, type HandResult } from "../game/scoring";
-import { CODE_LENGTH, Highlight, MODES, Mode, Notice, RoomView, SeatInfo, ServerMsg, isValidCode, normalizeCode } from "../server/protocol";
+import { CODE_LENGTH, Highlight, MODES, Mode, NAME_MAX, Notice, RoomView, SeatInfo, ServerMsg, checkName, isValidCode, nameLength, normalizeCode, normalizeName } from "../server/protocol";
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
 import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
@@ -62,7 +62,14 @@ let impactGate = new ImpactGate();           // 同一墩的結果只演一次  
 const chipPending = new Set<number>();   // 叫牌籌碼還在飛：那一邊的叫牌紙卡先不換字
 let hoverWant = -1, hoverTimer = 0;
 
-const oppName = () => seats[1 - mySeat]?.name || (mySeat === 0 ? "朋友" : "房主");
+// 朋友連線：房主／訪客（同名時用來分辨）
+const roleOf = (s: number) => room && s === room.host ? "房主" : "訪客";
+const sameNames = () => !!room && !!seats[0]?.name && seats[0].name.toLowerCase() === seats[1]?.name?.toLowerCase();
+// 對手的暱稱：兩人同名時後面加（房主）／（訪客）分辨
+const oppName = () => {
+  const n = seats[1 - mySeat]?.name || (room ? roleOf(1 - mySeat) : mySeat === 0 ? "朋友" : "房主");
+  return sameNames() ? `${n}（${roleOf(1 - mySeat)}）` : n;
+};
 const nameOf = (s: number) => s === mySeat ? "你" : oppName();
 const myTurn = () => !!st && st.currentSeat === st.seat && !(st.leadCard >= 0 && st.followCard >= 0) && st.phase !== Phase.Finished;
 const myBidTurn = () => !!st && st.phase === Phase.Bidding && myTurn();
@@ -95,13 +102,80 @@ function setWaiting(on: boolean) {
 const nameInput = $<HTMLInputElement>("name");
 const codeInput = $<HTMLInputElement>("code");
 const homeMsg = $("homeMsg");
-nameInput.value = store.get("hb-name") ?? "";
-nameInput.addEventListener("change", () => store.set("hb-name", nameInput.value.trim()));
+nameInput.value = store.get("hb-name") ?? "";          // 上次用的暱稱（可以改）
 codeInput.addEventListener("input", () => { codeInput.value = normalizeCode(codeInput.value).replace(/[^A-Z0-9]/g, "").slice(0, CODE_LENGTH); });
-codeInput.addEventListener("keydown", e => { if (e.key === "Enter") $("join").click(); });
+codeInput.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) $("join").click(); });
 
 function say(msg: string, err = false) { homeMsg.textContent = msg; homeMsg.classList.toggle("err", err); }
-const myName = () => { const n = nameInput.value.trim(); if (n) store.set("hb-name", n); return n; };
+const myName = () => normalizeName(nameInput.value);
+
+// ---------------- 暱稱：字數、空白、太長、不允許的符號（伺服器還會再檢查一次） ----------------
+// 輸入時即時顯示「幾個字 / 16」，超過就變紅並提示；按「開一桌／加入牌桌」時才擋下空白
+function nameField(input: HTMLInputElement, count: HTMLElement, err: HTMLElement) {
+  const update = () => {
+    const n = nameLength(normalizeName(input.value));
+    count.textContent = `${n}/${NAME_MAX}`;
+    const over = n > NAME_MAX;
+    count.classList.toggle("over", over);
+    fieldErr(input, err, over ? `暱稱最多 ${NAME_MAX} 個字，請縮短一點。` : "");   // 正在改：不合格的提示跟著更新
+  };
+  input.addEventListener("input", update);
+  update();
+  return update;
+}
+function fieldErr(input: HTMLInputElement, err: HTMLElement, msg: string) {
+  err.textContent = msg;
+  err.hidden = !msg;
+  input.classList.toggle("bad", !!msg);
+  input.setAttribute("aria-invalid", String(!!msg));
+}
+// 讀出合格的暱稱；不合格就在欄位下面說原因、回傳 null
+function readName(input: HTMLInputElement, err: HTMLElement): string | null {
+  const v = checkName(input.value);
+  if (!v.ok) { fieldErr(input, err, v.msg); fx.deny(input); sfx.deny(); input.focus(); return null; }
+  input.value = v.name;
+  fieldErr(input, err, "");
+  return v.name;
+}
+const refreshNameCount = nameField(nameInput, $("nameCount"), $("nameErr"));
+// 注音／拼音選字時按 Enter 是「選這個字」，不是送出（isComposing／229）
+const composing = (e: KeyboardEvent) => e.isComposing || e.keyCode === 229;
+nameInput.addEventListener("keydown", e => { if (e.key === "Enter" && !composing(e)) { e.preventDefault(); (inviteMode ? $("join") : $("create")).click(); } });
+const homeName = () => { const n = readName(nameInput, $("nameErr")); if (n) store.set("hb-name", n); return n; };
+
+// ---------------- 從邀請連結進來：房號帶好、看得到是誰開的桌，只要填自己的暱稱 ----------------
+let inviteMode = false;
+function setInvite(on: boolean) {
+  inviteMode = on;
+  $("inviteCard").hidden = !on;
+  $("inviteExit").hidden = !on;
+  $("create").hidden = on;
+  $("orLine").hidden = on;
+  codeInput.readOnly = on;
+  $("join").classList.toggle("wine", on);
+  $("join").classList.toggle("paper", !on);
+  if (on) $("resume").hidden = true;
+}
+async function showInvite(code: string) {
+  show("online");
+  setInvite(true);
+  codeInput.value = code;
+  say("");
+  $("inviteText").textContent = `房號 ${code}，查這桌中…`;
+  try {
+    const info = await roomInfo(code);
+    if (!inviteMode || codeInput.value !== code) return;
+    if (!info.exists) { setInvite(false); say("找不到這桌（房號打錯，或這桌已經收掉了）。", true); return; }
+    if (info.status === "CLOSED") { setInvite(false); say("這桌已經關了，請朋友再開一桌。", true); return; }
+    if (info.started) { setInvite(false); say("這桌已經開打了，請朋友再開一桌。", true); return; }
+    const free = (info.seats ?? []).filter(x => !x).length;
+    if (!free) { setInvite(false); say("這桌已經坐滿啦。", true); return; }
+    const mode = MODES[(info.mode ?? "classic") as Mode]?.label ?? MODES.classic.label;
+    $("inviteText").textContent = info.host ? `「${info.host}」開的桌 · ${mode} · 房號 ${code}` : `房號 ${code} · ${mode}`;
+    say(nameInput.value ? "暱稱沒問題就按「加入牌桌」。" : "填好你的暱稱，按「加入牌桌」。");
+  } catch (e) { say((e as Error).message, true); }
+}
+$("inviteExit").addEventListener("click", () => { setInvite(false); codeInput.value = ""; say(""); history.replaceState(null, "", "/"); refreshResume(); });
 
 $("goOnline").addEventListener("click", () => offerStoryFirst(() => { show("online"); refreshResume(); }));
 $("onlineBack").addEventListener("click", () => show("home"));
@@ -114,14 +188,18 @@ $("newsDot").hidden = store.get(NEWS_KEY) === BUILD.sha;
 $("goNews").addEventListener("click", () => { store.set(NEWS_KEY, BUILD.sha); $("newsDot").hidden = true; openModal("newsModal"); });
 
 $("create").addEventListener("click", async () => {
+  const name = homeName();
+  if (!name) return;
   const b = $<HTMLButtonElement>("create");
   b.disabled = true; say("開桌中…");
-  try { enter(await createRoom()); }
+  try { enter(await createRoom(), name); }
   catch (e) { say((e as Error).message, true); }
   finally { b.disabled = false; }
 });
 
 $("join").addEventListener("click", async () => {
+  const name = homeName();
+  if (!name) return;
   const code = normalizeCode(codeInput.value);
   if (!isValidCode(code)) { say(`房號是 ${CODE_LENGTH} 個英文字母或數字喔。`, true); fx.deny(codeInput); sfx.deny(); return; }
   say("找這桌中…");
@@ -130,14 +208,14 @@ $("join").addEventListener("click", async () => {
     if (!info.exists) { say("找不到這桌，再確認一下房號。", true); return; }
     if (!savedToken(code) && info.started) { say("這桌已經開打了，請朋友再開一桌。", true); return; }
     if (!savedToken(code) && info.seats?.every(Boolean)) { say("這桌已經坐滿啦。", true); return; }
-    enter(code);
+    enter(code, name);
   } catch (e) { say((e as Error).message, true); }
 });
 
 function refreshResume() {
   const last = store.get(LAST_ROOM_KEY);
   const b = $("resume");
-  b.hidden = !(last && savedToken(last));
+  b.hidden = inviteMode || !(last && savedToken(last));
   if (!b.hidden) b.textContent = `回到 ${last} 這桌`;
   $("soloSub").textContent = hasUnfinishedSolo() ? "繼續上次那局" : "";
   refreshStoryCard();
@@ -235,12 +313,14 @@ function resetTable() {
   sfx.resetStreak();
 }
 
-function enter(code: string) {
+// 進房：新入座的人帶自己的暱稱；拿憑證回來的人用原本的暱稱（伺服器不會拿這次的名字蓋掉）
+function enter(code: string, name = myName()) {
   conn?.close();
   resetTable();
+  setInvite(false);
   say("連線中…");
   history.replaceState(null, "", `/?room=${code}`);
-  const c = new Connection(code, myName());
+  const c = new Connection(code, name);
   conn = c;
   c.onMessage = onMsg;
   let dropped = false;
@@ -325,6 +405,15 @@ function onMsg(m: ServerMsg) {
       break;
     case "error":
       lastErr = m.msg;
+      if (m.code === "NAME") {
+        // 要坐新位子但暱稱不合格（例如這支手機的舊憑證已經作廢、又沒填暱稱）：回到填暱稱的地方，房號留著
+        const code = conn?.code ?? "";
+        goHome("", false, true);
+        codeInput.value = code;
+        fieldErr(nameInput, $("nameErr"), m.msg);
+        nameInput.focus();
+        break;
+      }
       if (m.code === "RATE") goHome(m.msg, true, true);
       else banner(m.msg, m.code === "VERSION" ? 0 : 2600);
       break;
@@ -379,6 +468,7 @@ function roomNotice(notice: Notice | undefined, name: string, prev: RoomView["re
       else banner(`${name}離開了這桌。`, 2600);
       break;
     case "mode": banner(`房主把玩法換成「${MODES[room!.mode].label}」，兩邊都要重新按準備。`, 2800); break;
+    case "name": banner(`${name}把暱稱改成「${oppName()}」。`, 2400); break;
     case "forfeit": banner(`${name}認輸離開了，這場算你贏。`, 3200); break;
     case "timeout": banner(`${name}斷線太久，照規則這場算你贏。`, 3200); break;
     case "rematch": if (seats[1 - mySeat]?.rematch) banner(`${name}想再來一場！`, 2200); break;
@@ -547,8 +637,12 @@ function showWait(before: (boolean | undefined)[] = []) {
   }
   if (mySeat < 0 || !room) return;
   const me = seats[mySeat], opp = seats[1 - mySeat];
-  const role = (s: number) => s === room!.host ? "房主" : "朋友";
+  const role = roleOf;
   $("plateMeName").textContent = me?.name || "你";
+  // 改名：開局前、還沒按準備才能改（只能改自己的）
+  const canRename = (room.status === "WAITING" || room.status === "READY") && !me?.ready && !renameBusy;
+  $("renameBtn").hidden = !canRename || !$("renameBox").hidden;
+  if (!canRename && !$("renameBox").hidden && me?.ready) closeRename();
   ($("plateMe").querySelector("small") as HTMLElement).textContent = `${role(mySeat)}（你）`;
   ($("plateOpp").querySelector("small") as HTMLElement).textContent = role(1 - mySeat);
   plateTag($("plateMe"), me);
@@ -594,6 +688,45 @@ function renderModes() {
   });
   $("modeNote").textContent = host ? "你是房主，玩法你來選（換了要重新準備）。" : "玩法由房主選（換了要重新準備）。";
 }
+// 改暱稱：名牌換成輸入欄（鍵盤跳出來時輸入欄和按鈕在畫面上半部，不會被擋住）
+let renameBusy = false;
+const renameInput = $<HTMLInputElement>("renameInput");
+const refreshRenameCount = nameField(renameInput, $("renameCount"), $("renameErr"));
+function openRename() {
+  renameInput.value = seats[mySeat]?.name ?? "";
+  fieldErr(renameInput, $("renameErr"), "");
+  refreshRenameCount();
+  $("plateMe").hidden = true;
+  $("renameBox").hidden = false;
+  $("renameBtn").hidden = true;
+  renameInput.focus();
+  renameInput.select();
+}
+function closeRename() {
+  $("renameBox").hidden = true;
+  $("plateMe").hidden = false;
+  if (screen === "wait") showWait();
+}
+$("renameBtn").addEventListener("click", openRename);
+$("renameCancel").addEventListener("click", closeRename);
+renameInput.addEventListener("keydown", e => { if (e.key === "Enter" && composing(e)) e.preventDefault(); });   // 選字中的 Enter 不送出
+$("renameBox").addEventListener("submit", ev => {
+  ev.preventDefault();
+  if (renameBusy) return;
+  const name = readName(renameInput, $("renameErr"));
+  if (!name) return;
+  if (name === seats[mySeat]?.name) { closeRename(); return; }
+  renameBusy = true;
+  $<HTMLButtonElement>("renameOk").disabled = true;
+  const sent = act({ t: "name", name }, r => {
+    renameBusy = false;
+    $<HTMLButtonElement>("renameOk").disabled = false;
+    if (r.ok) { store.set("hb-name", name); nameInput.value = name; refreshNameCount(); closeRename(); banner(`暱稱改成「${name}」了。`, 1600); }
+    else fieldErr(renameInput, $("renameErr"), r.msg);
+  });
+  if (!sent) { renameBusy = false; $<HTMLButtonElement>("renameOk").disabled = false; }
+});
+
 $("modePick").addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".mode");
   if (!b || !room) return;
@@ -2567,8 +2700,8 @@ emo.onChange(p => $("bidPanel").style.setProperty("--tension", p.toFixed(2)));
   if (solo === "new" || solo === "1") enterSolo(solo === "new");   // 故事最後的「自己跟電腦打一局」= new：重新發牌
   else if (isValidCode(room)) {
     codeInput.value = room;
-    if (savedToken(room)) enter(room);
-    else { show("online"); say(`朋友找你打牌！房號 ${room}，填好名字按「加入牌桌」。`); }
+    if (savedToken(room)) enter(room);          // 這支手機坐過這桌：直接回原座位（原本的暱稱）
+    else void showInvite(room);                 // 邀請連結：房號帶好，只要填自己的暱稱
   }
   refreshResume();
   // 封面：標題、三顆按鈕、四張篇章卡依序淡入

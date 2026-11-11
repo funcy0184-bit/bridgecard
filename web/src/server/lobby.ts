@@ -56,11 +56,8 @@ export type JoinResult = { seat: number; isNew: boolean };
 export function join(m: RoomMeta, tokenHash: string | null, fresh: { tokenHash: string; pid: string }, name: string, now: number): Ok<JoinResult> | Fail | { ok: false; code: "FULL" | "CLOSED" } {
   if (m.status === "CLOSED") return { ok: false, code: "CLOSED" };
   const back = seatOfToken(m, tokenHash);
-  if (back >= 0) {
-    const s = m.seats[back]!;
-    if (name) s.name = name;
-    return ok({ seat: back, isNew: false });
-  }
+  // 拿憑證回來（重新整理、重連）：原本的座位、原本的暱稱，不會被這次送來的名字蓋掉
+  if (back >= 0) return ok({ seat: back, isNew: false });
   // 新的人：只有等人／確認準備時有空位才行（比賽開始、結算中、再來一場都不讓陌生人坐）
   const free = m.seats.findIndex(s => s === null);
   if (free < 0 || !(m.status === "WAITING" || m.status === "READY")) return { ok: false, code: "FULL" };
@@ -69,6 +66,20 @@ export function join(m: RoomMeta, tokenHash: string | null, fresh: { tokenHash: 
   for (const s of m.seats) if (s) s.ready = false;    // 有人進來：準備重新確認
   m.status = seated(m) === 2 ? "READY" : "WAITING";
   return ok({ seat: free, isNew: true });
+}
+
+// 現在能不能讓一個新的人坐下（能的話才需要檢查他的暱稱）
+export const canSeatNew = (m: RoomMeta) => (m.status === "WAITING" || m.status === "READY") && m.seats.some(s => s === null);
+
+// 改自己的暱稱：開局前、還沒按準備時才行（只能改自己的座位；對局開始到這一場結束都鎖定）
+export function setName(m: RoomMeta, seat: number, name: string): Ok<{ changed: boolean }> | Fail {
+  const s = m.seats[seat];
+  if (!s) return fail("NOT_SEATED", "你不在這桌。");
+  if (!(m.status === "WAITING" || m.status === "READY")) return fail("NAME_LOCKED", "對局開始後暱稱就鎖定了，這一場結束後再改。");
+  if (s.ready) return fail("NAME_LOCKED", "已經按準備了：先取消準備再改暱稱。");
+  const changed = s.name !== name;
+  s.name = name;
+  return ok({ changed });
 }
 
 // 開局前離開：讓出座位；房主走了換剩下的人當房主；兩個都走了就關房
