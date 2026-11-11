@@ -16,7 +16,7 @@
 //
 // 籌碼守恆：雙方手上 + 本墩承諾 + 疊池（每人出資分開記）永遠 = 30
 import {
-  Cat, Dir, START_CHIPS, TOTAL_CHIPS, TRICKS, allInStage, catCounts, catOf, compare, deal, declarerOf, firstBettorOf, flipDir, stageOf,
+  Cat, DEFAULT_STAGES, Dir, START_CHIPS, Stage, TOTAL_CHIPS, TRICKS, allInStage, catCounts, catOf, compare, deal, declarerOf, firstBettorOf, flipDir, stageOf,
 } from "./rules";
 
 export type Phase = "flip" | "safeguard" | "lock" | "bet" | "over";
@@ -47,6 +47,7 @@ export interface BetStep { seat: number; act: "check" | "raise" | "call" | "fold
 export interface TrickRecord {
   trick: number; baseDir: Dir; dir: Dir; flippedBy: number; safeguardBy: number; safeguardBlocked: boolean;
   declarer: number; firstBettor: number; ante: number; cap: number; stake: number; startStacks: [number, number];
+  poolBefore: [number, number];            // 這一墩開始時疊池裡雙方的出資
   steps: BetStep[]; insight: [boolean, boolean];
   outcome: "showdown" | "tie" | "fold";
   cards: [number, number] | null;          // 翻牌（含同點）才有確切牌面
@@ -73,7 +74,7 @@ export interface LSState {
   flipUsed: [boolean, boolean]; safeUsed: [boolean, boolean]; insightUsed: [boolean, boolean];
   safeguard: number; safeguardBlocked: boolean; safeOrder: number[];
   locks: [number, number];
-  ante: number; cap: number; stake: number; startStacks: [number, number];
+  ante: number; cap: number; stake: number; startStacks: [number, number]; startPool?: [number, number];
   commit: [number, number];
   raises: number; checks: number; steps: BetStep[]; insightThis: [boolean, boolean]; insightNow: [number, number];
   pool: [number, number];                  // 疊池：每位玩家的出資分開記
@@ -81,6 +82,7 @@ export interface LSState {
   insightLog: { trick: number; seat: number; cat: Cat }[];       // 讀心結果（只給使用者看）
   folded: { trick: number; folder: number; cards: [number, number] }[];   // 棄牌確切牌面（伺服器保密，賽後雙方同意才公開）
   result: { winner: number; reason: "elimination" | "nine"; trick: number } | null;
+  stages?: Stage[];                        // 底注／上限（沒有就是企劃書預設；只給平衡模擬比較用）
 }
 
 export interface Legal {
@@ -118,12 +120,12 @@ export class LastStandGame {
   private constructor(s: LSState) { this.s = s; }
 
   // 開新的一場：發牌、擲硬幣決定第 1 墩宣戰權，直接進第 1 墩
-  static newMatch(rng: () => number, listener?: Listener): LastStandGame {
+  static newMatch(rng: () => number, listener?: Listener, stages?: Stage[]): LastStandGame {
     const { hands, directions } = deal(rng);
-    return LastStandGame.setup({ hands, directions, coin: rng() < 0.5 ? 0 : 1 }, listener);
+    return LastStandGame.setup({ hands, directions, coin: rng() < 0.5 ? 0 : 1, stages }, listener);
   }
   // 指定牌局（測試、教學用）：手牌、9 墩方向、誰先拿宣戰權、起始籌碼
-  static setup(o: { hands: [number[], number[]]; directions: Dir[]; coin: 0 | 1; stacks?: [number, number] }, listener?: Listener): LastStandGame {
+  static setup(o: { hands: [number[], number[]]; directions: Dir[]; coin: 0 | 1; stacks?: [number, number]; stages?: Stage[] }, listener?: Listener): LastStandGame {
     const stacks: [number, number] = o.stacks ? [o.stacks[0], o.stacks[1]] : [START_CHIPS, START_CHIPS];
     if (stacks[0] + stacks[1] !== TOTAL_CHIPS) throw new Error("起始籌碼加起來要是 30");
     const g = new LastStandGame({
@@ -134,6 +136,7 @@ export class LastStandGame {
       ante: 0, cap: 0, stake: 0, startStacks: [stacks[0], stacks[1]], commit: [0, 0],
       raises: 0, checks: 0, steps: [], insightThis: [false, false], insightNow: [-1, -1],
       pool: [0, 0], history: [], insightLog: [], folded: [], result: null,
+      ...(o.stages && o.stages !== DEFAULT_STAGES ? { stages: o.stages.map(x => ({ ...x })) } : {}),
     });
     if (listener) g.on(listener);
     g.emit({ type: "MatchStart", trick: 0, seat: -1, declarer: g.s.coin, stacks: [...g.s.stacks] as [number, number] });
@@ -157,9 +160,10 @@ export class LastStandGame {
   private beginTrick() {
     const s = this.s;
     s.trick++;
-    const st = stageOf(s.trick);
+    const st = stageOf(s.trick, s.stages);
     const lo = Math.min(s.stacks[0], s.stacks[1]);
     s.startStacks = [s.stacks[0], s.stacks[1]];
+    s.startPool = [s.pool[0], s.pool[1]];
     s.ante = Math.min(st.ante, lo);                 // 有效底注
     s.cap = Math.min(st.cap, lo);                   // 每人最高承諾總額：用「該墩開始時」的籌碼算
     s.stake = 0;
@@ -334,6 +338,7 @@ export class LastStandGame {
     return {
       trick: s.trick, baseDir: s.directions[s.trick - 1], dir: s.dir, flippedBy: s.flippedBy, safeguardBy: s.safeguard, safeguardBlocked: s.safeguardBlocked,
       declarer: this.declarer(), firstBettor: this.firstBettor(), ante: s.ante, cap: s.cap, stake: s.stake, startStacks: [...s.startStacks] as [number, number],
+      poolBefore: [s.startPool?.[0] ?? 0, s.startPool?.[1] ?? 0],
       steps: s.steps.slice(), insight: [...s.insightThis] as [boolean, boolean], allIn: this.allInSeat(),
       refund: null, stacksAfter: [0, 0], poolAfter: [0, 0], ...partial,
     };

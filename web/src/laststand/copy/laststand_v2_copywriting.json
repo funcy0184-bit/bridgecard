@@ -1,0 +1,1025 @@
+{
+  "title": "《來打橋牌：逆命賭局》V2 原創文案資料庫",
+  "version": "2.0",
+  "locale": "zh-TW",
+  "summary": "事件驅動的冷面、實況崩潰、體育記者會、TTS/抽象複製文。不引用既有實況主逐字稿或卡牌原文。",
+  "tokens": [
+    "actor",
+    "amount",
+    "directionLabel",
+    "keyTrick",
+    "loser",
+    "loserStake",
+    "loserVow",
+    "winner"
+  ],
+  "eventContract": {
+    "allin_loss": "梭哈方已遭接戰並在該墩輸掉，且該結果成為結算主事件；不推斷其意圖。",
+    "allin_win": "梭哈已接戰，主動梭哈方贏下對局或高額墩。",
+    "fold_win": "以棄牌決定該墩；不得宣稱翻牌後牌力孰強。",
+    "bluff_verified": "僅在雙方賽後同意揭露該墩隱藏牌且後端確定棄牌者本可獲勝時成立。",
+    "vow_backfire": "賽前豪言非空，發言者為本場落敗者；只做原句回放，不判定句義。",
+    "last_trick_comeback": "第9墩結算前非領先、結算後嚴格領先，且比賽於第9墩結束。",
+    "tie_pool": "雙方實際翻牌且同點，賭盤依規則保留。",
+    "safeguard_save": "保命實際避免超過1枚的損失；單純宣告不算。",
+    "finish_draw": "第9墩結算後，雙方手上籌碼相等且全部未決賭盤已依出資退款。"
+  },
+  "contentSafety": {
+    "scope": "全部僅在局內虛擬籌碼；彩頭不涉及現金交易、不強制現實履約。",
+    "input": "限制長度；escape HTML；過濾網址/個資/侮辱性或仇恨內容；支援檢舉與關閉自訂字詞。",
+    "privacy": "棄牌未公開的實際牌點，在雙方同意賽後揭露前不可由任何模板推斷或輸出。"
+  },
+  "entries": [
+    {
+      "id": "V2-001",
+      "event": "raise",
+      "phase": "live",
+      "style": "chat",
+      "tone": "light",
+      "text": "他加了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-002",
+      "event": "raise",
+      "phase": "live",
+      "style": "chat",
+      "tone": "light",
+      "text": "不是，這邊還要加？",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-003",
+      "event": "raise",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "本墩賭注已提高。請自行負責。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-004",
+      "event": "reraise",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "欸？還有第二次喔。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-005",
+      "event": "reraise",
+      "phase": "live",
+      "style": "chat",
+      "tone": "heavy",
+      "text": "不是，他真的反加欸。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-006",
+      "event": "reraise",
+      "phase": "live",
+      "style": "sports",
+      "tone": "medium",
+      "text": "這球直接回敬了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-007",
+      "event": "call",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "已接戰。沒有退路了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-008",
+      "event": "call",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "他跟了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-009",
+      "event": "fold",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "{actor} 選擇棄牌。",
+      "variables": [
+        "actor"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-010",
+      "event": "fold_after_raise",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "不是，他真的退了？",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-011",
+      "event": "fold_after_raise",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "這墩沒有翻牌的必要了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-012",
+      "event": "allin_announced",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "等一下，全部？",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-013",
+      "event": "allin_announced",
+      "phase": "live",
+      "style": "chat",
+      "tone": "heavy",
+      "text": "兄弟你先不要推。你先看我一下。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-014",
+      "event": "allin_called",
+      "phase": "live",
+      "style": "chat",
+      "tone": "heavy",
+      "text": "他跟了。好了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-015",
+      "event": "allin_called",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "雙方已確認高額接戰。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-016",
+      "event": "direction_flip",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "規則改了。現在{directionLabel}。",
+      "variables": [
+        "directionLabel"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-017",
+      "event": "tie",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "同點。這個問題留給下一墩。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-018",
+      "event": "tie",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "這兩個是在約好是不是？",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-019",
+      "event": "pool_win",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "剛剛沒解決的，這墩一次解決。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-020",
+      "event": "safeguard",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "{actor} 宣告保命。本墩風險封頂。",
+      "variables": [
+        "actor"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-021",
+      "event": "insight",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "{actor} 使用讀心。結果僅本人可見。",
+      "variables": [
+        "actor"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-022",
+      "event": "comeback",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "欸？現在換{actor}領先喔？",
+      "variables": [
+        "actor"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-023",
+      "event": "final_trick",
+      "phase": "live",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "最後一墩。沒有下一題了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-024",
+      "event": "chip_zero",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "好。這邊沒籌碼了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-025",
+      "event": "vow_echo",
+      "phase": "live",
+      "style": "chat",
+      "tone": "medium",
+      "text": "有人開局是不是有說過什麼？",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-026",
+      "event": "finish_general",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "{loser} 最終沒能保住「{loserStake}」",
+      "variables": [
+        "loser",
+        "loserStake"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-027",
+      "event": "finish_general",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "九墩已結束，「{loserStake}」的事另案處理",
+      "variables": [
+        "loserStake"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-028",
+      "event": "finish_general",
+      "phase": "title",
+      "style": "announcement",
+      "tone": "medium",
+      "text": "關於「{loserStake}」之歸屬，本桌已有結論",
+      "variables": [
+        "loserStake"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-029",
+      "event": "finish_general",
+      "phase": "title",
+      "style": "chat",
+      "tone": "medium",
+      "text": "好啦，至少{loser}有來",
+      "variables": [
+        "loser"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-030",
+      "event": "allin_loss",
+      "phase": "title",
+      "style": "sports",
+      "tone": "medium",
+      "text": "一次梭哈，整場交代",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-031",
+      "event": "allin_loss",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "全數投入，結果不予退款",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-032",
+      "event": "allin_loss",
+      "phase": "title",
+      "style": "chat",
+      "tone": "heavy",
+      "text": "不是，你真的全推喔",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-033",
+      "event": "allin_win",
+      "phase": "title",
+      "style": "sports",
+      "tone": "medium",
+      "text": "末段一球，直接換人領先",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-034",
+      "event": "allin_win",
+      "phase": "title",
+      "style": "announcement",
+      "tone": "light",
+      "text": "原訂勝者名單，現予以更正",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-035",
+      "event": "last_trick_comeback",
+      "phase": "title",
+      "style": "sports",
+      "tone": "medium",
+      "text": "領先八墩不是保固服務",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-036",
+      "event": "last_trick_comeback",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "最後一墩發生人員異動",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-037",
+      "event": "fold_win",
+      "phase": "title",
+      "style": "announcement",
+      "tone": "light",
+      "text": "無須翻牌，已完成移交",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-038",
+      "event": "bluff_verified",
+      "phase": "title",
+      "style": "chat",
+      "tone": "medium",
+      "text": "等等，剛剛那墩其實會贏？",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-039",
+      "event": "tie_pool",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "賭盤因雙方意見一致持續累積",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-040",
+      "event": "vow_backfire",
+      "phase": "title",
+      "style": "announcement",
+      "tone": "light",
+      "text": "賽前發言已完成事後查核",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-041",
+      "event": "safeguard_save",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "本次損失，感謝保命協助控制",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-042",
+      "event": "finish_draw",
+      "phase": "title",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "本桌決議：平手，各自把話吞回去",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-043",
+      "event": "finish_general",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "勝者是{winner}。至於「{loserStake}」，請當事人自行協調。",
+      "variables": [
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-044",
+      "event": "finish_general",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "medium",
+      "text": "{loser}只是想打個牌，事情怎麼會變成這樣。",
+      "variables": [
+        "loser"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-045",
+      "event": "finish_general",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "比賽沒有問題。問題目前集中在{loser}身上。",
+      "variables": [
+        "loser"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-046",
+      "event": "allin_loss",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "medium",
+      "text": "他梭哈那一刻，大家其實都有機會阻止他。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-047",
+      "event": "allin_loss",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "本桌確認，籌碼確實是{loser}自願推出去的。",
+      "variables": [
+        "loser"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-048",
+      "event": "allin_win",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "medium",
+      "text": "不是，真的給他打回來了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-049",
+      "event": "allin_win",
+      "phase": "punchline",
+      "style": "sports",
+      "tone": "medium",
+      "text": "前面八墩的努力，最後全部進入延長討論。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-050",
+      "event": "last_trick_comeback",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "本局於最後一墩更換勝者，敬請見諒。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-051",
+      "event": "fold_win",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "medium",
+      "text": "牌還沒翻，心理防線先翻了。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-052",
+      "event": "fold_win",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "本墩勝負，由棄牌方提前決定。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-053",
+      "event": "bluff_verified",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "heavy",
+      "text": "不是，他原本那張真的能贏欸。",
+      "variables": [],
+      "requires": [
+        "revealConsentBoth"
+      ],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-054",
+      "event": "tie_pool",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "由於雙方拒絕分出高下，籌碼繼續留職停薪。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-055",
+      "event": "vow_backfire",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "以下為{loser}賽前原話：「{loserVow}」。本桌已存檔。",
+      "variables": [
+        "loser",
+        "loserVow"
+      ],
+      "requires": [
+        "loserVowExists"
+      ],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-056",
+      "event": "vow_backfire",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "medium",
+      "text": "{loser}有說過「{loserVow}」。我們先不要急著刪訊息。",
+      "variables": [
+        "loser",
+        "loserVow"
+      ],
+      "requires": [
+        "loserVowExists"
+      ],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-057",
+      "event": "fold_streak",
+      "phase": "punchline",
+      "style": "sports",
+      "tone": "medium",
+      "text": "{loser}的戰術很有紀律，主要是沒有進入翻牌階段。",
+      "variables": [
+        "loser"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-058",
+      "event": "safeguard_save",
+      "phase": "punchline",
+      "style": "chat",
+      "tone": "medium",
+      "text": "這張保命真的是拿來保命的。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-059",
+      "event": "finish_draw",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "兩位都沒贏，也沒人能合理嘴另一位。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-060",
+      "event": "finish_general",
+      "phase": "punchline",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "關於「{loserStake}」的部分，賽事單位暫不發表意見。",
+      "variables": [
+        "loserStake"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-061",
+      "event": "allin_loss",
+      "phase": "long",
+      "style": "streamer",
+      "tone": "medium",
+      "text": "不是，等一下。\n你剛剛是不是把{amount}枚全部推進去了？\n嗯。好。\n然後{winner}跟了。\n然後你輸了。\n我沒有要檢討{loser}，我只是在確認剛剛發生的事情。\n現在「{loserStake}」還在嗎？\n喔。沒有了。\n好。",
+      "variables": [
+        "amount",
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-062",
+      "event": "allin_loss",
+      "phase": "long",
+      "style": "sports",
+      "tone": "medium",
+      "text": "【賽後記者會】\n記者：請問第{keyTrick}墩選擇梭哈，是既定戰術嗎？\n{loser}：當下有評估。\n記者：評估的結果是？\n{loser}：梭哈。\n記者：最後由{winner}獲勝。\n{loser}：對。\n記者：那「{loserStake}」的部分？\n{loser}：這個我們要再回去看一下。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-063",
+      "event": "allin_loss",
+      "phase": "long",
+      "style": "tts",
+      "tone": "heavy",
+      "text": "我先講，我從來沒有不支持{loser}。\n第一墩我支持，第二墩我也支持。\n到了第{keyTrick}墩，他說要全部押上去，我還是支持。\n真的，我沒有騙。\n只是{winner}接戰那一秒，我突然想起一件事。\n我們現在討論的不是勝負。\n我們討論的是為什麼一場牌會牽扯到「{loserStake}」。\n以上，謝謝。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-064",
+      "event": "allin_win",
+      "phase": "long",
+      "style": "announcement",
+      "tone": "light",
+      "text": "【名單更正通知】\n原暫列領先者為{loser}。\n經第{keyTrick}墩高額接戰後，現確認由{winner}取得勝利。\n造成觀眾提前慶祝之不便，敬請見諒。\n「{loserStake}」相關事項，請勿再向原領先者詢問。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-065",
+      "event": "last_trick_comeback",
+      "phase": "long",
+      "style": "sports",
+      "tone": "medium",
+      "text": "【賽後戰況】\n{loser}在最後一墩前仍保持優勢。\n賽事單位當時已經開始準備結算畫面。\n結果第{keyTrick}墩結束，勝者改為{winner}。\n關於這項調度，現場沒有任何人表示理解。\n但籌碼不會說謊。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-066",
+      "event": "fold_win",
+      "phase": "long",
+      "style": "announcement",
+      "tone": "light",
+      "text": "【結果通知】\n第{keyTrick}墩，{winner}提出加注。\n{loser}選擇棄牌，本墩由{winner}直接獲得。\n雙方未進行翻牌。\n如對結果有疑問，請回想一下當時是誰按下棄牌。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-067",
+      "event": "bluff_verified",
+      "phase": "long",
+      "style": "streamer",
+      "tone": "medium",
+      "text": "等一下。\n這邊可以倒帶一下嗎？\n第{keyTrick}墩，{winner}加注，{loser}棄牌。\n剛剛經雙方同意回看，{loser}那張牌原本是可以贏的。\n……\n好，我們今天先不要聊技術。\n我們聊聊勇氣。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "winner"
+      ],
+      "requires": [
+        "revealConsentBoth"
+      ],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-068",
+      "event": "vow_backfire",
+      "phase": "long",
+      "style": "tts",
+      "tone": "medium",
+      "text": "各位，我有個東西想分享。\n開局的時候，{loser}有一句話。\n他說：「{loserVow}」\n這是他說的，不是我說的。\n經過九墩的實際測試，最後由{winner}獲勝。\n我不知道這句話現在算不算有履行。\n但我已經幫他備份了。",
+      "variables": [
+        "loser",
+        "loserVow",
+        "winner"
+      ],
+      "requires": [
+        "loserVowExists"
+      ],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-069",
+      "event": "finish_general",
+      "phase": "long",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "【九墩比賽紀錄】\n參賽者：{winner}、{loser}。\n本局勝者：{winner}。\n本局失守項目：「{loserStake}」。\n資料確認無誤。\n其餘與比賽無關的問題，本桌概不處理。",
+      "variables": [
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-070",
+      "event": "finish_general",
+      "phase": "long",
+      "style": "absurd",
+      "tone": "medium",
+      "text": "今天有一件事情很奇怪。\n{loser}原本只是在玩牌。\n玩著玩著，{loserStake}突然變成需要討論的事情。\n後來{winner}贏了。\n現在牌桌收起來了。\n但那個問題沒有跟著收起來。",
+      "variables": [
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-071",
+      "event": "tie_pool",
+      "phase": "long",
+      "style": "sports",
+      "tone": "medium",
+      "text": "【比賽暫停說明】\n第{keyTrick}墩，雙方翻出相同點數。\n賭盤因此保留，等待下一墩處理。\n現場看似一片混亂，其實規則十分清楚。\n兩個人都沒有贏。\n錢先放著。",
+      "variables": [
+        "keyTrick"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-072",
+      "event": "finish_draw",
+      "phase": "long",
+      "style": "announcement",
+      "tone": "light",
+      "text": "【共同聲明】\n本場九墩比賽結束，雙方籌碼相同。\n經查，任何一方均未取得最終勝利。\n兩位開局提出的彩頭，仍由原填寫者自行保管。\n本桌呼籲雙方冷靜，不要為了平手吵成加賽。",
+      "variables": [],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-073",
+      "event": "allin_loss",
+      "phase": "long",
+      "style": "deadpan",
+      "tone": "light",
+      "text": "【客服回覆】\n您好，關於您反映「{loserStake}」在第{keyTrick}墩後消失一事，已查明。\n當時{loser}主動梭哈，{winner}接戰並獲勝。\n系統未偵測到異常。\n祝您下次遊戲順利。",
+      "variables": [
+        "keyTrick",
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    },
+    {
+      "id": "V2-074",
+      "event": "finish_general",
+      "phase": "long",
+      "style": "absurd",
+      "tone": "medium",
+      "text": "【本日重要議程】\n第一案：{winner}是否獲勝？已確認。\n第二案：{loser}是否落敗？已確認。\n第三案：「{loserStake}」應如何處置？\n主席裁示：本案不屬卡牌遊戲範疇。\n散會。",
+      "variables": [
+        "loser",
+        "loserStake",
+        "winner"
+      ],
+      "requires": [],
+      "weight": 1,
+      "privacy": "public"
+    }
+  ]
+}

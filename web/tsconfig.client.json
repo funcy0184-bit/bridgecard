@@ -9,7 +9,8 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "resolveJsonModule": true
   },
   "include": ["src/client", "src/story", "src/game", "src/server/protocol.ts"]
 }

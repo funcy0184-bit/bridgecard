@@ -38,11 +38,13 @@ export function compare(a: number, b: number, dir: Dir): 1 | -1 | 0 {
   return (ra > rb) === (dir === "high") ? 1 : -1;
 }
 
-// 階段：底注與每人最高承諾總額（第 7–9 墩上限是雙方有效籌碼）
-export function stageOf(trick: number): { ante: number; cap: number } {
-  if (trick <= 3) return { ante: 1, cap: 3 };
-  if (trick <= 6) return { ante: 2, cap: 6 };
-  return { ante: 3, cap: Infinity };
+// 階段：底注與每人最高承諾總額（第 7–9 墩上限是雙方有效籌碼，cap = -1 表示「可梭哈」）
+// 預設照企劃書 V2.0；做成參數只是為了平衡模擬比較不同數值，正式對局用預設值
+export interface Stage { ante: number; cap: number }
+export const DEFAULT_STAGES: Stage[] = [{ ante: 1, cap: 3 }, { ante: 2, cap: 6 }, { ante: 3, cap: -1 }];
+export function stageOf(trick: number, stages: Stage[] = DEFAULT_STAGES): { ante: number; cap: number } {
+  const st = stages[trick <= 3 ? 0 : trick <= 6 ? 1 : 2];
+  return { ante: st.ante, cap: st.cap < 0 ? Infinity : st.cap };
 }
 export const allInStage = (trick: number) => trick >= 7;
 
