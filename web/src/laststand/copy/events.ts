@@ -104,7 +104,8 @@ export interface Facts {
 }
 export interface MatchSummary { facts: Facts; events: Found<MatchEvent>[] }
 
-export function summarize(s: LSState, o: { vows?: [string, string]; revealConsentBoth?: boolean } = {}): MatchSummary {
+// 只用到 history、result、folded（folded＝棄牌墩的牌面，只有雙方同意揭露才看）：畫面端拿公開紀錄、folded 給空陣列也能用
+export function summarize(s: Pick<LSState, "history" | "result" | "folded">, o: { vows?: [string, string]; revealConsentBoth?: boolean } = {}): MatchSummary {
   const h = s.history, res = s.result;
   if (!res) throw new Error("比賽還沒結束，不能產生戰報");
   const vows = o.vows ?? ["", ""];

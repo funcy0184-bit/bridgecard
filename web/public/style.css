@@ -1341,3 +1341,19 @@ html[data-stage="staging"] body::after { content: "測試站"; position: fixed; 
   .lsticker .tk.out, .lscast.out { animation-name: fadeOut; }
   #lstable[data-press="4"]::after { animation: none; }
 }
+
+/* 梭了啦 P2：結算面板的戰報標題、賽後戰報 */
+.mehead { margin: -4px 0 0; text-align: center; font: 600 15.5px/1.45 var(--display); color: var(--wine); }
+#lsReport { z-index: 31; }         /* 疊在結算面板上面 */
+.sheet.report { gap: 10px; }
+.rpkicker { margin: 0; text-align: center; font-size: 11.5px; letter-spacing: .18em; color: var(--ink-soft); }
+.sheet.report h3 { letter-spacing: .04em; line-height: 1.4; }
+.sheet.report h3::before, .sheet.report h3::after { content: none; }
+.rpbody { display: flex; flex-direction: column; gap: 9px; }
+.rpbody section { display: flex; flex-direction: column; gap: 3px; }
+.rpbody h4 { margin: 0; font: 600 12.5px var(--display); letter-spacing: .14em; color: var(--wine); }
+.rpbody p, .rpbody li { margin: 0; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.rpbody ul { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 2px; }
+.rpbody blockquote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--gold); background: rgba(185,138,62,.12); }
+.rpbody blockquote p { font-size: 13.5px; }
+.rpbody section[data-k="closing"] p { font-weight: 600; text-align: center; color: var(--wine-dark); }

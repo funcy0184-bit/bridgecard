@@ -9,6 +9,7 @@ import type { LSView } from "../laststand/engine";
 import { publicOf } from "../laststand/director/analyze";
 import { PROGRAMS } from "../laststand/director/config";
 import { Director, type Cast } from "../laststand/director/director";
+import { buildReport, type Report } from "../laststand/director/report";
 import { Stage, type Showing } from "../laststand/director/scheduler";
 import type { Cue } from "../laststand/director/types";
 import * as fx from "./fx";
@@ -25,6 +26,7 @@ let gid: string | null = null;
 let lastHist = 0, lastTrick = 0;
 let timer = 0, holdUntil = 0;
 let cardShown: string | null = null, cardStart = 0;
+let lastView: LSView | null = null;
 const $ = (id: string) => document.getElementById(id)!;
 const now = () => performance.now();
 const CH_LABEL: Record<string, string> = { chat: "聊天室", anchor: "主播", notice: "公告" };
@@ -45,7 +47,7 @@ export function mediaInit(deps: MediaDeps) {
 }
 
 export function mediaReset() {
-  director = null; gid = null; lastHist = 0; lastTrick = 0; holdUntil = 0;
+  director = null; gid = null; lastHist = 0; lastTrick = 0; holdUntil = 0; lastView = null;
   stage = new Stage();
   clearScreen();
   $("lstable").dataset.press = "1";
@@ -65,6 +67,7 @@ export function mediaView(view: LSView, resync = false) {
   const g = M.gid();
   if (!g) return;
   const pub = publicOf(view);
+  lastView = view;
   const restarted = g === gid && (view.history.length < lastHist || view.trick < lastTrick);
   let silent = resync;
   if (g !== gid || restarted || !director) {
@@ -84,6 +87,12 @@ export function mediaView(view: LSView, resync = false) {
   const keep = fx.settings.cast === "lite" ? cues.filter(c => c.priority >= 60) : cues;
   if (keep.length) stage.push(keep, now());
   tick();                      // 牌桌剛重畫：沒有新演出也重新量一次小卡的位置
+}
+
+// 賽後戰報：照規則打完（九墩或有人歸零）才有；認輸、斷線逾時沒有完整戰報
+export function mediaReport(footer?: string): Report | null {
+  if (!M || !lastView?.result || !gid) return null;
+  return buildReport(publicOf(lastView), M.cast(), gid, { footer });
 }
 
 // ---------------- 畫面 ----------------

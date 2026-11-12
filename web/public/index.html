@@ -387,12 +387,28 @@
     </div>
   </div>
 
+  <!-- 梭了啦 P2：賽後戰報（只用這場的公開紀錄；同一場雙方看到的一樣；可以複製成純文字分享） -->
+  <div id="lsReport" class="modal" hidden>
+    <div class="sheet report" role="dialog" aria-labelledby="rpTitle">
+      <p class="rpkicker">梭了啦！這局賭什麼？・賽後戰報</p>
+      <h3 id="rpTitle"></h3>
+      <div class="rpbody" id="rpBody"></div>
+      <p class="clock" id="rpNote" aria-live="polite"></p>
+      <div class="row">
+        <button class="btn wine" id="rpCopy" type="button">複製戰報文字</button>
+        <button class="btn paper close" data-close type="button">關閉</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 朋友連線：整場因為認輸或斷線逾時結束 -->
   <div id="matchEnd" class="modal" hidden>
     <div class="sheet offer" role="dialog" aria-labelledby="meTitle">
       <h3 id="meTitle"></h3>
+      <p class="mehead" id="meHead" hidden></p>
       <p id="meText"></p>
       <p class="clock" id="meStats"></p>
+      <button class="btn paper" id="meReport" type="button" hidden>看賽後戰報</button>
       <button class="btn wine big" id="meRematch" type="button">再來一場！</button>
       <button class="btn ghost" id="meLeave" type="button">離開這桌</button>
       <button class="btn ghost small recapbtn" id="meRecap" type="button">這場的精彩回顧</button>

@@ -13,7 +13,7 @@ import { CODE_LENGTH, DEFAULT_STAKE, Highlight, MODES, Mode, NAME_MAX, Notice, R
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
 import { lsEvent, lsHas, lsHoldUntil, lsInit, lsReset, lsView, lsResult } from "./lstable";
-import { mediaInit } from "./lsmedia";
+import { mediaInit, mediaReport } from "./lsmedia";
 import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
 import { FIRST_NAMES, LocalLastStandTable, SPEED_NAMES, STRATEGY_NAMES, hasUnfinishedLsAi, type AiSpeed, type FirstPolicy } from "./laststand-solo";
 import { sfx } from "./sound";
@@ -746,8 +746,46 @@ function renderMatchEnd() {
   b.disabled = !other?.taken || meBusy;
   b.textContent = !other?.taken ? `${opp}已經離開了` : me?.rematch ? `等${opp}按…（點一下取消）` : other.rematch ? `${opp}想再來一場！按這裡開打` : "再來一場！";
   $("meRecap").hidden = !r!.gid || ls;
+  // 梭了啦 P2：賽後戰報標題＋按鈕（照規則打完才有；認輸、逾時沒有）
+  const rep = ls && fin && (why === "nine" || why === "elimination") ? mediaReport() : null;
+  $("meHead").hidden = !rep;
+  $("meHead").textContent = rep ? `【${rep.title}】` : "";
+  $("meReport").hidden = !rep;
   if ($("matchEnd").hidden) { $("matchEnd").hidden = false; sfx.slide(); }
 }
+// 賽後戰報：分段顯示；複製成純文字（玩家填的字都用 textContent，不當 HTML）
+let reportText = "";
+function openLsReport() {
+  const rep = mediaReport(isLsAi() ? "（單人測試｜不計正式戰績）" : undefined);
+  if (!rep) return;
+  reportText = rep.text;
+  $("rpTitle").textContent = rep.title;
+  $("rpNote").textContent = "";
+  $("rpBody").replaceChildren(...rep.sections.map(s => {
+    const sec = document.createElement("section");
+    sec.dataset.k = s.key;
+    const h = document.createElement("h4");
+    h.textContent = s.label;
+    sec.appendChild(h);
+    if (s.key === "statement") {
+      const q = document.createElement("blockquote");
+      for (const l of s.lines) { const p = document.createElement("p"); p.textContent = l; q.appendChild(p); }
+      sec.appendChild(q);
+    } else if (s.lines.length > 1) {
+      const ul = document.createElement("ul");
+      for (const l of s.lines) { const li = document.createElement("li"); li.textContent = l; ul.appendChild(li); }
+      sec.appendChild(ul);
+    } else { const p = document.createElement("p"); p.textContent = s.lines[0]; sec.appendChild(p); }
+    return sec;
+  }));
+  openModal("lsReport");
+}
+$("meReport").addEventListener("click", openLsReport);
+$("rpCopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(reportText); $("rpNote").textContent = "戰報複製好了，可以貼給朋友。"; sfx.select(); }
+  catch { $("rpNote").textContent = "這支手機不讓網頁直接複製：可以長按上面的文字自己選取複製。"; }
+});
+
 let meBusy = false;
 $("meRematch").addEventListener("click", () => {
   if (meBusy) return;
@@ -3012,7 +3050,7 @@ $("restartSolo").addEventListener("click", () => {
   if (conn instanceof LocalTable) conn.restart();     // 會發 NewHand：牌桌照新局的流程清空重畫
   else lsAi()?.restart();                              // 梭了啦單人測試：換下一副牌重開（會送「新的一場」，牌桌照流程重畫）
 });
-for (const m of ["menu", "rulesModal", "storyOffer", "homeMenu", "newsModal", "recap", "shuoRules", "lsDev"]) {
+for (const m of ["menu", "rulesModal", "storyOffer", "homeMenu", "newsModal", "recap", "shuoRules", "lsDev", "lsReport"]) {
   const modal = $(m);
   modal.addEventListener("click", ev => {
     if (ev.target === modal || (ev.target as HTMLElement).closest("[data-close]")) modal.hidden = true;
