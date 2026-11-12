@@ -14,6 +14,7 @@ import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
 import { lsEvent, lsHas, lsHoldUntil, lsInit, lsReset, lsView, lsResult } from "./lstable";
 import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
+import { FIRST_NAMES, LocalLastStandTable, SPEED_NAMES, STRATEGY_NAMES, hasUnfinishedLsAi, type AiSpeed, type FirstPolicy } from "./laststand-solo";
 import { sfx } from "./sound";
 import {
   bidChip, bidTier, contractFeedback, contractSlam, doubleFx, flipNumber, redoubleFx, rollNumber, stamp, streakGlow, victory,
@@ -84,6 +85,7 @@ function show(id: ScreenId) {
   for (const s of ["home", "shuo", "online", "wait", "table", "lstable"]) $(s).hidden = s !== id;
   setTheme(id === "shuo" || (id === "online" && wantMode === "laststand"));
   $("app").classList.toggle("on-ls", id === "lstable");      // 梭了啦牌桌：提示條改蓋在標題列（不蓋對手那一格）
+  if (id === "shuo") refreshLsAiEntry();
   watchPerf(id === "table");
   if (id !== "table") { resetAura(); closePops(); }
   if (screen === id) return;
@@ -272,7 +274,7 @@ function goHome(msg = "", err = false, toOnline = false) {
   conn?.close(); conn = null;
   clearTimeout(resultTimer);
   resultSig.skip = true;
-  for (const id of ["result", "menu", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal", "pause", "matchEnd", "recap", "shuoRules"]) $(id).hidden = true;
+  for (const id of ["result", "menu", "banner", "storyOffer", "rulesModal", "homeMenu", "newsModal", "pause", "matchEnd", "recap", "shuoRules", "lsDev"]) $(id).hidden = true;
   clearInterval(pauseTimer); pauseTimer = 0;
   hideCoach(true);
   history.replaceState(null, "", "/");
@@ -351,6 +353,106 @@ function enterSolo(fresh: boolean) {
   t.onStatus = () => {};
   t.open();
 }
+
+// ---------------- 梭了啦 單人測試（開發者用：真人 vs 測試 AI，整場在手機上跑） ----------------
+// 開關在建置時決定（scripts/build.mjs 的 LS_AI）：
+//   on  入口一直看得到（自己電腦上的開發版預設）
+//   dev 入口藏起來，這支手機開過一次 /?dev=1 才出現（Cloudflare 自動部署的預設）；/?dev=0 收回去
+//   off 整段程式不打包進去（入口、/?lsai=1 都沒有）
+// 它沒有任何伺服器權限（不開房、不連網路、不寫戰績），所以「藏起來」只是不讓一般玩家看到，不是安全防護
+declare const __LS_AI__: string | undefined;
+const LS_AI_MODE = typeof __LS_AI__ === "string" ? __LS_AI__ : "on";
+const LsAiTable = LS_AI_MODE !== "off" ? LocalLastStandTable : null;
+const DEV_KEY = "hb-dev";
+const lsAiAllowed = () => !!LsAiTable && (LS_AI_MODE === "on" || store.get(DEV_KEY) === "1");
+const isLsAi = (c: Link | null = conn): c is LocalLastStandTable => !!c && (c as { lsAi?: boolean }).lsAi === true;
+const lsAi = (): LocalLastStandTable | null => (isLsAi(conn) ? conn : null);
+function enterLsAi(fresh = false) {
+  if (!LsAiTable || !lsAiAllowed()) { show("shuo"); return; }
+  conn?.close();
+  resetTable();
+  say("");
+  wantMode = "laststand";
+  history.replaceState(null, "", "/?lsai=1");         // 重新整理會回到同一場
+  const t = new LsAiTable(myName(), fresh);
+  conn = t;
+  t.onMessage = m => { onMsg(m); if (!$("lsDev").hidden) renderLsDev(); };
+  t.onStatus = () => {};
+  t.open();
+}
+function refreshLsAiEntry() {
+  const b = $("shuoAi");
+  b.hidden = !lsAiAllowed();
+  if (!b.hidden) $("shuoAiSub").textContent = hasUnfinishedLsAi() ? "接著上次的測試｜不計正式戰績" : "單人測試｜不計正式戰績";
+}
+$("shuoAi").addEventListener("click", () => enterLsAi(false));
+// 測試工具面板：目前狀況、AI 策略／速度、宣戰權、跳過等待、重開、seed、測試紀錄
+function fillSelect(id: string, names: Record<string, string>) {
+  const el = $<HTMLSelectElement>(id);
+  el.replaceChildren(...Object.entries(names).map(([k, v]) => { const o = document.createElement("option"); o.value = k; o.textContent = v; return o; }));
+}
+fillSelect("lsDevStrategy", STRATEGY_NAMES); fillSelect("lsDevSpeed", SPEED_NAMES); fillSelect("lsDevFirst", FIRST_NAMES);
+function renderLsDev() {
+  const c = conn;
+  if (!isLsAi(c)) { $("lsDev").hidden = true; return; }
+  const i = c.info();
+  const STATUS: Record<string, string> = { READY: "還沒開打（契約書）", IN_GAME: "對局中", SETTLEMENT: "這一場結束了" };
+  const rows: [string, string, boolean?][] = [
+    ["狀態", `${STATUS[i.status] ?? i.status}・第 ${i.matchNo} 場`],
+    ["墩／階段", i.trick ? `第 ${i.trick} 墩・${({ flip: "宣戰權", safeguard: "保命", lock: "鎖牌", bet: "下注", over: "結束" } as Record<string, string>)[i.phase] ?? i.phase}` : "—"],
+    ["輪到", i.actor + (i.pendingAi ? "（AI 思考中）" : "")],
+    ["AI 策略", `${STRATEGY_NAMES[i.strategy] ?? i.strategy}・${SPEED_NAMES[i.speed as AiSpeed]}`],
+    ["seed", String(i.seed)],
+    ["籌碼", `你 ${i.stacks[0]}・AI ${i.stacks[1]}・總數 ${i.total}`, i.total !== 30],
+    ["檢查", `AI 不合法動作 ${i.illegal} 次・送出未公開的牌 ${i.leak} 次`, i.illegal > 0 || i.leak > 0],
+    ["本機戰績", `你 ${i.wins[0]} 勝・AI ${i.wins[1]} 勝${i.draws ? `・平 ${i.draws}` : ""}（不計正式戰績）`],
+  ];
+  $("lsDevStat").innerHTML = rows.map(([k, v, bad]) => `<dt>${esc(k)}</dt><dd${bad ? ' class="bad"' : ""}>${esc(v)}</dd>`).join("");
+  $<HTMLSelectElement>("lsDevStrategy").value = i.strategy;
+  $<HTMLSelectElement>("lsDevSpeed").value = i.speed;
+  $<HTMLSelectElement>("lsDevFirst").value = i.first;
+  $<HTMLInputElement>("lsDevSeed").placeholder = `目前 ${i.seed}`;
+  $<HTMLButtonElement>("lsDevSkip").disabled = !i.pendingAi;
+  const log = $("lsDevLog");
+  const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+  log.textContent = c.s.log.slice(-120).join("\n") || "（還沒有紀錄）";
+  if (atEnd) log.scrollTop = log.scrollHeight;
+}
+function openLsDev() { if (!isLsAi()) return; $("menu").hidden = true; renderLsDev(); openModal("lsDev"); }
+$("lsDevBtn").addEventListener("click", openLsDev);
+$("aiDevWait").addEventListener("click", openLsDev);
+$("lsDevStrategy").addEventListener("change", e => { if (isLsAi()) { lsAi()?.setStrategy((e.target as HTMLSelectElement).value); renderLsDev(); renderLsAiTag(); } });
+$("lsDevSpeed").addEventListener("change", e => { if (isLsAi()) { lsAi()?.setSpeed((e.target as HTMLSelectElement).value as AiSpeed); renderLsDev(); } });
+$("lsDevFirst").addEventListener("change", e => { if (isLsAi()) { lsAi()?.setFirst((e.target as HTMLSelectElement).value as FirstPolicy); renderLsDev(); } });
+$("lsDevSkip").addEventListener("click", () => { if (isLsAi()) { lsAi()?.skipWait(); renderLsDev(); } });
+$("lsDevSame").addEventListener("click", () => { if (isLsAi() && confirm("用同一副牌重打這一場？（這一場的進度不會保留）")) { lsAi()?.restart({ same: true }); renderLsDev(); } });
+$("lsDevNext").addEventListener("click", () => { if (isLsAi() && confirm("換下一副牌，重開一場？（這一場的進度不會保留）")) { lsAi()?.restart(); renderLsDev(); } });
+$("lsDevSeedGo").addEventListener("click", () => {
+  if (!isLsAi()) return;
+  const raw = $<HTMLInputElement>("lsDevSeed").value.trim();
+  if (!/^\d{1,10}$/.test(raw) || Number(raw) > 4294967295) { banner("seed 請填 0～4294967295 的整數。", 2400); sfx.deny(); return; }
+  lsAi()?.restart({ seed: Number(raw) });
+  $<HTMLInputElement>("lsDevSeed").value = "";
+  renderLsDev();
+});
+$("lsDevCopy").addEventListener("click", async () => {
+  if (!isLsAi()) return;
+  const text = lsAi()?.logText() ?? "";
+  try { await navigator.clipboard.writeText(text); banner("測試紀錄複製好了（不含暱稱、不含 AI 沒公開的牌）。", 2200); }
+  catch {
+    // 不能用剪貼簿（例如沒有 https）：選起來讓人自己複製
+    const log = $("lsDevLog"); log.textContent = text;
+    const r = document.createRange(); r.selectNodeContents(log); const sel = getSelection(); sel?.removeAllRanges(); sel?.addRange(r);
+    banner("瀏覽器不讓自動複製：紀錄已經選起來了，長按複製。", 2600);
+  }
+});
+function renderLsAiTag() {
+  const c = conn, tag = $("lsTestTag");
+  tag.hidden = !isLsAi(c);
+  if (isLsAi(c)) tag.textContent = `單人測試｜不計正式戰績・AI ${STRATEGY_NAMES[c.s.settings.strategy] ?? ""}`;
+}
+// 驗收用：只讀的狀況（不含任何手牌）
+Object.assign(globalThis, { __hbLsAi: () => (isLsAi() ? lsAi()?.info() : null) });
 
 // ---------------- 連線 ----------------
 
@@ -491,6 +593,7 @@ function onMsg(m: ServerMsg) {
 // 梭了啦：伺服器送來的牌桌（只有自己看得到的部分）
 function onLS(s: Parameters<typeof lsView>[0]) {
   lsView(s);
+  renderLsAiTag();
   if (started && room?.mode === "laststand" && screen !== "lstable") show("lstable");
   renderPause();
   renderMatchEnd();
@@ -636,7 +739,7 @@ function renderMatchEnd() {
         : fin ? `九墩打完：你 ${fin.stacks[mySeat]} 枚、${opp} ${fin.stacks[1 - mySeat]} 枚。` : "";
   const w = r!.stats.wins, d = r!.stats.draws;
   const stakes = ls ? `賭上之物：你『${seats[mySeat]?.stake || DEFAULT_STAKE}』・${opp}『${seats[1 - mySeat]?.stake || DEFAULT_STAKE}』（僅供遊戲敘事）\n` : "";
-  $("meStats").textContent = `${stakes}同桌戰績：你 ${w[mySeat]} 勝 · ${opp} ${w[1 - mySeat]} 勝${d ? ` · 平 ${d}` : ""}（共 ${r!.stats.played} 場）`;
+  $("meStats").textContent = `${stakes}${isLsAi() ? "本機測試" : "同桌戰績"}：你 ${w[mySeat]} 勝 · ${opp} ${w[1 - mySeat]} 勝${d ? ` · 平 ${d}` : ""}（共 ${r!.stats.played} 場${isLsAi() ? "，不計正式戰績" : ""}）`;
   const b = $<HTMLButtonElement>("meRematch");
   const me = seats[mySeat], other = seats[1 - mySeat];
   b.disabled = !other?.taken || meBusy;
@@ -737,7 +840,7 @@ function showWait(before: (boolean | undefined)[] = []) {
   $("renameBtn").hidden = !canRename || !$("renameBox").hidden;
   if (!canRename && !$("renameBox").hidden && me?.ready) closeRename();
   ($("plateMe").querySelector("small") as HTMLElement).textContent = `${role(mySeat)}（你）`;
-  ($("plateOpp").querySelector("small") as HTMLElement).textContent = role(1 - mySeat);
+  ($("plateOpp").querySelector("small") as HTMLElement).textContent = isLsAi() ? "測試對手" : role(1 - mySeat);
   plateTag($("plateMe"), me);
   // 梭了啦：名牌下面寫賭上之物（還沒簽就說還沒簽）
   const lsMode = room.mode === "laststand";
@@ -755,6 +858,11 @@ function showWait(before: (boolean | undefined)[] = []) {
   renderContract();
   // 梭了啦兩人都到了：邀請按鈕收起來，讓契約書和「準備好了」少捲一點
   $("wait").classList.toggle("lsfull", lsMode && !!opp?.taken);
+  const ai = isLsAi();
+  $("wait").classList.toggle("ai", ai);
+  $("aiNote").hidden = !ai;
+  if (isLsAi(conn)) $("aiNoteText").textContent = `對手是測試 AI（策略：${STRATEGY_NAMES[conn.s.settings.strategy] ?? ""}），不開房、不連網路，結果只記在這支手機。`;
+  $("cancelWait").textContent = ai ? "回梭了啦選單" : "離開這桌";
   const plate = $("plateOpp");
   $("plateOppName").textContent = opp?.taken ? opp.name : "還沒來…";
   plateTag(plate, opp);
@@ -990,6 +1098,7 @@ $("copy").addEventListener("click", async () => {
 // 離開這桌（開局前）：請伺服器讓出座位；連不上的話就只在這支手機忘掉（伺服器 10 分鐘後也會讓出來）
 $("cancelWait").addEventListener("click", () => {
   const c = conn;
+  if (isLsAi(c)) { goHome(""); return; }                // 單人測試：回梭了啦選單（契約書留著）
   if (!(c instanceof Connection) || !c.isOpen) { if (c) forgetRoom(c.code); goHome("", false, true); return; }
   const b = $<HTMLButtonElement>("cancelWait");
   b.disabled = true;
@@ -1057,7 +1166,7 @@ function render(first = false) {
 
 function renderNames() {
   // 朋友連線：對面是真人，不用阿元的郵票；跟阿元打才是阿元
-  const stamp = conn?.solo ? "/art/stamp-ahe.svg" : "/art/seal.svg";
+  const stamp = conn?.solo && !isLsAi() ? "/art/stamp-ahe.svg" : "/art/seal.svg";
   for (const img of [$<HTMLImageElement>("oppStamp"), $("plateOpp").querySelector("img")]) if (img && !img.src.endsWith(stamp)) img.src = stamp;
   $("oppName").textContent = oppName();
   $("oppNameTop").textContent = oppName();
@@ -2333,7 +2442,7 @@ $("resHome").addEventListener("click", () => {
   resultSig.skip = true;
   // 朋友連線、整場已經打完：離開就讓出座位（戰績留在這桌）；還沒打完就幫你留著位子
   if (room && st && st.matchWinner >= 0) { leaveRoom("你離開了這桌。"); return; }
-  goHome(conn?.solo ? "這局幫你存好了，按「跟阿元打」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
+  goHome(isLsAi() ? "這一場幫你存好了，按「跟 AI 試打一局」就能接著打。" : conn?.solo ? "這局幫你存好了，按「跟阿元玩」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
 });
 
 // ---------------- 事件 → 動畫與回饋（強度依真實事件分級） ----------------
@@ -2849,13 +2958,15 @@ function openMenu() {
   $("menuTitle").textContent = inTable ? "選單" : "設定";
   $("leaveBtn").hidden = !inTable;
   $("restartSolo").hidden = !(inTable && conn?.solo);
+  $("restartSolo").textContent = isLsAi() ? "換一副新牌，重開這一場" : "重新發牌，從頭打一場";
+  $("lsDevBtn").hidden = !(inTable && isLsAi());
   const live = inTable && !conn?.solo && (room?.status === "IN_GAME" || room?.status === "PAUSED");
   $("forfeitBtn").hidden = !live;
   // 同桌戰績（再來一場打第二場以後，選單裡看得到這兩個人到目前的戰績）
   const sl = inTable && !conn?.solo && room ? statsLine(room) : "";
   $("menuStats").hidden = !sl;
   $("menuStats").textContent = sl;
-  $("leaveBtn").textContent = conn?.solo ? "回首頁" : live ? "暫時離開（位子留著）" : "離開這桌";
+  $("leaveBtn").textContent = isLsAi() ? "回梭了啦選單" : conn?.solo ? "回首頁" : live ? "暫時離開（位子留著）" : "離開這桌";
   openModal("menu");
 }
 $("menuBtn").addEventListener("click", openMenu);
@@ -2873,7 +2984,7 @@ $("leaveBtn").addEventListener("click", () => {
   if (!conn?.solo && room && !live && room.status !== "WAITING" && room.status !== "READY") { leaveRoom("你離開了這桌。"); return; }   // 整場已經結束：直接讓座
   if (live && !confirm(`確定要暫時離開嗎？位子會幫你留著；不過${oppName()}在線上的話，${minutes(room!.timing.forfeit)}內沒回來，照規則這場算${oppName()}贏。`)) return;
   if (!conn?.solo && !live && !confirm("確定要離開這桌嗎？（位子會幫你留著）")) return;
-  goHome(conn?.solo ? "這局幫你存好了，按「跟阿元打」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
+  goHome(isLsAi() ? "這一場幫你存好了，按「跟 AI 試打一局」就能接著打。" : conn?.solo ? "這局幫你存好了，按「跟阿元玩」就能接著打。" : "位子幫你留著，到「找朋友玩」按「回到這桌」就能回去。");
 });
 // 認輸離開：先確認；伺服器判自己負（只算一次）→ 讓出座位 → 回首頁
 $("forfeitBtn").addEventListener("click", () => {
@@ -2889,8 +3000,9 @@ $("restartSolo").addEventListener("click", () => {
   if (!confirm("要重新開始嗎？這局進度不會保留。")) return;
   $("menu").hidden = true;
   if (conn instanceof LocalTable) conn.restart();     // 會發 NewHand：牌桌照新局的流程清空重畫
+  else lsAi()?.restart();                              // 梭了啦單人測試：換下一副牌重開（會送「新的一場」，牌桌照流程重畫）
 });
-for (const m of ["menu", "rulesModal", "storyOffer", "homeMenu", "newsModal", "recap", "shuoRules"]) {
+for (const m of ["menu", "rulesModal", "storyOffer", "homeMenu", "newsModal", "recap", "shuoRules", "lsDev"]) {
   const modal = $(m);
   modal.addEventListener("click", ev => {
     if (ev.target === modal || (ev.target as HTMLElement).closest("[data-close]")) modal.hidden = true;
@@ -2921,7 +3033,10 @@ emo.onChange(p => $("bidPanel").style.setProperty("--tension", p.toFixed(2)));
   const solo = params.get("solo");
   // 從教學最後的「開一場有提示的練習局」進來：對局提示打開、全部重新提示一次
   if (params.get("coach") === "1") { store.del(COACH_KEY); coachSeen = new Set(); fx.settings.coach = true; fx.saveSettings(); }
-  if (solo === "new" || solo === "1") enterSolo(solo === "new");   // 故事最後的「自己跟電腦打一局」= new：重新發牌
+  if (params.get("dev") === "1") store.set(DEV_KEY, "1");            // 開發者：這支手機打開「跟 AI 試打一局」入口
+  if (params.get("dev") === "0") store.del(DEV_KEY);
+  if (params.get("lsai") === "1" && lsAiAllowed()) enterLsAi(false);  // 單人測試中重新整理：回到同一場
+  else if (solo === "new" || solo === "1") enterSolo(solo === "new");   // 故事最後的「自己跟電腦打一局」= new：重新發牌
   else if (isValidCode(room)) {
     codeInput.value = room;
     if (savedToken(room)) enter(room);          // 這支手機坐過這桌：直接回原座位（原本的暱稱）

@@ -81,6 +81,7 @@
     <nav class="sh-menu" aria-label="梭了啦！這局賭什麼？選單">
       <button id="shuoCreate" class="btn gold big" type="button">找朋友開一局</button>
       <button id="shuoJoin" class="btn shuoline" type="button">輸入房號加入</button>
+      <button id="shuoAi" class="btn shuoline ai" type="button" hidden>跟 AI 試打一局<small id="shuoAiSub">單人測試｜不計正式戰績</small></button>
       <button id="shuoHow" class="btn ghost" type="button">怎麼玩？</button>
     </nav>
     <p class="sh-foot">兩個人、九墩、各 15 枚籌碼。<br>賭上之物只是遊戲敘事，不涉及任何實際交易。</p>
@@ -131,6 +132,10 @@
       </form>
       <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b><i class="pstake" id="plateOppStake" hidden></i><i class="pvow" id="plateOppVow" hidden></i></span><em class="ok">已入座</em></div>
     </div>
+    <div class="ainote" id="aiNote" hidden>
+      <p><b>單人測試｜不計正式戰績</b><span id="aiNoteText">對手是測試 AI，不開房、不連網路，結果只記在這支手機。</span></p>
+      <button class="linkbtn" id="aiDevWait" type="button">測試工具（AI 策略、速度、seed）</button>
+    </div>
     <div class="modes" id="modePick" role="radiogroup" aria-label="玩法（房主選）">
       <button type="button" class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>經典牌局</b><small>照正式規則計分</small></button>
       <button type="button" class="mode" data-mode="laststand" role="radio" aria-checked="false"><b>梭了啦！<br>這局賭什麼？</b><small>輸了交出來。</small></button>
@@ -171,7 +176,7 @@
   <!-- ============ 梭了啦牌桌：九墩、比大／比小、鎖牌、下注 ============ -->
   <section id="lstable" class="screen" hidden>
     <header class="lsbar">
-      <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1 · 單人上限 3</small></div>
+      <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1 · 單人上限 3</small><em class="lstest" id="lsTestTag" hidden>單人測試｜不計正式戰績</em></div>
       <button id="lsMenuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
     </header>
     <div class="lsside opp" id="lsOpp">
@@ -355,6 +360,7 @@
         <button class="btn ghost" id="leaveBtn" type="button">離開這桌</button>
       </div>
       <button class="btn ghost small" id="restartSolo" type="button" hidden>重新發牌，從頭打一場</button>
+      <button class="btn paper small" id="lsDevBtn" type="button" hidden>測試工具（AI 策略、速度、seed、紀錄）</button>
       <button class="btn ghost small" id="forfeitBtn" type="button" hidden>認輸離開（這場算對方贏）</button>
     </div>
   </div>
@@ -451,6 +457,32 @@
       <p id="offerText">搶牌、叫牌、王吃、打成，大概 5 分鐘。教完直接跟我打一局。</p>
       <a class="btn wine big" id="offerTeach" href="/story/?then=play">先教我一下</a>
       <button class="btn paper" id="offerSkip" type="button">直接開打</button>
+    </div>
+  </div>
+
+  <!-- 梭了啦 單人測試：測試工具（只有你看得到；AI 拿不到這裡的任何資訊） -->
+  <div id="lsDev" class="modal" hidden>
+    <div class="sheet lsdev" role="dialog" aria-labelledby="lsDevTitle">
+      <h3 id="lsDevTitle">測試工具</h3>
+      <p class="lsdev-note">單人測試｜不計正式戰績。不開房、不連網路；紀錄只有你看得到的事，不含 AI 沒公開的牌。</p>
+      <dl class="lsdev-stat" id="lsDevStat"></dl>
+      <div class="lsdev-grid">
+        <label>AI 策略<select id="lsDevStrategy"></select></label>
+        <label>AI 速度<select id="lsDevSpeed"></select></label>
+        <label>第 1 墩宣戰權<select id="lsDevFirst"></select></label>
+      </div>
+      <p class="lsdev-hint">策略是打法類型，不是難度等級；換策略、換速度從 AI 的下一個動作開始。宣戰權設定在下次換 seed 重開時生效（之後每一場交換）。</p>
+      <div class="row">
+        <button class="btn paper small" id="lsDevSkip" type="button">跳過 AI 等待</button>
+        <button class="btn paper small" id="lsDevCopy" type="button">複製測試紀錄</button>
+      </div>
+      <div class="row">
+        <button class="btn paper small" id="lsDevSame" type="button">同一副牌重來</button>
+        <button class="btn paper small" id="lsDevNext" type="button">換下一副牌</button>
+      </div>
+      <div class="lsdev-seed"><input id="lsDevSeed" inputmode="numeric" maxlength="10" autocomplete="off" aria-label="seed（0～4294967295）"><button class="btn paper small" id="lsDevSeedGo" type="button">用這個 seed 重開</button></div>
+      <pre class="lsdev-log" id="lsDevLog" aria-label="測試紀錄"></pre>
+      <button class="btn paper close" data-close type="button">關閉</button>
     </div>
   </div>
 
