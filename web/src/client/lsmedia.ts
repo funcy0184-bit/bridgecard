@@ -132,8 +132,9 @@ function paintTicker(items: Showing[], cardInTicker: Showing | null, t: number) 
     }
   }
   const keys = new Set(want.map(w => w.key));
+  // 要收的那則：先脫離排版（停在原位淡出），不會把新的那則擠出框外
   for (const el of Array.from(box.children) as HTMLElement[]) {
-    if (!keys.has(el.dataset.k!) && !el.classList.contains("out")) { el.classList.add("out"); window.setTimeout(() => el.remove(), 380); }
+    if (!keys.has(el.dataset.k!) && !el.classList.contains("out")) { el.style.top = `${el.offsetTop}px`; el.classList.add("out"); window.setTimeout(() => el.remove(), 380); }
   }
   for (const w of want) {
     if (box.querySelector(`[data-k="${CSS.escape(w.key)}"]:not(.out)`)) continue;
@@ -147,9 +148,10 @@ function paintTicker(items: Showing[], cardInTicker: Showing | null, t: number) 
     el.append(tag, tx);
     box.appendChild(el);
   }
-  // 放不下：最舊的先收
+  // 放不下（用實際高度算；置中排版超出上面時 scrollHeight 量不到）：最舊的直接收掉，不切半句
   const live = () => (Array.from(box.children) as HTMLElement[]).filter(e => !e.classList.contains("out"));
-  while (live().length > 1 && box.scrollHeight > box.clientHeight + 1) { const old = live()[0]; old.classList.add("out"); old.style.display = "none"; window.setTimeout(() => old.remove(), 0); }
+  const used = () => live().reduce((s, e) => s + e.offsetHeight, 0) + Math.max(0, live().length - 1);
+  while (live().length > 1 && used() > box.clientHeight) live()[0].remove();
   box.classList.toggle("on", live().length > 0);
   box.style.setProperty("--tk-left", `${Math.ceil($("lsBadge").getBoundingClientRect().width) + 6}px`);
   $("lsBar").classList.toggle("airing", live().length > 0);

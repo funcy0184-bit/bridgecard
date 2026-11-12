@@ -53,12 +53,15 @@ async function audit(P, tag) {
     const tk = document.getElementById("lsTicker"), on = tk.classList.contains("on") && !tk.classList.contains("hush");
     const card = document.getElementById("lsCast"), cardOn = !card.hidden && !card.classList.contains("out") && getComputedStyle(card).opacity > 0.5;
     return { ticker: on ? R("lsTicker") : null, bar: R("lsBar"), card: cardOn ? R("lsCast") : null, opp: R("lsOpp"), pot: R("lsPot"), dir: R("lsDir"), dock: R("lsDock"), menu: R("lsMenuBtn"),
-      items: tk.querySelectorAll(".tk:not(.out)").length, press: document.getElementById("lstable").dataset.press, scrollW: document.documentElement.scrollWidth, W: document.documentElement.clientWidth };
+      items: tk.querySelectorAll(".tk:not(.out)").length,
+      clipped: [...tk.querySelectorAll(".tk:not(.out) span, .tk:not(.out) i")].filter(e => { const a = e.getBoundingClientRect(), b = tk.getBoundingClientRect(); return a.height > 2 && (a.bottom > b.bottom + 2 || a.top < b.top - 2); }).map(e => e.textContent.slice(0, 10)),
+      press: document.getElementById("lstable").dataset.press, scrollW: document.documentElement.scrollWidth, W: document.documentElement.clientWidth };
   });
   if (r.ticker) {
     if (r.ticker.top < r.bar.top - 1 || r.ticker.bottom > r.bar.bottom + 1) issues.push(`${tag} 字幕超出標題列`);
     if (inter(r.ticker, r.menu)) issues.push(`${tag} 字幕蓋到選單鈕`);
     if (r.items > 2) issues.push(`${tag} 字幕超過兩則`);
+    if (r.clipped.length) issues.push(`${tag} 字幕被框切掉：${r.clipped.join("、")}`);
   }
   if (r.card) for (const k of ["opp", "pot", "dir", "dock"]) if (inter(r.card, r[k])) issues.push(`${tag} 小卡蓋到 ${k}`);
   if (r.scrollW > r.W + 1) issues.push(`${tag} 可以橫向捲動`);

@@ -1292,9 +1292,9 @@ html[data-stage="staging"] body::after { content: "測試站"; position: fixed; 
 .lsticker .tk i { flex: none; font-style: normal; font-size: 11px; line-height: 1.5; padding: 0 5px; border-radius: 6px; color: var(--gold-pale); background: rgba(226,184,96,.2); text-shadow: none; }
 .lsticker .tk span { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .lsticker .tk.hot i { color: #FFF3F0; background: rgba(178,68,83,.9); }
-.lsticker .tk.out { animation: tkOut .34s ease-in forwards; }
-@keyframes tkIn { from { opacity: 0; transform: translateY(6px); } }
-@keyframes tkOut { to { opacity: 0; transform: translateY(-5px); } }
+.lsticker .tk.out { position: absolute; left: 8px; right: 8px; animation: tkOut .34s ease-in forwards; }
+@keyframes tkIn { from { opacity: 0; transform: translateY(2px); } }
+@keyframes tkOut { to { opacity: 0; transform: translateY(-4px); } }
 
 /* 節目小卡：中間到底部固定區之間的空位；位置由程式量好（不蓋對手、賭盤、手牌、按鈕）；點一下略過 */
 .lscast { position: fixed; z-index: 3; left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); max-width: 500px; margin-inline: auto;
