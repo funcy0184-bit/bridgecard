@@ -688,6 +688,8 @@ function showWait(before: (boolean | undefined)[] = []) {
     el.classList.toggle("unsigned", !s?.stake);
   }
   renderContract();
+  // 逆命賭局兩人都到了：邀請按鈕收起來，讓契約書和「準備好了」少捲一點
+  $("wait").classList.toggle("lsfull", lsMode && !!opp?.taken);
   const plate = $("plateOpp");
   $("plateOppName").textContent = opp?.taken ? opp.name : "還沒來…";
   plateTag(plate, opp);
@@ -840,7 +842,11 @@ $("contract").addEventListener("submit", ev => {
   $<HTMLButtonElement>("stakeSeal").disabled = true;
   const sent = act({ t: "stake", stake: stakeInput.value }, r => {
     stakeBusy = false;
-    if (r.ok) { fx.stampIn($("stakeSeal")); fx.buzz(14); stakeInput.blur(); }
+    if (r.ok) {
+      fx.stampIn($("stakeSeal")); fx.buzz(14); stakeInput.blur();
+      // 蓋好章：把「準備好了」捲進畫面（小手機上它在契約書下面）
+      setTimeout(() => $("readyBtn").scrollIntoView({ block: "center", behavior: fx.motionOn() ? "smooth" : "auto" }), 260);
+    }
     else fieldErr(stakeInput, $("stakeErr"), r.msg);
     renderContract();
   });

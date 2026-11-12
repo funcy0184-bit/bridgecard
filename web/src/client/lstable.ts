@@ -115,7 +115,7 @@ function render() {
   if (!v) return;
   const me = v.seat, op = 1 - me, opp = D.oppName(), pool = v.pool[0] + v.pool[1];
   $("lsTrick").textContent = v.result ? "比賽結束" : `第 ${v.trick}／${TRICKS} 墩`;
-  $("lsStage").textContent = v.safeguard >= 0 ? `保命墩：每人只押 1 枚` : `底注 ${v.ante} · 單人上限 ${v.allInStage ? `可梭哈（每人最多 ${v.cap}）` : v.cap}`;
+  $("lsStage").textContent = v.safeguard >= 0 ? `保命墩：每人只押 1 枚` : `底注 ${v.ante} · ${v.allInStage ? `可梭哈（每人最多 ${v.cap}）` : `單人上限 ${v.cap}`}`;
   $("lsOppName").textContent = opp;
   $("lsOppTag").textContent = role(op);
   $("lsMyTag").textContent = role(me);
@@ -125,7 +125,7 @@ function render() {
   $("lsMyCounts").textContent = `剩 ${v.hand.length} 張：${catText(v.counts[me])}`;
   $("lsOppSkills").innerHTML = skills(op);
   $("lsMySkills").innerHTML = skills(me);
-  $("lsOppStatus").textContent = oppStatus(opp);
+  $("lsOppStatus").textContent = oppStatus();
   // 方向
   const big = $("lsDirBig");
   big.textContent = DIR_LABEL[v.dir];
@@ -135,9 +135,10 @@ function render() {
   // 賭盤
   $("lsMyCommit").textContent = String(v.commit[me]);
   $("lsOppCommit").textContent = String(v.commit[op]);
+  $("lsOppCommitWho").textContent = opp;
   const pl = $("lsPool");
   pl.hidden = !pool;
-  if (pool) pl.textContent = `疊池 ${pool} 枚（你出 ${v.pool[me]}・${opp}出 ${v.pool[op]}）：下一個翻牌贏、或讓對方棄牌的人拿走` + (v.safeguardBlocked ? "；有疊池，這一墩不能保命" : "");
+  if (pool) pl.innerHTML = `<b>疊池 ${pool} 枚</b>（你出 ${v.pool[me]}・${esc(opp)}出 ${v.pool[op]}）<small>下一個翻牌贏、或讓對方棄牌的人拿走${v.safeguardBlocked ? "；有疊池，這一墩不能保命" : ""}</small>`;
   $("lsRisk").innerHTML = riskHtml(opp, pool);
   renderReveal(opp);
   const turn = $("lsTurn");
@@ -149,14 +150,14 @@ function render() {
   renderLog(opp);
 }
 
-function oppStatus(opp: string): string {
+function oppStatus(): string {
   const s = v!, op = 1 - s.seat;
   if (s.result) return "";
-  if (s.phase === "lock") return s.locked[op] ? `${opp}已鎖牌 🔒` : `${opp}選牌中…`;
+  if (s.phase === "lock") return s.locked[op] ? "已鎖牌 🔒" : "選牌中…";
   if (s.phase === "bet") {
     const last = [...s.steps].reverse().find(x => x.seat === op);
-    if (last) return last.act === "check" ? `${opp}過牌` : last.act === "raise" ? `${opp}${last.reraise ? "反加" : "加注"}到 ${last.to}${last.allIn ? "（梭哈）" : ""}` : last.act === "call" ? `${opp}接戰` : "";
-    return `${opp}已鎖牌 🔒`;
+    if (last) return last.act === "check" ? "過牌" : last.act === "raise" ? `${last.reraise ? "反加" : "加注"}到 ${last.to}${last.allIn ? "（梭哈）" : ""}` : last.act === "call" ? "接戰" : "";
+    return "已鎖牌 🔒";
   }
   return "";
 }
@@ -168,8 +169,8 @@ function riskHtml(opp: string, pool: number): string {
   if (s.phase === "bet") {
     const mine = s.commit[me], theirs = s.commit[op];
     if (theirs > mine)
-      return `若<b>接戰</b>：再補 <b>${theirs - mine}</b> 枚，翻牌贏拿 <b>${theirs}</b> 枚${poolTxt}、輸了損失 <b>${theirs}</b> 枚。<br>若<b>棄牌</b>：損失 <b>${mine}</b> 枚（${esc(opp)}多押的 ${theirs - mine} 枚退回給他）。`;
-    return `目前每人押 <b>${mine}</b> 枚：翻牌贏拿 <b>${theirs}</b> 枚${poolTxt}、輸了損失 <b>${mine}</b> 枚。`;
+      return `若<b>接戰</b>（補 ${theirs - mine}）：翻牌贏 <b>+${theirs}</b>${poolTxt}／輸 <b>−${theirs}</b><br>若<b>棄牌</b>：<b>−${mine}</b>（${esc(opp)}多押的 ${theirs - mine} 枚退回給他）`;
+    return `目前每人押 <b>${mine}</b> 枚：翻牌贏 <b>+${theirs}</b>${poolTxt}／輸 <b>−${mine}</b>`;
   }
   const stake = s.safeguard >= 0 ? 1 : s.ante, cap = s.safeguard >= 0 ? 1 : s.cap;
   let h = `本墩底注 <b>${stake}</b> 枚（雙方都押），每人最多押到 <b>${cap}</b> 枚。`;
@@ -204,6 +205,7 @@ function turnText(opp: string): { text: string; mine: boolean } {
 function renderHand() {
   const s = v!, box = $("lsHand");
   const canPick = s.phase === "lock" && s.myLock < 0 && !busy;
+  box.style.setProperty("--n", String(Math.max(s.hand.length, 6)));   // 牌寬照張數算（最少當 6 張，免得剩一兩張時太大）
   box.replaceChildren(...s.hand.map(id => {
     const b = document.createElement("button");
     b.type = "button";
@@ -230,17 +232,17 @@ function renderActions(opp: string, pool: number) {
   if (!s.result && !busy) {
     if (L.flip) {
       h.push(btn("flip", `翻成${DIR_LABEL[flipDir(s.dir)]}`, "wine"), btn("noflip", `不翻（照${DIR_LABEL[s.dir]}）`));
-      h.push(`<p class="note">翻轉只改這一墩，每人一場一次。</p>`);
+      h.push(`<p class="note tip">翻轉只改這一墩，每人一場一次。</p>`);
     } else if (L.safeguard) {
       h.push(btn("safe", "用保命", "wine"), btn("nosafe", "不用"));
-      h.push(`<p class="note">保命：這一墩每人只押 1 枚、不能加注；一方用了另一方不能再用。</p>`);
+      h.push(`<p class="note tip">保命：這一墩每人只押 1 枚、不能加注；一方用了另一方不能再用。</p>`);
     } else if (L.lock.length) {
       h.push(btn("lock", sel >= 0 ? `鎖定這張（${CAT_LABEL[catOf(sel)]}）` : "先點一張牌", "wine wide", sel < 0));
-      h.push(`<p class="note">鎖了就不能改；翻牌前對方只看得到你「已鎖牌」。</p>`);
+      h.push(`<p class="note tip">鎖了就不能改；翻牌前對方只看得到你「已鎖牌」。</p>`);
     } else if (s.phase === "bet" && s.toAct === me) {
       if (L.check) h.push(btn("check", "過牌"));
       if (L.call) h.push(btn("call", `接戰（補 ${s.commit[1 - me] - s.commit[me]}）`, "wine"), btn("fold", `棄牌（輸 ${s.commit[me]}）`));
-      if (L.insight) h.push(btn("insight", "讀心（看對方鎖的是大中小）"));
+      if (L.insight) h.push(btn("insight", "讀心：看對方鎖的大中小", "paper wide"));
       if (L.raise) {
         const [lo, hi] = L.raise, x = raiseTo, allIn = s.allInStage && x === hi;
         const word = L.call ? "反加到" : "加注到";

@@ -999,7 +999,10 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 @media (max-width: 360px) { .talkbtn { width: 34px; height: 34px; } }
 
 /* ================= 逆命賭局：賭局契約書（等待室） ================= */
-.pstake { display: block; font-style: normal; font-size: 12px; color: var(--wine); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plate span:has(.pstake) { min-width: 0; }
+/* 賭上之物最多 24 字：最多兩行，再長才截掉（不撐破名牌） */
+.pstake { font-style: normal; font-size: 12px; line-height: 1.35; color: var(--wine); margin-top: 2px; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .pstake.unsigned { color: var(--ink-soft); }
 .contract { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 14px; text-align: left; color: var(--ink);
   background: linear-gradient(180deg, var(--paper-hi), var(--paper) 70%, var(--paper-2)); clip-path: var(--torn-a);
@@ -1033,64 +1036,97 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .seal:disabled { opacity: .5; cursor: default; }
 
 /* ================= 逆命賭局：牌桌 ================= */
-#lstable { gap: 8px; overflow-y: auto; padding-top: calc(env(safe-area-inset-top) + 10px); }
+#lstable { gap: 6px; overflow-y: auto; padding-top: calc(env(safe-area-inset-top) + 8px); padding-bottom: 0; }
 .lsbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.lstrick { display: flex; flex-direction: column; }
-.lstrick b { font: 600 18px var(--display); letter-spacing: .12em; color: var(--gold-pale); }
+.lstrick { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; min-width: 0; }
+.lstrick b { font: 600 17px var(--display); letter-spacing: .12em; color: var(--gold-pale); }
 .lstrick small { font-size: 12.5px; color: var(--muted); }
-.lsside { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "who chips" "meta meta" "st st"; gap: 2px 10px; padding: 10px 12px; border-radius: 10px;
+.lsside { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "who chips" "meta chips"; gap: 1px 10px; padding: 7px 12px; border-radius: 10px;
   background: rgba(251,244,228,.07); box-shadow: inset 0 0 0 1px rgba(226,184,96,.35); }
-.lsside.me { box-shadow: inset 0 0 0 1px rgba(243,212,136,.6); }
-.lswho { grid-area: who; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+/* 自己那一列在底部固定區裡：不加框，只是一條 */
+.lsside.me { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; padding: 0 2px; background: none; box-shadow: none; }
+.lsside.me .lsmeta { flex: 1 1 auto; }
+.lsside.me .lschips { order: 3; margin-left: auto; }
+.lsside.me .lschips b { font-size: 22px; }
+.lswho { grid-area: who; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
 .lswho b { font: 500 17px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lswho small { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.lschips { grid-area: chips; display: flex; align-items: baseline; gap: 3px; }
-.lschips b { font: 700 26px var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
+.lschips { grid-area: chips; align-self: center; display: flex; align-items: baseline; gap: 3px; }
+.lschips b { font: 700 25px/1 var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
 .lschips small { font-size: 12px; color: var(--muted); }
-.lsmeta { grid-area: meta; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--on-wood); }
+.lsmeta { grid-area: meta; display: flex; gap: 2px 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--on-wood); }
 .lsmeta span:last-child { color: var(--muted); }
-.lsstatus { grid-area: st; font-size: 12.5px; color: var(--gold-pale); min-height: 1em; }
-.lsdir { text-align: center; padding: 6px 0 2px; }
-.lsdirbig { font: 700 40px/1.1 var(--display); letter-spacing: .3em; padding-left: .3em; color: var(--paper-hi); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+/* 對手現在的狀態（已鎖牌／加注到幾）：跟名字同一行的小標籤 */
+.lsstatus { font-size: 12.5px; color: var(--paper-hi); padding: 0 7px; border-radius: 9px; background: rgba(122,39,50,.75); white-space: nowrap; }
+.lsstatus:empty { display: none; }
+.lsdir { text-align: center; padding: 0; }
+.lsdirbig { font: 700 36px/1.08 var(--display); letter-spacing: .3em; padding-left: .3em; color: var(--paper-hi); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
 .lsdirbig.low { color: #CFE3F2; }
 .lsdirbig.flipped::after { content: "（翻轉）"; font-size: 13px; letter-spacing: 0; color: var(--gold-pale); vertical-align: middle; }
 .lsdir small { font-size: 13px; color: var(--muted); }
-.lspot { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; color: var(--paper-hi);
+.lspot { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 10px; color: var(--paper-hi);
   background: radial-gradient(90% 90% at 50% 40%, var(--felt) 0%, var(--felt-dark) 75%, var(--felt-deep) 100%); box-shadow: inset 0 0 0 2px rgba(185,138,62,.55); }
-.lscommit { display: flex; justify-content: space-between; font-size: 14px; }
+.lscommit { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.lscommit span { min-width: 0; white-space: nowrap; }
+.lscommit i { font-style: normal; display: inline-block; max-width: 6em; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 .lscommit b { font: 700 20px var(--display); color: var(--gold-pale); margin-left: 2px; font-variant-numeric: tabular-nums; }
-.lspool { font-size: 13px; color: var(--gold-pale); text-align: center; padding: 3px 8px; border-radius: 12px; background: rgba(0,0,0,.25); }
-.lsrisk { margin: 0; font-size: 13px; line-height: 1.55; color: #E8F0E8; }
+.lspool { font-size: 13px; line-height: 1.35; color: var(--gold-pale); text-align: center; padding: 3px 8px; border-radius: 10px; background: rgba(0,0,0,.25); }
+.lspool small { display: block; font-size: 11.5px; color: var(--muted); }
+/* 輸贏試算：放在按鈕正上方 */
+.lsrisk { margin: 0; font-size: 13px; line-height: 1.45; color: #E8F0E8; padding: 5px 10px; border-radius: 8px; background: rgba(28,58,44,.72); box-shadow: inset 0 0 0 1px rgba(185,138,62,.45); }
+.lsrisk:empty { display: none; }
 .lsrisk b { color: var(--gold-pale); }
 .lsrisk .allin { display: block; margin-top: 2px; color: #FFD7A8; font-weight: 700; }
-.lsreveal { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 6px; border-radius: 8px; background: rgba(0,0,0,.28); --cw: 40px; }
-.lsreveal figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--muted); }
-.lsreveal .cat { width: var(--cw); height: calc(var(--cw) * 1.42); display: grid; place-items: center; border-radius: 4px; font: 700 18px var(--display);
+.lsreveal { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: rgba(0,0,0,.28); --cw: 30px; }
+.lsreveal figure { flex: none; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--muted); max-width: 4.5em; }
+.lsreveal figcaption { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lsreveal .cat { width: var(--cw); height: calc(var(--cw) * 1.42); display: grid; place-items: center; border-radius: 4px; font: 700 16px var(--display);
   color: var(--ink); background: repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 4px, var(--paper) 4px, var(--paper) 8px); box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); }
-.lsreveal p { margin: 0; flex-basis: 100%; text-align: center; font-size: 13.5px; }
+.lsreveal p { margin: 0; flex: 1; min-width: 0; font-size: 13px; line-height: 1.4; }
 .lsreveal p b { color: var(--gold-pale); }
-.lsturn { margin: 0; text-align: center; font: 500 15px var(--display); color: var(--gold-pale); min-height: 1.4em; }
+.lsturn { margin: 0; text-align: center; font: 500 15px/1.35 var(--display); color: var(--gold-pale); min-height: 1.35em; }
 .lsturn.mine { color: #FFE7B0; text-shadow: 0 0 10px rgba(243,212,136,.4); }
-.lshand { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; --cw: 44px; padding: 4px 0; }
+/* 手牌永遠一排：牌寬照張數和螢幕寬算（9 張在 320 寬也放得下），張數少了牌會變大 */
+.lshand { display: flex; justify-content: center; flex-wrap: nowrap; gap: 4px; padding: 8px 0 0;
+  --cw: clamp(27px, calc((min(100vw, 520px) - 40px - (var(--n, 9) - 1) * 4px) / var(--n, 9)), 46px); }
 .lscard { position: relative; border: 0; padding: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 6px; }
-.lscard small { font-size: 11px; color: var(--muted); }
+.lscard small { font-size: 11px; line-height: 1.2; color: var(--muted); }
 .lscard.sel .card { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--gold-pale), 0 6px 10px rgba(0,0,0,.4); }
 .lscard.locked .card { box-shadow: 0 0 0 3px var(--wine-hi); }
 .lscard.locked small { color: #FFC9C9; font-weight: 700; }
 .lscard:disabled { cursor: default; }
 .lscard:disabled:not(.locked) .card { filter: saturate(.7) brightness(.85); }
 .lsactions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.lsactions .btn { flex: 1 1 40%; min-width: 0; padding: 11px 10px; font-size: 15.5px; }
+.lsactions .btn { flex: 1 1 40%; min-width: 0; padding: 10px 10px; font-size: 15px; }
 .lsactions .btn.wide { flex-basis: 100%; }
-.lsactions .note { flex-basis: 100%; margin: 0; text-align: center; font-size: 12.5px; color: var(--muted); }
-.lsraise { flex-basis: 100%; display: flex; align-items: center; gap: 8px; }
-.lsraise .step { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; font: 700 22px var(--display); color: var(--ink); background: var(--paper); cursor: pointer; }
+/* 過牌和加注同一排（放不下才換行） */
+.lsactions .btn[data-a="check"] { flex: 0 1 auto; padding-inline: 16px; }
+.lsactions .note { flex-basis: 100%; margin: 0; text-align: center; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.lsraise { flex: 1 1 196px; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.lsraise .step { flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; font: 700 22px var(--display); color: var(--ink); background: var(--paper); cursor: pointer; }
 .lsraise .step:disabled { opacity: .4; }
-.lsraise .btn { flex: 1; }
+.lsraise .btn { flex: 1; min-width: 0; padding-inline: 6px; }
 .lsraise .btn.allin { background: linear-gradient(180deg, #B24453, var(--wine-dark)); }
 .lslog { font-size: 13px; color: var(--on-wood); }
 .lslog summary { cursor: pointer; color: var(--muted); text-align: center; padding: 4px; }
 .lslog ol { margin: 4px 0 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
 .lslog li b { color: var(--gold-pale); font-weight: 500; }
-@media (max-height: 640px) { .lsdirbig { font-size: 32px; } .lshand { --cw: 40px; } .lsside { padding: 7px 10px; } }
+#wait.lsfull > .row { display: none; }
+@media (max-height: 700px) { .lsdirbig { font-size: 32px; } }
+/* 底部固定區：輪到誰＋手牌＋按鈕 */
+.lsdock { position: sticky; bottom: 0; z-index: 2; margin: auto -18px 0; padding: 8px 18px calc(env(safe-area-inset-bottom) + 12px);
+  display: flex; flex-direction: column; gap: 6px; background: linear-gradient(to top, var(--wood-3) calc(100% - 10px), rgba(30,18,11,0)); }
+@media (max-height: 640px) {
+  #lstable { gap: 5px; }
+  .lsdirbig { font-size: 30px; }
+  .lsdir small { font-size: 12px; }
+  .lsside { padding: 5px 10px; }
+  .lspot { padding: 6px 10px; }
+  .lsrisk, .lsreveal p { font-size: 12.5px; line-height: 1.38; }
+  #lsMyCounts { display: none; }            /* 自己的大中小：手牌下面已經標了 */
+  .lshand { --cw: clamp(27px, calc((min(100vw, 520px) - 72px) / 9), 38px); }   /* 矮螢幕：牌不因為張數變少而長高 */
+  .lsrisk { padding: 4px 9px; }
+  .lsactions .note.tip { display: none; }   /* 規則小提示收起來（輪到誰那一行已經講了）；下注試算照樣顯示 */
+  .lsactions .btn { padding: 9px 8px; }
+}
 @media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard.sel .card { transform: none; } }

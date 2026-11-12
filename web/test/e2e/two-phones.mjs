@@ -55,13 +55,16 @@ await A.waitForFunction(() => document.getElementById("plateOpp").classList.cont
 if (await A.isVisible("#table:not([hidden])")) { console.error("✗ 還沒按準備就進牌桌了"); process.exit(1); }
 console.log("✓ 朋友輸入房號加入：兩邊都在等待室，不會自動開打");
 if (!(await A.textContent("#plateMe small")).includes("房主") || !(await B.textContent("#plateOpp small")).includes("房主")) { console.error("✗ 房主標示不對"); process.exit(1); }
-// 玩法：朋友點不動（玩法由房主選）；房主點籌碼對決會說還沒開放
-await B.click('#modePick [data-mode="chips"]');
+// 玩法：朋友點不動（玩法由房主選）；房主可以換成逆命賭局再換回經典（兩邊同步）
+await B.click('#modePick [data-mode="laststand"]');
 await B.waitForFunction(() => document.getElementById("banner").textContent.includes("房主選"), null, { timeout: 3000 });
-await A.click('#modePick [data-mode="chips"]');
-await A.waitForFunction(() => document.getElementById("banner").textContent.includes("籌碼對決還在做"), null, { timeout: 3000 });
-if ((await A.getAttribute('#modePick [data-mode="classic"]', "aria-checked")) !== "true") { console.error("✗ 玩法被改掉了"); process.exit(1); }
-console.log("✓ 玩法：朋友不能換、房主點籌碼對決會說還沒開放，維持經典牌局");
+if ((await A.getAttribute('#modePick [data-mode="classic"]', "aria-checked")) !== "true") { console.error("✗ 朋友竟然改得動玩法"); process.exit(1); }
+await A.click('#modePick [data-mode="laststand"]');
+await B.waitForFunction(() => document.querySelector('#modePick [data-mode="laststand"]').getAttribute("aria-checked") === "true", null, { timeout: 3000 });
+await A.click('#modePick [data-mode="classic"]');
+await B.waitForFunction(() => document.querySelector('#modePick [data-mode="classic"]').getAttribute("aria-checked") === "true", null, { timeout: 3000 });
+await A.waitForFunction(() => document.querySelector('#modePick [data-mode="classic"]').getAttribute("aria-checked") === "true", null, { timeout: 3000 }).catch(() => { console.error("✗ 玩法沒換回經典"); process.exit(1); });
+console.log("✓ 玩法：朋友不能換；房主換逆命賭局再換回經典，兩邊同步");
 await shot(B, "02b-both-seated-B");
 await A.click("#readyBtn");
 await B.waitForFunction(() => document.querySelector("#plateOpp em").textContent.includes("準備好了"), null, { timeout: 4000 });

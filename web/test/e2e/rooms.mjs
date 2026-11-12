@@ -1,5 +1,5 @@
 // C1 房間功能的邊界情況（不開瀏覽器，用 WebSocket 直接打伺服器）
-//   開房、查房（不含私人資料）、加入、準備／取消、換模式（只有房主、籌碼對決未開放）、
+//   開房、查房（不含私人資料）、加入、準備／取消、換模式（只有房主、逆命賭局要先簽契約、舊的籌碼對決已移除）、
 //   重複送同一個指令、第三人、同一個憑證開兩個分頁、房主離開換人當房主、同時按準備只開一場、
 //   開打後陌生人進不來、對局中不能用一般離開、協定版本不對、頻率限制（擋猜房號、擋狂開房）
 // 用法：先 npx wrangler dev，再 node test/e2e/rooms.mjs [http://127.0.0.1:8787]
@@ -8,6 +8,7 @@ const WS = BASE.replace(/^http/, "ws");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fail = m => { console.error("✗ " + m); process.exit(1); };
 const ok = m => console.log("✓ " + m);
+const until = async (f, what, ms = 3000) => { for (let t = 0; t < ms; t += 20) { if (f()) return; await sleep(20); } fail("等不到：" + what); };
 let cidN = 0;
 const cid = () => `t${Date.now().toString(36)}-${++cidN}`;
 
@@ -109,11 +110,19 @@ ok("準備、取消準備：雙方即時看到");
 r = await guest.cmd({ t: "mode", mode: "classic" });
 if (r.t !== "reject" || r.code !== "NOT_HOST") fail("朋友應該不能換模式");
 r = await host.cmd({ t: "mode", mode: "chips" });
-if (r.t !== "reject" || r.code !== "MODE_UNAVAILABLE" || !r.msg.includes("籌碼對決")) fail("籌碼對決應該回「還沒開放」");
+if (r.t !== "reject" || r.code !== "BAD_REQUEST") fail("舊的籌碼對決已經拿掉，應該當成沒有這個模式");
 r = await host.cmd({ t: "mode", mode: "bogus" });
 if (r.t !== "reject" || r.code !== "BAD_REQUEST") fail("亂傳模式應該被拒");
 if (host.room.mode !== "classic") fail("模式被亂改了");
-ok("模式：只有房主能換；籌碼對決回「還沒開放」、不會冒充；亂傳的模式被拒");
+r = await host.cmd({ t: "mode", mode: "laststand" });
+if (r.t !== "ack") fail(`房主應該能換成逆命賭局：${JSON.stringify(r)}`);
+await until(() => host.room.mode === "laststand" && guest.room.mode === "laststand", "兩邊都看到逆命賭局");
+r = await guest.cmd({ t: "ready", ready: true });
+if (r.t !== "reject" || !r.msg.includes("契約")) fail("逆命賭局沒簽契約不能準備");
+r = await host.cmd({ t: "mode", mode: "classic" });
+if (r.t !== "ack") fail("房主應該能換回經典牌局");
+await until(() => host.room.mode === "classic" && guest.room.mode === "classic", "兩邊都換回經典牌局");
+ok("模式：只有房主能換；逆命賭局要先簽契約才能準備、可以換回經典；舊的籌碼對決和亂傳的模式都被拒");
 
 // ---------- 第三人、打錯房號、協定版本 ----------
 const third = player(code, "路人"); await third.joined;

@@ -141,30 +141,32 @@
       <button id="lsMenuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
     </header>
     <div class="lsside opp" id="lsOpp">
-      <div class="lswho"><b id="lsOppName">對手</b><small id="lsOppTag"></small></div>
+      <div class="lswho"><b id="lsOppName">對手</b><small id="lsOppTag"></small><span class="lsstatus" id="lsOppStatus"></span></div>
       <div class="lschips"><b id="lsOppChips">15</b><small>枚</small></div>
       <div class="lsmeta"><span id="lsOppCounts">剩 9 張：大 3・中 3・小 3</span><span id="lsOppSkills"></span></div>
-      <div class="lsstatus" id="lsOppStatus"></div>
     </div>
     <div class="lsdir" id="lsDir" aria-live="polite">
       <div class="lsdirbig" id="lsDirBig">比大</div>
       <small id="lsDirNote">下一墩：比小</small>
     </div>
     <div class="lspot" id="lsPot">
-      <div class="lscommit"><span>你已投入 <b id="lsMyCommit">0</b></span><span>對手已投入 <b id="lsOppCommit">0</b></span></div>
+      <div class="lscommit"><span>你已投入 <b id="lsMyCommit">0</b></span><span><i id="lsOppCommitWho">對手</i>已投入 <b id="lsOppCommit">0</b></span></div>
       <div class="lspool" id="lsPool" hidden></div>
-      <p class="lsrisk" id="lsRisk"></p>
       <div class="lsreveal" id="lsReveal" hidden></div>
     </div>
-    <p class="lsturn" id="lsTurn" aria-live="polite"></p>
-    <div class="lsside me" id="lsMe">
-      <div class="lswho"><b id="lsMyName">你</b><small id="lsMyTag"></small></div>
-      <div class="lschips"><b id="lsMyChips">15</b><small>枚</small></div>
-      <div class="lsmeta"><span id="lsMyCounts"></span><span id="lsMySkills"></span></div>
-    </div>
-    <div class="lshand" id="lsHand" role="listbox" aria-label="你的手牌"></div>
-    <div class="lsactions" id="lsActions"></div>
     <details class="lslog" id="lsLog"><summary>每墩紀錄</summary><ol id="lsLogList"></ol></details>
+    <!-- 自己的籌碼、輪到誰、手牌、輸贏試算、按鈕：固定在畫面底部（小手機上方內容捲動時也一定看得到、點得到） -->
+    <div class="lsdock" id="lsDock">
+      <div class="lsside me" id="lsMe">
+        <div class="lswho"><b id="lsMyName">你</b><small id="lsMyTag"></small></div>
+        <div class="lschips"><b id="lsMyChips">15</b><small>枚</small></div>
+        <div class="lsmeta"><span id="lsMyCounts"></span><span id="lsMySkills"></span></div>
+      </div>
+      <p class="lsturn" id="lsTurn" aria-live="polite"></p>
+      <div class="lshand" id="lsHand" role="listbox" aria-label="你的手牌"></div>
+      <p class="lsrisk" id="lsRisk"></p>
+      <div class="lsactions" id="lsActions"></div>
+    </div>
   </section>
 
   <!-- ============ 02～04 牌桌：搶牌／叫牌／出牌 ============ -->
