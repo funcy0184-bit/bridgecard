@@ -1,4 +1,4 @@
-// 《逆命賭局》文案模板的使用條件
+// 《梭了啦！這局賭什麼？》文案模板的使用條件
 //   · 原始 V2 文案（laststand_v2_copywriting.json）一字不改；這裡只「另外」加條件
 //   · 原本的 event／phase／requires／privacy 是硬條件；這裡再補上會讓句子講錯事的額外條件（EXTRA_REQUIRES）
 //   · 必要變數缺任何一個就換別的模板，不補造

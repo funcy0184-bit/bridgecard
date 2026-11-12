@@ -76,7 +76,7 @@ describe("文案只講真的發生過的事（AI 對局 1200 場）", () => {
     const seen = new Set<string>();
     for (const { g, consent, vows } of runs) {
       const { facts, events } = summarize(g.s, { vows, revealConsentBoth: consent });
-      const names: [string, string] = ["大雞", "阿禾"];
+      const names: [string, string] = ["大雞", "小美"];
       for (const ev of events) {
         const vars: Vars = {
           winner: facts.winner >= 0 ? names[facts.winner] : undefined, loser: facts.loser >= 0 ? names[facts.loser] : undefined,

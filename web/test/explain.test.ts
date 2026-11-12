@@ -9,10 +9,10 @@ const { Clubs: CL, Diamonds: DI, Hearts: HE, Spades: SP } = Suit;
 
 describe("這墩為什麼是這個人贏", () => {
   it("♠K／♦A：誰先出，領出花色就是誰的", () => {
-    const a = trickSentence(C(SP, 13), C(DI, 14), Strain.Hearts, "阿禾", "你");
-    expect(a).toEqual({ winnerIsLeader: true, text: "阿禾贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌，點數再大也沒用。" });
-    const b = trickSentence(C(DI, 14), C(SP, 13), Strain.Hearts, "你", "阿禾");
-    expect(b).toEqual({ winnerIsLeader: true, text: "你贏：本墩先出方塊，阿禾的黑桃不是領出花色，也不是王牌。" });
+    const a = trickSentence(C(SP, 13), C(DI, 14), Strain.Hearts, "阿元", "你");
+    expect(a).toEqual({ winnerIsLeader: true, text: "阿元贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌，點數再大也沒用。" });
+    const b = trickSentence(C(DI, 14), C(SP, 13), Strain.Hearts, "你", "阿元");
+    expect(b).toEqual({ winnerIsLeader: true, text: "你贏：本墩先出方塊，阿元的黑桃不是領出花色，也不是王牌。" });
   });
   it("王吃、都是王牌、同花色、先出王牌：說法和 beats() 的結果一致", () => {
     expect(whyTrick(C(SP, 14), C(HE, 2), Strain.Hearts, "你").kind).toBe("ruff");

@@ -15,7 +15,7 @@ export function reportText(): string {
     `頁面：${location.pathname}${location.search}`,
     `畫面大小：${innerWidth}×${innerHeight}（像素比 ${devicePixelRatio}）`,
     `裝置：${navigator.userAgent}`,
-    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、品質 ${s.quality}→${fx.quality()}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}、阿禾吐槽 ${s.talk}`,
+    `設定：動畫${fx.INTENSITY_LABELS[s.intensity]}${s.fast ? "＋加快" : ""}、品質 ${s.quality}→${fx.quality()}、震動${s.shake ? "開" : "關"}、粒子${s.particles ? "開" : "關"}、音效 ${Math.round(s.sfx * 100)}、音樂 ${Math.round(s.music * 100)}${s.muted ? "、靜音" : ""}、阿元吐槽 ${s.talk}`,
   ].join("\n");
 }
 
@@ -112,11 +112,11 @@ export function renderSettings(box: HTMLElement) {
   }
   qrow.append(ql, qg);
 
-  // 阿禾吐槽：正常／精簡（只講重要的）／關閉（規則、錯誤、結算照常顯示）
+  // 阿元吐槽：正常／精簡（只講重要的）／關閉（規則、錯誤、結算照常顯示）
   const trow = document.createElement("div");
   trow.className = "setting";
   const tl = document.createElement("span");
-  tl.textContent = "阿禾吐槽";
+  tl.textContent = "阿元吐槽";
   const tg = document.createElement("div");
   tg.className = "seg";
   for (const [val, label] of [["full", "正常"], ["lite", "精簡"], ["off", "關閉"]] as const) {
@@ -173,7 +173,7 @@ export function renderSettings(box: HTMLElement) {
   const reset = document.createElement("button");
   reset.type = "button"; reset.className = "btn ghost small"; reset.textContent = "重設這支手機的進度";
   reset.addEventListener("click", () => {
-    if (!confirm("要清掉這支手機上的教學進度、跟阿禾打到一半的那局，還有「第一次玩」的提示嗎？（設定會留著，朋友的牌桌不受影響）")) return;
+    if (!confirm("要清掉這支手機上的教學進度、跟阿元打到一半的那局，還有「第一次玩」的提示嗎？（設定會留著，朋友的牌桌不受影響）")) return;
     for (const k of ["hb.story.v4", "hb.story.v3", "hb.story.v2", "hb-ahe-mem", "hb-solo-v1", "hb-story-offered", "hb-news-seen", COACH_KEY]) { try { localStorage.removeItem(k); } catch { /* 無痕模式 */ } }
     location.href = "/";
   });

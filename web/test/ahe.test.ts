@@ -1,4 +1,4 @@
-// 阿禾的嘴（正式對戰）：台詞只在條件符合時出現、頻率有控制、不一直重複、幹話稀有，記憶只記這一場
+// 阿元的嘴（正式對戰）：台詞只在條件符合時出現、頻率有控制、不一直重複、幹話稀有，記憶只記這一場
 import { describe, expect, it } from "vitest";
 import { AheBrain, EMOTES, MEM_KEY, NONSENSE_MAX, REACTIONS } from "../src/client/ahe";
 import { EMOTE_COUNT, emoteAllowed } from "../src/server/protocol";
@@ -16,7 +16,7 @@ const allLines = () => REACTIONS.flatMap(r => typeof r.lines === "function"
   ? [r.lines({ n: 3, iDecl: true }, { playerDoubles: 0, playerRuffs: 0, aheDownRow: 0 }), r.lines({ n: 70, iDecl: false, aheAhead: true, playerAhead: true, aheLostLast: true, lastTrickAhe: true }, { playerDoubles: 0, playerRuffs: 0, aheDownRow: 0 })].flat()
   : r.lines);
 
-describe("阿禾的台詞庫", () => {
+describe("阿元的台詞庫", () => {
   it("不像客服、不像考卷；每句都短到放得進泡泡", () => {
     for (const l of allLines()) {
       for (const w of ["請選擇", "恭喜您", "您", "此策略", "請執行", "本次", "操作"]) expect(l).not.toContain(w);
@@ -29,7 +29,7 @@ describe("阿禾的台詞庫", () => {
       expect(lines.size, id).toBeGreaterThanOrEqual(2);
     }
   });
-  it("五個可以回阿禾的話", () => {
+  it("五個可以回阿元的話", () => {
     expect(EMOTES.map(e => e.text)).toEqual(["有料喔！", "哭啊！", "別太囂張！", "漂亮！", "再來啊！"]);
   });
 });
@@ -51,7 +51,7 @@ describe("條件不符就不講", () => {
     const { b } = brain();
     expect(b.say("madeMe", { over: 2 })!.text).toContain("太貪心");
   });
-  it("回話照局勢：阿禾領先才說「現在才開始哭喔？」", () => {
+  it("回話照局勢：阿元領先才說「現在才開始哭喔？」", () => {
     const { b, tick } = brain();
     expect(b.say("emote:cry", { aheAhead: true })!.text).toBe("現在才開始哭喔？");
     tick(10000);
@@ -59,7 +59,7 @@ describe("條件不符就不講", () => {
     tick(10000);
     expect(b.say("emote:cocky", { aheAhead: true })!.text).toBe("啊我就真的贏了啊。");
   });
-  it("幹話：你沒領先就不說你運氣過分；阿禾沒吃虧就不說在研究失敗", () => {
+  it("幹話：你沒領先就不說你運氣過分；阿元沒吃虧就不說在研究失敗", () => {
     for (let seed = 1; seed < 60; seed++) {
       const { b } = brain({ seed });
       const s = b.say("nonsense", { playerAhead: false, aheLostLast: false })!;
@@ -146,7 +146,7 @@ describe("這一場的記憶", () => {
     for (let i = 0; i < 3; i++) b.note("playerRuff");
     expect(b.say("ruffMe")!.text).toContain("到底還有幾張王牌");
   });
-  it("阿禾當莊連續倒約兩次：「我今天到底在叫什麼東西……」；打成一次就歸零", () => {
+  it("阿元當莊連續倒約兩次：「我今天到底在叫什麼東西……」；打成一次就歸零", () => {
     const { b, tick } = brain();
     b.note("aheHand", false); b.note("aheHand", false);
     expect(b.say("downAhe", { under: 2 })!.text).toBe("我今天到底在叫什麼東西……");
@@ -183,7 +183,7 @@ describe("回個話", () => {
     expect(emoteAllowed([0, 3000, 6000, 9000], 12000)).toBe(false);
     expect(emoteAllowed([0, 3000, 6000, 9000], 21000)).toBe(true);
   });
-  it("阿禾回你的話：不受閒聊間隔和一局上限限制，但關閉吐槽就不回", () => {
+  it("阿元回你的話：不受閒聊間隔和一局上限限制，但關閉吐槽就不回", () => {
     const { b, tick } = brain();
     for (let i = 0; i < 6; i++) { b.say("contractMe"); b.say("faceUpMe"); tick(30000); }
     expect(b.say("emote:pretty")).not.toBeNull();

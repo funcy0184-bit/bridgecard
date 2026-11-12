@@ -29,9 +29,9 @@ const B = await phone(DEV_B, "朋友");
 // --- 開房：主選單 → 朋友連線 ---
 await shot(A, "01-home");
 await A.click("#goOnline");
-// 第一次在這支手機按「朋友連線」會先問要不要跟阿禾學：選「我會玩，直接開始」
+// 第一次在這支手機按「朋友連線」會先問要不要跟阿元學：選「我會玩，直接開始」
 await A.waitForSelector("#storyOffer:not([hidden])");
-console.log("✓ 第一次按朋友連線會先問要不要跟阿禾學");
+console.log("✓ 第一次按朋友連線會先問要不要跟阿元學");
 await A.click("#offerSkip");
 await A.waitForSelector("#online:not([hidden])");
 await A.fill("#name", "阿明");
@@ -55,7 +55,7 @@ await A.waitForFunction(() => document.getElementById("plateOpp").classList.cont
 if (await A.isVisible("#table:not([hidden])")) { console.error("✗ 還沒按準備就進牌桌了"); process.exit(1); }
 console.log("✓ 朋友輸入房號加入：兩邊都在等待室，不會自動開打");
 if (!(await A.textContent("#plateMe small")).includes("房主") || !(await B.textContent("#plateOpp small")).includes("房主")) { console.error("✗ 房主標示不對"); process.exit(1); }
-// 玩法：朋友點不動（玩法由房主選）；房主可以換成逆命賭局再換回經典（兩邊同步）
+// 玩法：朋友點不動（玩法由房主選）；房主可以換成梭了啦再換回經典（兩邊同步）
 await B.click('#modePick [data-mode="laststand"]');
 await B.waitForFunction(() => document.getElementById("banner").textContent.includes("房主選"), null, { timeout: 3000 });
 if ((await A.getAttribute('#modePick [data-mode="classic"]', "aria-checked")) !== "true") { console.error("✗ 朋友竟然改得動玩法"); process.exit(1); }
@@ -64,7 +64,7 @@ await B.waitForFunction(() => document.querySelector('#modePick [data-mode="last
 await A.click('#modePick [data-mode="classic"]');
 await B.waitForFunction(() => document.querySelector('#modePick [data-mode="classic"]').getAttribute("aria-checked") === "true", null, { timeout: 3000 });
 await A.waitForFunction(() => document.querySelector('#modePick [data-mode="classic"]').getAttribute("aria-checked") === "true", null, { timeout: 3000 }).catch(() => { console.error("✗ 玩法沒換回經典"); process.exit(1); });
-console.log("✓ 玩法：朋友不能換；房主換逆命賭局再換回經典，兩邊同步");
+console.log("✓ 玩法：朋友不能換；房主換梭了啦再換回經典，兩邊同步");
 await shot(B, "02b-both-seated-B");
 await A.click("#readyBtn");
 await B.waitForFunction(() => document.querySelector("#plateOpp em").textContent.includes("準備好了"), null, { timeout: 4000 });
@@ -171,15 +171,15 @@ const handAfter = await B.locator("#hand .card").count();
 console.log(`✓ 朋友重新整理網頁，直接回到牌桌（手上 ${handAfter} 張）`);
 await shot(B, "10-after-reload-B");
 
-// 朋友連線：對面是真人，畫面上不會冒出阿禾的名字、郵票或台詞
+// 朋友連線：對面是真人，畫面上不會冒出阿元的名字、郵票或台詞
 for (const [P, n] of [[A, "房主"], [B, "朋友"]]) {
   const ahe = await P.evaluate(() => ({
     quip: document.getElementById("quip").textContent, name: document.getElementById("oppName").textContent,
     stamp: document.getElementById("oppStamp").getAttribute("src"),
   }));
-  if (ahe.quip || ahe.name === "阿禾" || ahe.stamp.includes("ahe")) { console.error(`✗ ${n}的畫面出現阿禾：`, ahe); process.exit(1); }
+  if (ahe.quip || ahe.name === "阿元" || ahe.stamp.includes("ahe")) { console.error(`✗ ${n}的畫面出現阿元：`, ahe); process.exit(1); }
 }
-console.log("✓ 朋友連線時兩邊都看不到阿禾（名字、郵票、台詞都沒有）");
+console.log("✓ 朋友連線時兩邊都看不到阿元（名字、郵票、台詞都沒有）");
 
 await browser.close();
 if (errors.length) { console.error("✗ 頁面有錯誤：\n" + errors.join("\n")); process.exit(1); }

@@ -1,4 +1,4 @@
-// 逆命賭局 P1（瀏覽器真的點）：房主用 iPhone 13、朋友用桌機（另一個獨立瀏覽器環境）
+// 梭了啦 P1（瀏覽器真的點）：房主用 iPhone 13、朋友用桌機（另一個獨立瀏覽器環境）
 //   賭局契約書：提示文字輪播（點了、打字、有字就停；減少動態效果不輪播）、即時預覽、空白＝我最後的尊嚴、蓋章、雙方看得到
 //   牌桌：方向與下一墩、雙方籌碼／剩餘張數／大中小、底注與上限、已投入、可能損失／獲得、輪到誰、
 //         鎖牌、過牌、加注／反加、接戰、棄牌、梭哈顯示「每人押多少」；中途重新整理；打完九墩或歸零 → 結算 → 再戰交換宣戰權
@@ -25,25 +25,26 @@ async function phone(kind, label, url = BASE, extra = {}) {
   return { ctx, p };
 }
 
-console.log("開桌、換成逆命賭局");
+console.log("開桌、換成梭了啦！這局賭什麼？");
 const H = await phone("mobile", "房主");
 await H.p.click("#goOnline"); await H.p.fill("#name", "大雞"); await H.p.click("#create");
 await H.p.waitForSelector("#wait:not([hidden])");
 const code = (await text(H.p, "#bigCode")).replace(/\s/g, "");
 const G = await phone("desktop", "朋友", `${BASE}/?room=${code}`);
 await G.p.waitForSelector("#online:not([hidden])");
-await G.p.fill("#name", "阿禾"); await G.p.click("#join");
+await G.p.fill("#name", "小美"); await G.p.click("#join");
 await G.p.waitForSelector("#wait:not([hidden])");
 await H.p.click('#modePick [data-mode="laststand"]');
 await H.p.waitForSelector("#contract:not([hidden])", { timeout: 5000 });
 await G.p.waitForSelector("#contract:not([hidden])", { timeout: 5000 });
-ok((await text(H.p, ".ctitle")) === "賭局契約書", "房主選逆命賭局：雙方都出現「賭局契約書」");
+ok((await text(H.p, ".ctitle")) === "賭局契約書", "房主選梭了啦：雙方都出現「賭局契約書」");
 ok(await H.p.isDisabled("#readyBtn") && (await text(H.p, "#waitText")).includes("契約書"), "還沒蓋章：「準備好了」按不了，提示先蓋章");
 
 console.log("契約書：提示輪播、預覽、蓋章");
 const phSeen = new Set([await text(H.p, "#stakePh")]);
 for (let i = 0; i < 10; i++) { await sleep(500); phSeen.add(await text(H.p, "#stakePh")); }
-ok(phSeen.size === 2 && [...phSeen].every(t => ["這場，你要賭上什麼？", "你要交出什麼？"].includes(t)), `輸入框空著：提示文字在兩句之間輪播（看到 ${[...phSeen].join("／")}）`);
+const PH19 = await H.p.evaluate(() => globalThis.__hbPh());
+ok(phSeen.size >= 2 && [...phSeen].every(t => PH19.includes(t)), `輸入框空著：提示文字在 19 句裡隨機輪播（5 秒內看到 ${[...phSeen].join("／")}）`);
 await H.p.click("#stakeInput");
 const phFocus = await text(H.p, "#stakePh");
 await sleep(4500);
@@ -133,7 +134,7 @@ async function playMatch(label) {
         await G.p.waitForFunction(() => !!globalThis.__hbLS?.(), null, { timeout: 8000 });
         const w = await LS(G.p);
         const after = JSON.stringify({ s: [w.stacks[0] + w.commit[0], w.stacks[1] + w.commit[1]], h: w.hand, t: w.trick });
-        ok(after === before && (await text(G.p, "#lsMyChips")) === String(w.stacks[w.seat]), `第 3 墩朋友重新整理：直接回到逆命牌桌，籌碼、手牌都一樣（${before} → ${after}）`);
+        ok(after === before && (await text(G.p, "#lsMyChips")) === String(w.stacks[w.seat]), `第 3 墩朋友重新整理：直接回到梭了啦牌桌，籌碼、手牌都一樣（${before} → ${after}）`);
         refreshed = true;
       }
     }
@@ -174,5 +175,5 @@ ok(seen.allInLabel > 0 || (await LS(H.p)).history.every(t => t.trick < 7 || t.ca
 await browser.close();
 if (errors.length) { console.log(errors.join("\n")); fails++; }
 ok(!errors.length, "全程沒有頁面錯誤");
-console.log(fails ? `\n${fails} 項沒過` : "\n逆命賭局介面驗收全部通過");
+console.log(fails ? `\n${fails} 項沒過` : "\n梭了啦介面驗收全部通過");
 process.exit(fails ? 1 : 0);

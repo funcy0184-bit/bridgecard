@@ -61,8 +61,8 @@ for (const d of [1, 2]) {
 
 console.log("連續贏墩：我方暗金、對方酒紅、中斷就退去；不加分");
 {
-  // 固定牌局：1NT 阿禾當莊家、你先出。你有 ♠A～♠5（10 張）＋♥2～♥4；阿禾 ♠2～♠4＋♥5～♥A
-  // → 你先連贏一大串黑桃，出紅心時被打斷，接著換阿禾連贏
+  // 固定牌局：1NT 阿元當莊家、你先出。你有 ♠A～♠5（10 張）＋♥2～♥4；阿元 ♠2～♠4＋♥5～♥A
+  // → 你先連贏一大串黑桃，出紅心時被打斷，接著換阿元連贏
   const sp = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5].map(r => c(SP, r)), mh = [2, 3, 4].map(r => c(HE, r));
   const ah = [2, 3, 4].map(r => c(SP, r)).concat([5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(r => c(HE, r)));
   const streakSave = { hands: [sp.concat(mh), ah], takenFaceUp: [[], []], stock: [], tricksWon: [0, 0], phase: 2, currentPlayer: 0, leader: 0, leadCard: -1, followCard: -1,
@@ -86,7 +86,7 @@ console.log("連續贏墩：我方暗金、對方酒紅、中斷就退去；不�
   console.log(`   連贏標記：${chips.slice(0, 3).join("、")} … ${chips.slice(-2).join("、")}`);
   ok(me.length > 0 && me.every(x => /你連贏 \d+ 墩\|gold/.test(x)), "你連贏 3 墩以上：你旁邊出現「你連贏 N 墩」，桌緣暗金");
   ok(heatDuringMe === "1gold" && heatAfterBreak === "0", `連贏中斷：氣氛退去（連贏中 ${heatDuringMe} → 中斷後 ${heatAfterBreak}）`);
-  ok(opp.length > 0 && opp.every(x => /阿禾連贏 \d+ 墩\|wine/.test(x)), "阿禾連贏：標記在阿禾旁邊、桌緣酒紅（是壓力，不是你在贏）");
+  ok(opp.length > 0 && opp.every(x => /阿元連贏 \d+ 墩\|wine/.test(x)), "阿元連贏：標記在阿元旁邊、桌緣酒紅（是壓力，不是你在贏）");
   const sAfter = await p.evaluate(() => [document.getElementById("rtMe").textContent, document.getElementById("rtOpp").textContent, document.getElementById("resBody").innerText]);
   ok(!/連贏/.test(sAfter[2]), "結算明細沒有任何連贏加分（連贏只是氣氛）");
   void scoreBefore;

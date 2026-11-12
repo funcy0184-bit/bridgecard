@@ -1,4 +1,4 @@
-/* 來打橋牌 · 手機版（連線、單機、阿禾的故事共用）
+/* 來打橋牌 · 手機版（連線、單機、阿元的故事共用）
    美術：深色木桌、復古紙張與撕紙拼貼、黑金細框、蠟封與郵票；奶油色、暗金、酒紅、深綠
    動態：卡牌用彈簧曲線（--spring，由 fx.ts 算好），動畫強度／快速模式透過 --spd、--amp、data-motion 控制 */
 :root {
@@ -680,7 +680,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   .sheet.result .btn.big { padding: 11px; font-size: 17px; }
 }
 
-/* 阿禾的一句話：浮在阿禾旁邊的小紙條（只有跟阿禾打才會出現，不擋操作） */
+/* 阿元的一句話：浮在阿元旁邊的小紙條（只有跟阿元打才會出現，不擋操作） */
 .quip { position: absolute; left: 70px; top: 0; z-index: 6; margin: 0; max-width: min(250px, calc(100% - 82px)); padding: 5px 11px;
   font-size: 13px; line-height: 1.45; color: var(--ink); background: var(--paper-hi); border-radius: 10px; pointer-events: none;
   box-shadow: 0 0 0 1px rgba(185,138,62,.75), 0 6px 14px rgba(0,0,0,.4); }
@@ -709,7 +709,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .crack.gold .glow { stroke: rgba(255,196,80,.35); }
 .crack.gold .core { stroke: #FFE6A0; }
 
-/* ---------- 手機橫拿：牌桌在左、阿禾／手牌／按鈕在右，整個對戰畫面一樣不捲動 ---------- */
+/* ---------- 手機橫拿：牌桌在左、阿元／手牌／按鈕在右，整個對戰畫面一樣不捲動 ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
   #app:has(#table:not([hidden])) { max-width: 980px; }
   #table:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr);
@@ -745,7 +745,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .turn.wait .tt { font: 500 14px var(--display); letter-spacing: .14em; }
 .hand .card.dim::after { content: "✕"; position: absolute; right: 3px; top: 3px; width: 13px; height: 13px; display: grid; place-items: center; border-radius: 50%;
   font: 700 8px/1 sans-serif; color: #F7E9CC; background: rgba(60,40,25,.75); pointer-events: none; }
-/* 對局提示：浮在阿禾那一列上（不遮手牌、確認出牌和牌桌） */
+/* 對局提示：浮在阿元那一列上（不遮手牌、確認出牌和牌桌） */
 .coach { position: absolute; inset: 0 8px; z-index: 8; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 12px; margin: 0;
   font-size: 12.5px; line-height: 1.45; color: var(--ink); background: var(--paper-hi); border-radius: 8px; box-shadow: 0 0 0 1px rgba(185,138,62,.8), 0 8px 18px rgba(0,0,0,.45); }
 .coach b { font: 700 13.5px var(--display); letter-spacing: .12em; color: var(--wine); }
@@ -866,7 +866,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .stagepop p, .tippop p { margin: 0; font-size: 15px; line-height: 1.65; white-space: pre-line; }
 .px { position: absolute; right: 3px; top: 3px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: none; font-size: 16px; color: var(--ink-soft); cursor: pointer; }
 
-/* 阿禾那一列：一排就好（郵票＋名字＋張數｜背面牌｜牌局紀錄） */
+/* 阿元那一列：一排就好（郵票＋名字＋張數｜背面牌｜牌局紀錄） */
 #oppArea { display: flex; align-items: center; gap: 8px; padding: 4px 10px 2px; min-height: 44px; }
 #oppArea .who { flex: none; display: flex; flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
 .oppstamp { width: 26px; height: 31px; }
@@ -881,7 +881,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .recbtn[aria-expanded="true"] i { rotate: 180deg; }
 .coach { inset: 0 8px auto; min-height: 100%; }
 
-/* 牌局紀錄：從阿禾那一列往下展開，停在提示列上面（不遮手牌和確認出牌） */
+/* 牌局紀錄：從阿元那一列往下展開，停在提示列上面（不遮手牌和確認出牌） */
 .recpop { position: absolute; left: 8px; right: 8px; z-index: 30; display: flex; flex-direction: column; overflow: hidden; border-radius: 10px; color: var(--ink);
   background: var(--paper-hi); box-shadow: 0 0 0 1px rgba(185,138,62,.9), inset 0 0 0 3px var(--paper-hi), inset 0 0 0 4px rgba(185,138,62,.4), 0 14px 30px rgba(0,0,0,.55); }
 .rechead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; padding: 10px 46px 6px 14px; }
@@ -962,7 +962,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   .recbtn { padding: 0 8px; font-size: 13px; } .score { padding-left: 7px; }
 }
 
-/* ---------- 阿禾的表情：頭像旁冒一下的小記號（！♪？…＃），一下就收 ---------- */
+/* ---------- 阿元的表情：頭像旁冒一下的小記號（！♪？…＃），一下就收 ---------- */
 .emomark { position: absolute; z-index: 7; pointer-events: none; opacity: 0; font: 700 16px/1 var(--display); color: var(--wine);
   text-shadow: 0 1px 0 #FBF4E4, 0 0 5px rgba(251,244,228,.95); }
 .emomark[data-emo="smug"] { color: #9A6A1E; }
@@ -972,11 +972,11 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 #oppArea .who .emomark { left: 20px; top: -5px; }
 .seller { position: relative; }
 .seller .emomark { left: 34px; top: -6px; font-size: 18px; }
-/* 阿禾的泡泡：吐槽（情緒）稍微強調，幹話用斜體 */
+/* 阿元的泡泡：吐槽（情緒）稍微強調，幹話用斜體 */
 .quip[data-tone="2"] { font-weight: 700; }
 .quip[data-tone="3"] { font-style: italic; color: #4A3B2A; }
 
-/* ---------- 回個話：阿禾頭像旁的黃銅小鈕＋五句短句；你的泡泡在牌桌左下（不遮手牌和按鈕） ---------- */
+/* ---------- 回個話：阿元頭像旁的黃銅小鈕＋五句短句；你的泡泡在牌桌左下（不遮手牌和按鈕） ---------- */
 .talkbtn { position: relative; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #4A2E1A;
   background: radial-gradient(circle at 34% 28%, #FFFAEC 0%, #EEDFBD 58%, #D8C291 100%);
   box-shadow: inset 0 0 0 1.3px #B98A3E, inset 0 0 0 2.6px #FBF2DC, 0 1px 3px rgba(0,0,0,.35); transition: opacity .2s; }
@@ -998,12 +998,13 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .myquip .who { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 8px; font-size: 11.5px; color: #F7E9CC; background: var(--wine); vertical-align: 1px; }
 @media (max-width: 360px) { .talkbtn { width: 34px; height: 34px; } }
 
-/* ================= 逆命賭局：賭局契約書（等待室） ================= */
+/* ================= 梭了啦：賭局契約書（等待室） ================= */
 .plate span:has(.pstake) { min-width: 0; }
 /* 賭上之物最多 24 字：最多兩行，再長才截掉（不撐破名牌） */
 .pstake { font-style: normal; font-size: 12px; line-height: 1.35; color: var(--wine); margin-top: 2px; overflow: hidden; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .pstake.unsigned { color: var(--ink-soft); }
+.pvow { font-style: normal; font-size: 11.5px; line-height: 1.35; color: var(--ink-soft); overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .contract { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 14px; text-align: left; color: var(--ink);
   background: linear-gradient(180deg, var(--paper-hi), var(--paper) 70%, var(--paper-2)); clip-path: var(--torn-a);
   box-shadow: inset 0 0 0 6px transparent, inset 0 0 0 7px rgba(122,39,50,.45), inset 0 0 0 10px transparent, inset 0 0 0 10.6px rgba(122,39,50,.25); }
@@ -1018,6 +1019,11 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .cph.fade { opacity: 0; }
 .cph[hidden] { display: none; }
 .crow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.csub { margin: -2px 0 2px; text-align: center; font: italic 500 13.5px var(--display); letter-spacing: .14em; color: var(--ink-soft); }
+.clabel { margin-top: 2px; font: 600 13px var(--display); letter-spacing: .3em; color: var(--wine); }
+.clabel small { margin-left: 4px; font-weight: 400; font-size: 11px; letter-spacing: .1em; color: var(--ink-soft); }
+.cfield.vow input { font-size: 15.5px; }
+.cfield.vow input::placeholder { color: rgba(90,70,40,.5); }
 .cfine { font-size: 11.5px; color: var(--ink-soft); }
 .cpreview { margin: 0; font: 15px/1.7 var(--display); color: var(--ink); padding: 8px 10px; background: rgba(122,39,50,.06); border-left: 3px solid rgba(122,39,50,.55); word-break: break-all; }
 .csign { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
@@ -1035,7 +1041,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .seal.signed { background: radial-gradient(circle at 35% 30%, #9E3A47, #6A1E29 60%, #4A141C); opacity: .92; }
 .seal:disabled { opacity: .5; cursor: default; }
 
-/* ================= 逆命賭局：牌桌 ================= */
+/* ================= 梭了啦：牌桌 ================= */
 #lstable { gap: 6px; overflow-y: auto; padding-top: calc(env(safe-area-inset-top) + 8px); padding-bottom: 0; }
 .lsbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lstrick { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; min-width: 0; }
@@ -1130,3 +1136,112 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   .lsactions .btn { padding: 9px 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard.sel .card { transform: none; } }
+
+/* ================= P1.5：首頁選玩法、梭了啦！這局賭什麼？的選單、換玩法轉場 ================= */
+:root { --shuo-1: #8E2B38; --shuo-2: #5A1620; --shuo-3: #2A070C; --shuo-gold: #E6BC62; --shuo-gold-dk: #8A6424; --shuo-cream: #F7E3BA; }
+
+/* 首頁：兩個玩法並排（經典＝深綠牌桌；梭了啦＝酒紅暗金） */
+.cv-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 6px; flex: none; position: relative; z-index: 2; }
+.cv-mode { position: relative; display: flex; align-items: center; gap: 9px; min-height: 74px; padding: 9px 8px 9px 11px; border: 0; border-radius: 10px; cursor: pointer;
+  text-align: left; font: inherit; transition: transform calc(.3s * var(--spd)) var(--spring), filter .15s; }
+.cv-mode > span { display: flex; flex-direction: column; min-width: 0; }
+.cv-mode b { font: 500 16px/1.25 var(--display); letter-spacing: .06em; white-space: nowrap; }
+.cv-mode small { margin-top: 2px; font-size: 11px; letter-spacing: .08em; opacity: .88; white-space: nowrap; }
+.cv-mode .mcard { position: relative; flex: none; width: 28px; height: 40px; border-radius: 4px; display: grid; place-items: center; font: 700 16px var(--display); font-style: normal; }
+.cv-mode.classic { color: #F3E9D2; background: radial-gradient(120% 120% at 30% 20%, var(--felt) 0%, var(--felt-dark) 60%, var(--felt-deep) 100%);
+  box-shadow: inset 0 0 0 1px rgba(226,184,96,.6), inset 0 0 0 3px var(--felt-dark), inset 0 0 0 3.6px rgba(226,184,96,.35), 0 3px 8px rgba(40,30,20,.25); }
+.cv-mode.classic .mcard { background: #FBF4E4; color: #2B2118; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.cv-mode.shuo { color: var(--shuo-cream); background: radial-gradient(120% 130% at 25% 15%, var(--shuo-1) 0%, var(--shuo-2) 55%, #34090F 100%);
+  box-shadow: inset 0 0 0 1px #D4A64E, inset 0 0 0 3px var(--shuo-2), inset 0 0 0 3.6px rgba(212,166,78,.55), 0 3px 10px rgba(80,20,25,.35); }
+.cv-mode.shuo .mcard { background: linear-gradient(160deg, #3A0D14, var(--shuo-2)); color: var(--shuo-gold); box-shadow: inset 0 0 0 1px #C99A4B, 0 1px 2px rgba(0,0,0,.5); }
+.cv-mode.shuo b { color: #F3D488; }
+.cv-mode.shuo b.b2 { font-size: 14px; color: var(--shuo-cream); }
+.cv-mode .newtag { position: absolute; left: 4px; top: -7px; font-style: normal; font-size: 10px; line-height: 15px; letter-spacing: .08em; padding: 0 5px; border-radius: 3px;
+  color: #3A0D14; background: var(--shuo-gold); box-shadow: 0 1px 2px rgba(0,0,0,.35); transform: rotate(-5deg); }
+.cv-mode:active { transform: translateY(1px) scale(.98); }
+@media (hover: hover) and (pointer: fine) { .cv-mode:hover { transform: translateY(-2px); } }
+@media (max-width: 360px) { .cv-mode .mcard { display: none; } .cv-mode { padding-left: 10px; } }
+
+/* 梭了啦！這局賭什麼？：新玩法的選單（酒紅、暗金） */
+#shuo { gap: 12px; overflow-y: auto; text-align: center; color: var(--shuo-cream);
+  background: radial-gradient(110% 70% at 50% 30%, var(--shuo-1) 0%, var(--shuo-2) 45%, var(--shuo-3) 100%); }
+#shuo::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .35; background-image: var(--noise); mix-blend-mode: overlay; }
+#shuo > * { position: relative; }
+.sh-top { display: flex; justify-content: space-between; align-items: center; flex: none; }
+#shuo .back { color: var(--shuo-gold); }
+.sh-icon { width: 42px; height: 42px; border: 0; background: none; color: var(--shuo-gold); cursor: pointer; display: grid; place-items: center; border-radius: 50%; }
+.sh-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.sh-title { margin-top: auto; flex: none; }
+.sh-kicker { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; font-size: 12px; letter-spacing: .4em; color: #D4A64E; }
+.sh-kicker::before, .sh-kicker::after { content: ""; flex: 0 1 60px; height: 1px; background: linear-gradient(90deg, transparent, #D4A64E); }
+.sh-kicker::after { background: linear-gradient(90deg, #D4A64E, transparent); }
+.sh-title h1 { margin: 10px 0 8px; display: flex; flex-direction: column; font-family: var(--display); line-height: 1.12; }
+.sh-title .l1 { font-size: clamp(44px, 14vw, 60px); font-weight: 700; letter-spacing: .08em; color: #F3D488; text-shadow: 0 2px 0 #3A0D14, 0 0 18px rgba(243,212,136,.25); }
+.sh-title .l2 { font-size: clamp(27px, 8.6vw, 38px); font-weight: 500; letter-spacing: .14em; color: #FBEBD0; }
+.sh-tag { margin: 0; font-size: 15px; letter-spacing: .5em; padding-left: .5em; color: var(--shuo-gold); }
+.sh-card { flex: none; align-self: center; width: 76px; height: 108px; margin: 6px 0; border-radius: 8px; display: grid; place-items: center;
+  background: linear-gradient(160deg, #3A0D14, var(--shuo-2)); transform: rotate(-4deg);
+  box-shadow: inset 0 0 0 1.5px #C99A4B, inset 0 0 0 5px #3A0D14, inset 0 0 0 6px rgba(201,154,75,.6), 0 10px 24px rgba(0,0,0,.45); }
+.sh-card i { font: 700 38px var(--display); font-style: normal; color: var(--shuo-gold); }
+.sh-menu { display: flex; flex-direction: column; gap: 12px; padding: 0 8px; flex: none; }
+.btn.gold { color: #3A0D14; background-color: var(--shuo-gold); background-image: linear-gradient(180deg, rgba(255,255,255,.35), transparent 60%), var(--noise);
+  box-shadow: inset 0 0 0 1px var(--shuo-gold-dk), inset 0 0 0 3px var(--shuo-gold), inset 0 0 0 3.7px rgba(138,100,36,.6), 0 3px 0 rgba(0,0,0,.5), 0 6px 12px rgba(0,0,0,.35); }
+.btn.shuoline { background: rgba(0,0,0,.2); color: var(--shuo-cream); box-shadow: inset 0 0 0 1px rgba(230,188,98,.75), 0 3px 0 rgba(0,0,0,.4); }
+#shuo .btn.ghost { color: var(--shuo-gold); box-shadow: none; text-decoration: underline; text-underline-offset: 4px; }
+.sh-foot { margin: 0 0 auto; flex: none; font-size: 11.5px; line-height: 1.7; letter-spacing: .06em; color: rgba(247,227,186,.62); }
+@media (max-height: 640px) { .sh-card { display: none; } #shuo { gap: 10px; } }
+/* 從新玩法進朋友連線：標題換成新玩法 */
+#online.shuo .subhead h2 { font-size: 18px; letter-spacing: .12em; color: #F3D488; }
+.sheet.rules.shuo h3 { letter-spacing: .1em; }
+/* 規則很長：「知道了」釘在小抄底部，不用捲到最下面才關得掉 */
+.sheet.rules.shuo .close { position: sticky; bottom: -18px; margin: 0 -18px -18px; border-radius: 0; padding: 14px; z-index: 1;
+  background: linear-gradient(to top, var(--paper) 78%, rgba(240,227,198,0)); box-shadow: none; color: var(--wine); font-weight: 700; }
+
+/* 換玩法的轉場（0.62 秒）：綠牌桌暗下 → 中間的牌翻面 → 背景換酒紅暗金 → 標題換成新玩法；只動 transform／opacity */
+#modeFx { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; perspective: 900px; transition: opacity .14s linear; }
+#modeFx.out { opacity: 0; }
+#modeFx > i { position: absolute; inset: 0; opacity: 0; }
+.mf-felt { background: radial-gradient(90% 70% at 50% 45%, var(--felt) 0%, var(--felt-dark) 60%, var(--felt-deep) 100%); }
+.mf-dim { background: #050302; }
+.mf-wine { background: radial-gradient(110% 70% at 50% 30%, var(--shuo-1) 0%, var(--shuo-2) 45%, var(--shuo-3) 100%); }
+/* 外層管出現（opacity／scale），內層管翻面（rotateY）：opacity 跟 3D 翻面放同一層會被壓平，背面翻不過來 */
+.mf-card { position: absolute; left: 50%; top: 50%; width: 88px; height: 124px; margin: -40px 0 0 -44px; perspective: 700px; opacity: 0; }
+.mf-flip { position: absolute; inset: 0; transform-style: preserve-3d; }
+.mf-flip i { position: absolute; inset: 0; border-radius: 8px; display: grid; place-items: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; font: 700 42px var(--display); font-style: normal; }
+.mf-flip .f { background: #FBF4E4; color: #2B2118; box-shadow: inset 0 0 0 1px #C9B184, 0 8px 18px rgba(0,0,0,.5); }
+.mf-flip .b { background: linear-gradient(160deg, #3A0D14, var(--shuo-2)); color: var(--shuo-gold); transform: rotateY(180deg);
+  box-shadow: inset 0 0 0 1.5px #C99A4B, inset 0 0 0 5px #3A0D14, inset 0 0 0 6px rgba(201,154,75,.6), 0 8px 18px rgba(0,0,0,.5); }
+.mf-title { position: absolute; left: 0; right: 0; top: calc(50% - 150px); height: 110px; text-align: center; }
+.mf-title b { position: absolute; left: 0; right: 0; top: 0; font-family: var(--display); opacity: 0; will-change: transform, opacity; }
+.mf-title .t1 { font-weight: 300; font-size: 44px; letter-spacing: .3em; padding-left: .3em; color: #F3E9D2; }
+.mf-title .t2 { display: flex; flex-direction: column; line-height: 1.12; }
+.mf-title .t2 span:first-child { font-size: 46px; font-weight: 700; letter-spacing: .08em; color: #F3D488; }
+.mf-title .t2 span + span { font-size: 29px; font-weight: 500; letter-spacing: .14em; color: #FBEBD0; }
+#modeFx.run .mf-felt { animation: mfFelt .62s linear both; }
+#modeFx.run .mf-dim { animation: mfDim .62s linear both; }
+#modeFx.run .mf-wine { animation: mfWine .62s ease-out both; }
+#modeFx.run .mf-card { animation: mfCardIn .62s ease-out both; }
+#modeFx.run .mf-flip { animation: mfFlip .62s cubic-bezier(.45,.05,.3,1) both; }
+#modeFx.run .t1 { animation: mfT1 .62s ease-out both; }
+#modeFx.run .t2 { animation: mfT2 .62s ease-out both; }
+@keyframes mfFelt { 0% { opacity: 0; } 10%, 100% { opacity: 1; } }
+@keyframes mfDim { 0%, 10% { opacity: 0; } 32%, 100% { opacity: .55; } }
+@keyframes mfWine { 0%, 42% { opacity: 0; } 76%, 100% { opacity: 1; } }
+@keyframes mfCardIn { 0% { opacity: 0; transform: scale(.86); } 12% { opacity: 1; transform: scale(1); } 68%, 100% { opacity: 1; transform: scale(1.04); } }
+@keyframes mfFlip { 0%, 28% { transform: rotateY(0); } 68%, 100% { transform: rotateY(180deg); } }
+@keyframes mfT1 { 0% { opacity: 0; } 12%, 40% { opacity: 1; transform: none; } 58%, 100% { opacity: 0; transform: translateY(-8px); } }
+@keyframes mfT2 { 0%, 54% { opacity: 0; transform: translateY(10px); } 90%, 100% { opacity: 1; transform: none; } }
+
+/* 梭了啦牌桌：提示條蓋在最上面的標題列（第幾墩／底注），不蓋對手那一格；右邊留給選單鈕；最多兩行 */
+#app.on-ls .banner { top: calc(env(safe-area-inset-top) + 8px); left: max(14px, env(safe-area-inset-left)); right: calc(max(18px, env(safe-area-inset-right)) + 48px);
+  min-height: 40px; padding: 3px 10px; display: flex; align-items: center; justify-content: center; font-size: 13.5px; line-height: 1.3;
+  animation-name: bannerDrop; }     /* 從上面落下來（從下面滑上來會在進場那一下蓋到對手那一格） */
+@keyframes bannerDrop { from { transform: translateY(-14px); opacity: 0; } }
+/* 安全區域（瀏海、圓角、橫拿）：左右也讓開 */
+#lstable, #shuo, #wait { padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+.lsdock { margin-left: calc(-1 * max(18px, env(safe-area-inset-left))); margin-right: calc(-1 * max(18px, env(safe-area-inset-right)));
+  padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+
+/* 測試站：上方中間一個小標（正式站不會出現） */
+html[data-stage="staging"] body::after { content: "測試站"; position: fixed; z-index: 90; top: env(safe-area-inset-top); left: 50%; translate: -50% 0; pointer-events: none;
+  padding: 1px 10px 2px; border-radius: 0 0 8px 8px; font: 700 11px/1.4 var(--display, serif); letter-spacing: .3em; color: #2B2118; background: #F3D488; box-shadow: 0 1px 4px rgba(0,0,0,.35); }

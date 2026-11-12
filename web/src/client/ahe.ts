@@ -1,4 +1,4 @@
-// 阿禾在正式對戰時的嘴：事件驅動的台詞庫＋挑台詞的規則（不碰畫面，測試可以直接跑）。
+// 阿元在正式對戰時的嘴：事件驅動的台詞庫＋挑台詞的規則（不碰畫面，測試可以直接跑）。
 //
 // 每一句都綁在「真的發生的事件」上（呼叫的人把真實牌局算好的事實 Facts 傳進來），條件不符的台詞不會被選到。
 // 三種口氣：1 自然聊天（最常見）、2 情緒吐槽（有意義的事件才有）、3 莫名其妙的幹話（稀有，一場最多 2 次）。
@@ -17,10 +17,10 @@ export interface Facts {
   doubled?: number;        // 0／1 加倍／2 再加倍
   under?: number;          // 倒幾墩
   over?: number;           // 超幾墩
-  aheAhead?: boolean;      // 整場分數阿禾領先
+  aheAhead?: boolean;      // 整場分數阿元領先
   playerAhead?: boolean;   // 整場分數你領先
-  aheLostLast?: boolean;   // 阿禾剛剛吃虧（輸了這墩、倒約……）
-  lastTrickAhe?: boolean;  // 上一墩阿禾贏
+  aheLostLast?: boolean;   // 阿元剛剛吃虧（輸了這墩、倒約……）
+  lastTrickAhe?: boolean;  // 上一墩阿元贏
   byPlayer?: boolean;      // 加倍是你喊的
 }
 
@@ -29,7 +29,7 @@ export interface Mem {
   attitude?: string;       // newbie／some／pro
   playerDoubles: number;   // 你這場加倍幾次
   playerRuffs: number;     // 你這場王吃成功幾次
-  aheDownRow: number;      // 阿禾當莊連續倒約幾次
+  aheDownRow: number;      // 阿元當莊連續倒約幾次
 }
 
 export interface Said { id: string; text: string; tone: Tone; emo: Emo; fx: Tfx; pri: number }
@@ -132,7 +132,7 @@ export const REACTIONS: Reaction[] = [
   R("matchAhe", 2, 2, 1, "smug", ["你不是說你很強嗎？好啦，下一場再證明。"], { key: "matchAhe:pro", when: (_f, m) => m.attitude === "pro" }),
   R("matchAhe", 2, 2, 1, "smug", f => (f.n ?? 0) <= 20 ? ["呼！這局差點翻車。"] : ["這次換我贏啦！", "今天手感太好了，不好意思啦。"]),
 
-  // ---- 你回個話（表情）：阿禾照現在的局勢回 ----
+  // ---- 你回個話（表情）：阿元照現在的局勢回 ----
   R("emote:nice", 1, 7, 1, "smug", f => f.lastTrickAhe ? ["嘿嘿，你現在才知道？"] : ["你是在誇我還是誇你自己？", "欸，謝啦。"], { direct: true }),
   R("emote:cry", 2, 7, 1, "smug", f => f.aheAhead ? ["現在才開始哭喔？"] : ["要哭的是我吧。"], { direct: true }),
   R("emote:cocky", 2, 7, 1, "smug", f => f.aheAhead ? ["啊我就真的贏了啊。"] : ["我哪有囂張，我現在很低調。"], { direct: true }),

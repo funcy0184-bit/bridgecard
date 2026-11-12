@@ -27,5 +27,27 @@
     { "tag": "v1", "new_sqlite_classes": ["Room"] },
     { "tag": "v2", "new_sqlite_classes": ["Limiter"] }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // 測試站（跟正式站完全隔離）：另一個 Worker 名字 = 另一套 Durable Object（房間、戰績、頻率限制都分開存）
+  // 部署：npx wrangler deploy --env staging → https://bridgecard-staging.<帳戶子網域>.workers.dev
+  // 正式站的自動部署（Workers Builds）只跑預設環境，不會碰到這裡
+  "env": {
+    "staging": {
+      "name": "bridgecard-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "durable_objects": {
+        "bindings": [
+          { "name": "ROOMS", "class_name": "Room" },
+          { "name": "LIMITER", "class_name": "Limiter" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["Room"] },
+        { "tag": "v2", "new_sqlite_classes": ["Limiter"] }
+      ],
+      "vars": { "STAGE": "staging" },
+      "observability": { "enabled": true }
+    }
+  }
 }

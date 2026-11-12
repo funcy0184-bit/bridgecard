@@ -2,7 +2,7 @@
 //   1 房主輸入中文暱稱開桌（空白、太長先被擋）  2 朋友點邀請連結：看到誰開的桌、房號帶好，只填自己的暱稱
 //   3 另一桌：朋友手動輸入房號加入（也要填自己的暱稱）  4 雙方暱稱同步  5 改名後雙方即時看到（按了準備就鎖）
 //   6 兩人同名：名牌標房主／訪客、牌桌上對手名字後面加（房主）／（訪客）  7 空白、過長的提示
-//   8 兩人都準備後開打  9 重新整理名字還在  10 桌機與手機  11 對局、結算顯示正確名字、不會冒出阿禾
+//   8 兩人都準備後開打  9 重新整理名字還在  10 桌機與手機  11 對局、結算顯示正確名字、不會冒出阿元
 //   12 重連不會多一個玩家  另外：鍵盤跳出來（畫面變矮）時輸入欄和主要按鈕還點得到
 // 用法：先 npx wrangler dev，再 node test/e2e/names-ui.mjs [網址] [截圖資料夾]
 import { createRequire } from "node:module";
@@ -164,7 +164,7 @@ const sH = await S(H.p), sG = await S(G.p);
 ok(sH.room.seats.map(s => s.name).join() === "阿明哥,小美美" && sG.room.seats.map(s => s.name).join() === "阿明哥,小美美" && sH.room.seats.filter(s => s.taken).length === 2,
   "房主重新整理：名字還是「阿明哥」、朋友那邊沒變，也沒有多一個玩家");
 ok((await text(H.p, "#oppName")) === "小美美", "重新整理後房主牌桌上的對手名字還是「小美美」");
-// 回個話：對方看到的是暱稱，不是阿禾
+// 回個話：對方看到的是暱稱，不是阿元
 await G.p.click("#talkBtn"); await sleep(150);
 await G.p.locator('#emoteList button[data-emote="pretty"]').click();
 await until(H.p, () => !document.getElementById("quip").hidden);
@@ -185,10 +185,10 @@ ok(!!sawTurn, `輪到對手時的提示用暱稱：「${sawTurn}」`);
 await H.p.waitForSelector("#result:not([hidden])", { timeout: 10000 });
 await sleep(3500);
 const resH = await text(H.p, "#resSheet"), resG = await text(G.p, "#resSheet");
-ok(resH.includes("小美美") && resG.includes("阿明哥") && !resH.includes("阿禾") && !resG.includes("阿禾"), "結算單上用雙方暱稱、沒有阿禾");
+ok(resH.includes("小美美") && resG.includes("阿明哥") && !resH.includes("阿元") && !resG.includes("阿元"), "結算單上用雙方暱稱、沒有阿元");
 await shot(G.p, "result");
 const aheH = await H.p.evaluate(() => (globalThis.__hbAhe ?? []).length), aheG = await G.p.evaluate(() => (globalThis.__hbAhe ?? []).length);
-ok(aheH === 0 && aheG === 0, "朋友連線全程阿禾一句都沒講");
+ok(aheH === 0 && aheG === 0, "朋友連線全程阿元一句都沒講");
 
 // ================= 第 2 桌：兩人同名，朋友手動輸入房號 =================
 console.log("兩人同名（朋友手動輸入房號）");

@@ -70,17 +70,22 @@ for (const [name, w, h] of SIZES) {
   const check = async (label, keys = []) => { await p.waitForTimeout(350); results.push([label, await p.evaluate(probe, keys)]); };
   const mode = () => p.evaluate(() => document.getElementById("narrator")?.dataset.mode);
   let sawChoice = false;
-  // 一句一句點下去；遇到阿禾問你（A／B／C）：檢查一次版面，再選第一個
+  // 一句一句點下去；遇到阿元問你（A／B／C）：檢查一次版面，再選第一個
   const story = async () => {
     for (let i = 0; i < 40 && ["intro", "outro", "aside"].includes(await mode()); i++) {
       const ch = p.locator("#controls .s-choice").first();
-      if (await ch.isVisible()) { if (!sawChoice) { await check("故事：阿禾問你（選項）", ["#narrator", "#spoken", "#controls .choices"]); sawChoice = true; } await ch.click(); await p.waitForTimeout(80); continue; }
+      if (await ch.isVisible()) { if (!sawChoice) { await check("故事：阿元問你（選項）", ["#narrator", "#spoken", "#controls .choices"]); sawChoice = true; } await ch.click(); await p.waitForTimeout(80); continue; }
       await p.locator("#spoken").click(); await p.waitForTimeout(40);
     }
   };
 
   // 封面、選單、朋友連線、等朋友
-  await p.goto(base + "/"); await check("封面", [".cv-top", "#titleCard", "#storyCard", "#solo", "#goOnline"]);
+  await p.goto(base + "/"); await check("封面", [".cv-top", "#titleCard", "#modeClassic", "#modeShuo", "#solo", "#goOnline"]);
+  // 新玩法：梭了啦！這局賭什麼？的選單、規則小抄
+  await p.click("#modeShuo"); await p.waitForSelector("#shuo:not([hidden])"); await p.waitForSelector("#modeFx", { state: "hidden" });
+  await check("梭了啦選單", [".sh-title", "#shuoBack", "#shuoCreate", "#shuoJoin", "#shuoHow"]);
+  await p.click("#shuoHow"); await check("梭了啦規則小抄", ["#shuoRules .sheet h3", "#shuoRules [data-close]"]); await p.click("#shuoRules [data-close]");
+  await p.click("#shuoBack"); await p.waitForSelector("#home:not([hidden])");
   await p.click("#goMenu"); await check("封面選單", ["#homeMenu .sheet"]); await p.click("#homeMenu [data-close]");
   await p.click("#goNews"); await check("最新消息", ["#newsModal .sheet"]); await p.click("#newsModal [data-close]");
   await p.click("#goOnline"); await check("朋友連線", ["#name", "#nameCount", "#create", "#join"]);
@@ -91,7 +96,7 @@ for (const [name, w, h] of SIZES) {
   await p.goto(base + "/story/"); await p.waitForTimeout(200); await check("故事開場（第一幕紙條）", ["#narrator", "#spoken", "#sHand"]);
   await story(); await check("故事：輪到你", ["#narrator", "#sHand", "#controls"]);
   await p.locator("#sHand .card").first().click(); await p.waitForTimeout(200); await check("故事：選好牌、準備確認", ["#narrator", "#sConfirm", "#sHand"]);
-  await p.locator("#sConfirm").click(); await p.waitForTimeout(2500); await check("故事：阿禾說明", ["#narrator", "#spoken"]);
+  await p.locator("#sConfirm").click(); await p.waitForTimeout(2500); await check("故事：阿元說明", ["#narrator", "#spoken"]);
   await story(); await check("故事：完成這一步", ["#narrator", "#controls .s-emph"]);
   await p.goto(base + "/story/?act=2"); await p.waitForTimeout(300); await story(); await check("故事：叫牌", ["#narrator", "#sBoard .sgrid", "#sHand"]);
   await p.locator('#sBoard button[data-bid="7"]').click(); await check("故事：選好 2♥、準備叫", ["#sCall", "#sBoard .sgrid", "#sHand", "#narrator"]);

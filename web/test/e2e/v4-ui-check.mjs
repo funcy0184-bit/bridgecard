@@ -138,7 +138,7 @@ for (const [label, vp, mobile] of [["手機 360×640", { width: 360, height: 640
     if (await p.locator("#bidPanel.mine").isVisible()) {
       const k = await p.innerText("#keyInfo");
       if (/叫牌中/.test(k) && /輪到你/.test(k)) sawBidKey = true;
-      // 360：都 Pass，讓阿禾當莊（看防守方的顯示）；其他尺寸：自己叫
+      // 360：都 Pass，讓阿元當莊（看防守方的顯示）；其他尺寸：自己叫
       if (label.includes("360") || !(await p.textContent("#bidContract")).includes("換你叫牌")) await p.click("#bidPass");
       else { await p.locator("#bidLevels button:not([disabled])").first().click(); await p.locator("#bidStrains button:not([disabled])").first().click(); await p.click("#bidConfirm"); }
       await sleep(250); continue;
@@ -153,7 +153,7 @@ for (const [label, vp, mobile] of [["手機 360×640", { width: 360, height: 640
       if (phase.includes("後半")) {
         const k = await p.innerText("#keyInfo");
         if (/王牌|無王/.test(k) && /莊家/.test(k) && /\/ \d+ 墩/.test(k)) sawPlayKey = true;
-        if (/莊家 阿禾/.test(k) && /你防守/.test(k)) sawDefend = true;
+        if (/莊家 阿元/.test(k) && /你防守/.test(k)) sawDefend = true;
         if (textPlay < 0) textPlay = await visibleText(p);
       }
       // 「?」：規則細節點開才看
@@ -229,7 +229,7 @@ for (const [label, vp, mobile] of [["手機 360×640", { width: 360, height: 640
   ok(!recLeak, "牌局紀錄只出現公開過的牌（明牌、打出來的牌），沒有暗牌或對手手牌");
   ok(sawBidKey || label.includes("360"), "叫牌：第二排寫「叫牌中 · 輪到你」");
   ok(sawPlayKey, "出牌：第二排有合約、王牌、莊家、已贏 / 目標墩數");
-  if (label.includes("360")) ok(sawDefend, "阿禾當莊：寫「莊家 阿禾」＋「你防守」，不會誤會成自己的目標");
+  if (label.includes("360")) ok(sawDefend, "阿元當莊：寫「莊家 阿元」＋「你防守」，不會誤會成自己的目標");
   ok(scrollOk, "打牌途中都沒有整頁捲動");
   if (textPlay > 0) console.log(`    主畫面字數（出牌、輪到你時）：${textPlay} 字`);
 

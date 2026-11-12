@@ -10,7 +10,7 @@ import { Action as LSAction, LSEvent, LSState, LastStandGame } from "../laststan
 import { deal } from "../laststand/rules";
 import {
   ClientMsg, EMOTE_COUNT, EMOTE_WINDOW_MS, MODES, Notice, PROTOCOL_VERSION, RejectCode, RoomView, ServerMsg, TIMING, Timing,
-  checkName, checkStake, emoteAllowed,
+  checkName, checkStake, checkVow, emoteAllowed,
 } from "./protocol";
 import {
   RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, seatOfToken, setMode, setName, setReady, setRematch, setStake, startMatch,
@@ -37,7 +37,7 @@ export class Room extends DurableObject<Env> {
   private meta: RoomMeta | null = null;
   private game: HoneymoonGame | null = null;
   private pending: { e: GameEvent; to: number }[] = [];
-  private ls: LastStandGame | null = null;            // 逆命賭局（跟經典牌局分開）
+  private ls: LastStandGame | null = null;            // 梭了啦（跟經典牌局分開）
   private lsPending: { e: LSEvent; to: number }[] = [];
   private timing: Timing;
   private trickAt = 0;                   // 兩張牌都上桌：這個時間點結算這一墩
@@ -139,7 +139,7 @@ export class Room extends DurableObject<Env> {
       case "ready": this.onReady(ws, seat, cid, !!msg.ready); break;
       case "mode": this.onMode(ws, seat, cid, msg.mode); break;
       case "name": this.onName(ws, seat, cid, msg.name); break;
-      case "stake": this.onStake(ws, seat, cid, msg.stake); break;
+      case "stake": this.onStake(ws, seat, cid, msg.stake, msg.vow); break;
       case "ls": this.onLS(ws, seat, cid, msg); break;
       case "rematch": this.onRematch(ws, seat, cid, !!msg.ready); break;
       case "leave": this.onLeave(ws, seat, cid, !!msg.forfeit); break;
@@ -242,11 +242,13 @@ export class Room extends DurableObject<Env> {
     if (r.value.changed) this.broadcastRoom("name", seat);
   }
 
-  // 逆命賭局：賭局契約書（賭上之物）。空白＝我最後的尊嚴；伺服器檢查、存檔，再同步給同桌
-  private onStake(ws: WebSocket, seat: number, cid: string | undefined, raw: unknown) {
+  // 梭了啦：賭局契約書（賭上之物＋選填的賽前豪言）。空白＝我最後的尊嚴；伺服器檢查、存檔，再同步給同桌
+  private onStake(ws: WebSocket, seat: number, cid: string | undefined, raw: unknown, rawVow: unknown) {
     const v = checkStake(raw);
     if (!v.ok) return this.reject(ws, seat, cid, "STAKE_INVALID", v.msg);
-    const r = setStake(this.meta!, seat, v.stake);
+    const w = checkVow(rawVow);
+    if (!w.ok) return this.reject(ws, seat, cid, "STAKE_INVALID", w.msg);
+    const r = setStake(this.meta!, seat, v.stake, w.vow);
     if (!r.ok) return this.reject(ws, seat, cid, r.code, r.msg);
     this.commitRoom(seat, cid);
     this.ack(ws, cid);
@@ -349,10 +351,10 @@ export class Room extends DurableObject<Env> {
     void this.scheduleAlarm();
   }
 
-  // ---------------- 逆命賭局：牌局動作 ----------------
+  // ---------------- 梭了啦：牌局動作 ----------------
   private onLS(ws: WebSocket, seat: number, cid: string | undefined, msg: Extract<ClientMsg, { t: "ls" }>) {
     const m = this.meta!, g = this.ls;
-    if (!g || m.mode !== "laststand" || !inMatch(m)) return this.reject(ws, seat, cid, "BAD_STATE", "現在沒有進行中的逆命賭局。");
+    if (!g || m.mode !== "laststand" || !inMatch(m)) return this.reject(ws, seat, cid, "BAD_STATE", "現在沒有進行中的「梭了啦」牌局。");
     if (m.status === "PAUSED") return this.reject(ws, seat, cid, "PAUSED", `${m.seats[1 - seat]?.name || "對方"}連線中斷，牌局先暫停，等他回來。`);
     if ((msg.gid && msg.gid !== m.gid) || (typeof msg.ver === "number" && msg.ver !== m.ver))
       return this.reject(ws, seat, cid, "STALE", "牌桌已經更新了，幫你同步到最新。");
@@ -389,7 +391,7 @@ export class Room extends DurableObject<Env> {
     void this.scheduleAlarm();
   }
 
-  // 逆命賭局開新的一場：第一場擲硬幣決定第 1 墩宣戰權，再戰時交換
+  // 梭了啦開新的一場：第一場擲硬幣決定第 1 墩宣戰權，再戰時交換
   private beginLS(ws: WebSocket, seat: number, cid: string | undefined) {
     const m = this.meta!;
     const coin: 0 | 1 = m.lsCoin === 0 ? 1 : m.lsCoin === 1 ? 0 : cryptoRng() < 0.5 ? 0 : 1;
@@ -514,7 +516,7 @@ export class Room extends DurableObject<Env> {
     const online = this.onlineSeats();
     return {
       code: m.code, status: m.status, mode: m.mode, host: m.host, ver: m.ver, gid: m.gid, now: Date.now(), result: m.result,
-      seats: m.seats.map((s, i) => ({ taken: !!s, online: online[i], name: s?.name ?? "", ready: !!s?.ready, rematch: !!s?.rematch, offlineSince: s?.offlineSince ?? null, stake: s?.stake ?? "" })),
+      seats: m.seats.map((s, i) => ({ taken: !!s, online: online[i], name: s?.name ?? "", ready: !!s?.ready, rematch: !!s?.rematch, offlineSince: s?.offlineSince ?? null, stake: s?.stake ?? "", vow: s?.vow ?? "" })),
       stats: pairStats(this.recordList(), [m.seats[0]?.pid ?? null, m.seats[1]?.pid ?? null], m.mode),
       timing: { notice: this.timing.notice, choice: this.timing.choice, forfeit: this.timing.forfeit },
       ...(({ forfeitAt, forfeitSeat }) => ({ forfeitAt, forfeitSeat }))(deadlines(m, this.timing, false)),
@@ -531,7 +533,7 @@ export class Room extends DurableObject<Env> {
   private recap(ws: WebSocket, seat: number, gid: unknown) {
     const m = this.meta!;
     const id = typeof gid === "string" && gid ? gid : m.gid;
-    if (!id || seat < 0 || m.mode === "laststand") { this.send(ws, { t: "recap", gid: id ?? "", items: [] }); return; }     // 逆命賭局的戰報在 P2
+    if (!id || seat < 0 || m.mode === "laststand") { this.send(ws, { t: "recap", gid: id ?? "", items: [] }); return; }     // 梭了啦的戰報在 P2
     const names: [string, string] = [m.seats[0]?.name ?? "房主", m.seats[1]?.name ?? "朋友"];
     this.send(ws, { t: "recap", gid: id, items: highlights(this.store.events(id), names) });
   }

@@ -8,7 +8,7 @@ import type { Highlight, MatchRecord, PairStats } from "./protocol";
 export interface RecordRow extends MatchRecord { pids: [string, string] }
 export interface LoggedEvent { eid: number; to: number; e: GameEvent }
 
-// 只算現在這兩個人（座位上的人換了，就是另一組同桌）；有給模式就只算那個模式（逆命賭局可能平手）
+// 只算現在這兩個人（座位上的人換了，就是另一組同桌）；有給模式就只算那個模式（梭了啦可能平手）
 export function pairStats(rows: RecordRow[], pids: [string | null, string | null], mode?: string): PairStats {
   const mine = rows.filter(r => r.pids[0] === pids[0] && r.pids[1] === pids[1] && (!mode || (r.mode ?? "classic") === mode)).sort((a, b) => a.at - b.at);
   const wins: [number, number] = [0, 0];

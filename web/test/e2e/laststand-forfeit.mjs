@@ -1,4 +1,4 @@
-// 逆命賭局：斷線逾時判輸、選單認輸離開（跟經典牌局共用房間的斷線時間軸，這裡確認逆命房也照規則走）
+// 梭了啦：斷線逾時判輸、選單認輸離開（跟經典牌局共用房間的斷線時間軸，這裡確認梭了啦房也照規則走）
 //   自己開一個 wrangler dev（斷線時間軸用 --var 縮短），跑完關掉，不用先 npm run dev
 //   1. 打到第 2 墩，朋友斷線：房主看到暫停 → 逾時判朋友輸、只記一場；朋友回來看得到結果、看不到房主的牌
 //   2. 再來一場（第 1 墩宣戰權換人）→ 房主從選單認輸離開：朋友贏、只多記一場；接著離開，座位讓出來
@@ -81,8 +81,8 @@ await start();
 try {
   const { code } = await (await fetch(`${BASE}/api/rooms`, { method: "POST" })).json();
   const A = player(code, "大雞"); await A.joined;
-  let B = player(code, "阿禾"); await B.joined;
-  if ((await A.cmd({ t: "mode", mode: "laststand" })).t !== "ack") await fail("換不成逆命賭局");
+  let B = player(code, "小美"); await B.joined;
+  if ((await A.cmd({ t: "mode", mode: "laststand" })).t !== "ack") await fail("換不成梭了啦");
   await A.cmd({ t: "stake", stake: "阿嬤的藍白拖" }); await B.cmd({ t: "stake", stake: "" });
   await A.cmd({ t: "ready", ready: true }); await B.cmd({ t: "ready", ready: true });
   await until(() => A.v && B.v && A.room.status === "IN_GAME", "開局");
@@ -103,7 +103,7 @@ try {
   ok(`第 ${before.trick} 墩朋友斷線：房主看到暫停，約 ${(waited / 1000).toFixed(1)} 秒後逾時判朋友輸（設定 ${T.FORFEIT_MS / 1000} 秒），戰績只記 1 場`);
 
   // 朋友用憑證回來：看得到結果、手上的牌還是自己的、看不到房主的牌
-  B = player(code, "阿禾", B.token); await B.joined;
+  B = player(code, "小美", B.token); await B.joined;
   if (B.seat !== 1 || !B.room.result || B.room.result.winner !== A.seat) await fail("朋友回來應該看到自己被判輸：" + JSON.stringify(B.room.result));
   if (B.v) {
     const mine = new Set(B.v.hand), theirs = A.v.hand;
@@ -133,7 +133,7 @@ try {
   if ((await A.cmd({ t: "leave" })).t !== "ack") await fail("認輸之後離開被拒");
   await until(() => B.room.status === "WAITING" && !B.room.seats[0]?.taken, "房主離開後朋友回到等人");
   ok("房主從選單認輸離開：朋友贏（forfeit）、收到通知、戰績 2 場各贏 1；房主離開後座位讓出來，朋友回到等人");
-  console.log("逆命賭局斷線判輸／認輸全部通過");
+  console.log("梭了啦斷線判輸／認輸全部通過");
 } finally {
   await stop();
   rmSync(DIR, { recursive: true, force: true });

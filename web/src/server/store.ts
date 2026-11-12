@@ -22,7 +22,7 @@ const MIGRATIONS: Record<number, string[]> = {
     "CREATE TABLE IF NOT EXISTS commands (cid TEXT PRIMARY KEY, seat INTEGER, ok INTEGER, code TEXT, msg TEXT, ver INTEGER, at INTEGER)",
     "CREATE TABLE IF NOT EXISTS matches (gid TEXT PRIMARY KEY, at INTEGER, winner INTEGER, reason TEXT, score0 INTEGER, score1 INTEGER, hands INTEGER, pid0 TEXT, pid1 TEXT)",
   ],
-  // 第 3 版：逆命賭局。牌局快照記是哪一種遊戲；戰績記模式和第 1 墩宣戰權（算位置勝率用）
+  // 第 3 版：梭了啦。牌局快照記是哪一種遊戲；戰績記模式和第 1 墩宣戰權（算位置勝率用）
   3: [
     "ALTER TABLE game ADD COLUMN kind TEXT",
     "ALTER TABLE matches ADD COLUMN mode TEXT",
@@ -80,7 +80,7 @@ export class RoomStore {
     const r = this.sql.exec<{ v: string }>("SELECT v FROM meta WHERE k = 'room'").toArray()[0];
     return r ? JSON.parse(r.v) as RoomMeta : null;
   }
-  // 經典牌局的快照（逆命賭局的快照不會從這裡拿到）
+  // 經典牌局的快照（梭了啦的快照不會從這裡拿到）
   loadSnapshot(): GameSnapshot | null {
     const g = this.loadGame();
     return g && g.kind === "classic" ? g.snapshot as GameSnapshot : null;

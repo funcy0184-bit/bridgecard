@@ -1,9 +1,9 @@
-// 阿禾在正式對戰的嘴：實際打幾局，檢查
+// 阿元在正式對戰的嘴：實際打幾局，檢查
 //   · 每一句都對得上真的事件（王吃的台詞一定是真的王吃、打成的台詞一定是那一方真的打成……）
 //   · 同一時間只有一個泡泡、泡泡不遮手牌和按鈕、表情記號不累積
 //   · 一局講的話有上限、幹話一場最多 2 句
 //   · 精簡：只講重要的；關閉：完全不講，但出牌、結算照常
-//   · 回個話（表情）：你的泡泡、阿禾回一句、防洗版冷卻；不影響牌局
+//   · 回個話（表情）：你的泡泡、阿元回一句、防洗版冷卻；不影響牌局
 // 用法：先 npm run dev，再 node test/e2e/ahe-check.mjs [網址]
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -106,7 +106,7 @@ console.log("正常互動：打幾局，台詞都對得上真的事件");
   const log = await p.evaluate(() => window.__hbAhe);
   const qa = await p.evaluate(() => window.__qa);
   const bad = log.filter(l => !(RULES[l.id] ?? (() => false))(l));
-  ok(r.done >= 2, `打完 ${r.done} 局（加倍 ${r.doubles} 次），阿禾講了 ${log.length} 句`);
+  ok(r.done >= 2, `打完 ${r.done} 局（加倍 ${r.doubles} 次），阿元講了 ${log.length} 句`);
   ok(log.length > 0, `有講話：${[...new Set(log.map(l => l.id))].join("、")}`);
   ok(bad.length === 0, bad.length ? `對不上的台詞：${JSON.stringify(bad.slice(0, 3))}` : "每一句都對得上觸發它的真實事件（王吃、打成、加倍、誰當莊……）");
   const perHand = {};
@@ -139,13 +139,13 @@ console.log("關閉額外吐槽：完全不講，牌照打、結算照常");
   const r = await playHands(p, 1, 120000);
   const log = await p.evaluate(() => window.__hbAhe);
   const qa = await p.evaluate(() => window.__qa);
-  ok(r.done === 1 && log.length === 0 && qa.shown === 0, `打完一局、阿禾一句都沒講（泡泡出現 ${qa.shown} 格）`);
+  ok(r.done === 1 && log.length === 0 && qa.shown === 0, `打完一局、阿元一句都沒講（泡泡出現 ${qa.shown} 格）`);
   ok(await p.locator("#resTitle").innerText() !== "", "結算照常顯示");
   ok(errs.length === 0, "沒有錯誤");
   await ctx.close();
 }
 
-console.log("回個話（跟阿禾打）：你的泡泡、阿禾回一句、冷卻中按不了、不影響牌局");
+console.log("回個話（跟阿元打）：你的泡泡、阿元回一句、冷卻中按不了、不影響牌局");
 for (const [w, h] of [[360, 640], [390, 844]]) {
   const { ctx, p, errs } = await open("full", w, h);
   await sleep(2500);                                                     // 開場那句先講完
@@ -160,7 +160,7 @@ for (const [w, h] of [[360, 640], [390, 844]]) {
   ok(mine.vis && mine.t.includes("別太囂張！") && mine.dis && mine.clear, `你的泡泡「${mine.t.replace(/\s+/g, "")}」出現在牌桌左下、不遮手牌；冷卻中按鈕先變淡`);
   await sleep(1200);
   const reply = await p.evaluate(() => ({ q: document.getElementById("quip").innerText, log: (window.__hbAhe ?? []).filter(l => l.id.startsWith("emote:")).map(l => l.text) }));
-  ok(reply.log.length === 1 && ["啊我就真的贏了啊。", "我哪有囂張，我現在很低調。"].includes(reply.log[0]) && reply.q.includes(reply.log[0]), `阿禾回：「${reply.log[0]}」`);
+  ok(reply.log.length === 1 && ["啊我就真的贏了啊。", "我哪有囂張，我現在很低調。"].includes(reply.log[0]) && reply.q.includes(reply.log[0]), `阿元回：「${reply.log[0]}」`);
   ok(hand0 === await p.evaluate(() => [...document.querySelectorAll("#hand .card")].map(c => c.dataset.id).join()), "回話不影響牌局（手牌沒變）");
   await sleep(1800);
   ok(!(await p.locator("#talkBtn").isDisabled()), "冷卻過了可以再回");
@@ -168,7 +168,7 @@ for (const [w, h] of [[360, 640], [390, 844]]) {
   await ctx.close();
 }
 
-console.log("回個話（朋友連線）：對方看到你的暱稱，阿禾不會插嘴");
+console.log("回個話（朋友連線）：對方看到你的暱稱，阿元不會插嘴");
 {
   const mk = async name => {
     const ctx = await b.newContext({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
@@ -193,14 +193,14 @@ console.log("回個話（朋友連線）：對方看到你的暱稱，阿禾不�
   await A.p.locator('#emoteList button[data-emote="pretty"]').click();
   await B.p.waitForFunction(() => !document.getElementById("quip").hidden, null, { timeout: 5000 }).catch(() => {});
   const seen = await B.p.innerText("#quip").catch(() => "");
-  ok(seen.includes("阿明") && seen.includes("漂亮！"), `朋友那邊看到「${seen.replace(/\s+/g, "")}」（用你的暱稱，不是阿禾）`);
+  ok(seen.includes("阿明") && seen.includes("漂亮！"), `朋友那邊看到「${seen.replace(/\s+/g, "")}」（用你的暱稱，不是阿元）`);
   ok((await A.p.innerText("#myQuip")).includes("漂亮！"), "自己這邊也看到自己的泡泡");
   const aheA = await A.p.evaluate(() => (window.__hbAhe ?? []).length), aheB = await B.p.evaluate(() => (window.__hbAhe ?? []).length);
-  ok(aheA === 0 && aheB === 0, "朋友連線時阿禾一句都不講");
+  ok(aheA === 0 && aheB === 0, "朋友連線時阿元一句都不講");
   ok(A.errs.length === 0 && B.errs.length === 0, "兩邊都沒有錯誤");
   await A.ctx.close(); await B.ctx.close();
 }
 
 await b.close();
-console.log(fails ? `\n${fails} 項沒過` : "\n阿禾互動驗收全部通過");
+console.log(fails ? `\n${fails} 項沒過` : "\n阿元互動驗收全部通過");
 process.exit(fails ? 1 : 0);

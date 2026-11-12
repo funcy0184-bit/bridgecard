@@ -1,4 +1,4 @@
-// 阿禾的四幕故事（教學）：每一步都是一個固定的牌局（GameSnapshot），
+// 阿元的四幕故事（教學）：每一步都是一個固定的牌局（GameSnapshot），
 // 玩家出牌、叫牌直接丟進正式的規則引擎 HoneymoonGame —— 能不能出、誰贏這墩、分數多少，
 // 都跟連線版／單機版同一套程式算出來，故事裡沒有另外寫一份規則。
 // 台詞有分支：玩家的選擇（開場態度、想不想搶、叫多大、加倍怎麼回）會換成不同的反應，但結果一律照引擎算。
@@ -31,7 +31,7 @@ function snap(p: Partial<GameSnapshot>): GameSnapshot {
   };
 }
 
-// 出牌練習：你是莊家、阿禾先出（合約、王牌、墩數依每一段設定）
+// 出牌練習：你是莊家、阿元先出（合約、王牌、墩數依每一段設定）
 const contractPlay = (bid: number, p: Partial<GameSnapshot>) => snap({
   phase: Phase.Play, trump: bidStrain(bid),
   highestBid: bid, highestBidder: ME, declarer: ME, doubled: 0,
@@ -50,7 +50,7 @@ export interface Step {
   snapshot: GameSnapshot;
   outcomes: Outcome[];           // 這一步所有「都算對」的結果
   tricks?: number;               // 出牌：這一段要打幾墩（預設 1；第四幕打最後兩墩）
-  aheCard?: number;              // 你先出時，阿禾回的牌（固定，才能做對照）；沒寫就照「能出的最小那張」
+  aheCard?: number;              // 你先出時，阿元回的牌（固定，才能做對照）；沒寫就照「能出的最小那張」
 }
 
 // 你手上的 13 張（第二幕兩種情況共用）
@@ -61,7 +61,7 @@ const BID_HANDS: [number[], number[]] = [
 const bidSnap = () => snap({ phase: Phase.Bidding, trump: Strain.NoTrump, currentPlayer: ME, leader: ME, firstSeat: ME, hands: [BID_HANDS[0].slice(), BID_HANDS[1].slice()] });
 
 export const STEPS: Step[] = [
-  // 第一幕之一：阿禾翻開 ♦K、出了 ♣9；你手上 ♣Q、♣4、♥3（♥3 不能出：有梅花要跟）。下一張暗牌是 ♠6（輸的人摸）
+  // 第一幕之一：阿元翻開 ♦K、出了 ♣9；你手上 ♣Q、♣4、♥3（♥3 不能出：有梅花要跟）。下一張暗牌是 ♠6（輸的人摸）
   { id: "grab", act: 0, kind: "play", outcomes: ["win", "lose"],
     snapshot: snap({ phase: Phase.Draw, trump: Strain.NoTrump, hands: [[c(CL, 12), c(CL, 4), c(HE, 3)], [c(SP, 7), c(DI, 5)]],
       stock: [c(DI, 13), c(SP, 6), c(HE, 11), c(CL, 2)], leader: AHE, currentPlayer: ME, leadCard: c(CL, 9), firstSeat: AHE }) },
@@ -69,33 +69,33 @@ export const STEPS: Step[] = [
   { id: "grab2", act: 0, kind: "play", outcomes: ["win"],
     snapshot: snap({ phase: Phase.Draw, trump: Strain.NoTrump, hands: [[c(CL, 4), c(HE, 3), c(DI, 13)], [c(SP, 7), c(DI, 5), c(SP, 6)]], takenFaceUp: [[c(DI, 13)], []],
       stock: [c(HE, 11), c(CL, 2)], leader: ME, currentPlayer: ME, leadCard: -1, firstSeat: AHE }) },
-  // 第二幕之一：你想叫多大？叫低阿禾 Pass；叫 3 線以上阿禾加倍（你可以再加倍或直接打）；你不叫、阿禾也不叫就重發
+  // 第二幕之一：你想叫多大？叫低阿元 Pass；叫 3 線以上阿元加倍（你可以再加倍或直接打）；你不叫、阿元也不叫就重發
   { id: "bid", act: 1, kind: "bid", outcomes: ["contract"], snapshot: bidSnap() },
-  // 第二幕之二（競叫）：你叫 2♥，阿禾叫 2♠，再輪到你：叫更高或 Pass
+  // 第二幕之二（競叫）：你叫 2♥，阿元叫 2♠，再輪到你：叫更高或 Pass
   { id: "bid2", act: 1, kind: "bid", outcomes: ["raise", "defend"], snapshot: bidSnap() },
-  // 第三幕：2♠（黑桃是王牌）。阿禾出 ♥A，你有 ♥3 和 ♠2 → 有紅心就得跟，不能王吃
+  // 第三幕：2♠（黑桃是王牌）。阿元出 ♥A，你有 ♥3 和 ♠2 → 有紅心就得跟，不能王吃
   { id: "follow", act: 2, kind: "play", outcomes: ["followed"],
     snapshot: contractPlay(S2, { hands: [[c(HE, 3), c(SP, 2)], [c(DI, 5)]], leadCard: c(HE, 14), tricksWon: [6, 5] }) },
-  // 一樣阿禾出 ♥A，這次你沒有紅心：♠2 王吃，或墊 ♣3
+  // 一樣阿元出 ♥A，這次你沒有紅心：♠2 王吃，或墊 ♣3
   { id: "ruff", act: 2, kind: "play", outcomes: ["ruff", "discard"],
     snapshot: contractPlay(S2, { hands: [[c(SP, 2), c(CL, 3)], [c(DI, 5)]], leadCard: c(HE, 14), tricksWon: [6, 5] }) },
-  // 對照 A（2♥，紅心是王牌）：阿禾先出 ♠K，你沒有黑桃也沒有紅心，手上 ♦A ♣5 → ♠K 贏
+  // 對照 A（2♥，紅心是王牌）：阿元先出 ♠K，你沒有黑桃也沒有紅心，手上 ♦A ♣5 → ♠K 贏
   { id: "flipA", act: 2, kind: "play", outcomes: ["lose"],
     snapshot: contractPlay(CONTRACT, { hands: [[c(DI, 14), c(CL, 5)], [c(CL, 4)]], leadCard: c(SP, 13), tricksWon: [6, 5] }) },
-  // 對照 B：換你先出 ♦A，阿禾沒有方塊，墊 ♠K → ♦A 贏
+  // 對照 B：換你先出 ♦A，阿元沒有方塊，墊 ♠K → ♦A 贏
   { id: "flipB", act: 2, kind: "play", outcomes: ["win"], aheCard: c(SP, 13),
     snapshot: contractPlay(CONTRACT, { hands: [[c(DI, 14), c(DI, 3)], [c(SP, 13), c(CL, 4)]], leader: ME, currentPlayer: ME, leadCard: -1, tricksWon: [6, 5] }) },
-  // 都是王牌：阿禾先出 ♥9，你有 ♥Q（一定要跟紅心）→ 比點數
+  // 都是王牌：阿元先出 ♥9，你有 ♥Q（一定要跟紅心）→ 比點數
   { id: "trumps", act: 2, kind: "play", outcomes: ["win"],
     snapshot: contractPlay(CONTRACT, { hands: [[c(HE, 12), c(SP, 5)], [c(CL, 6)]], leadCard: c(HE, 9), tricksWon: [6, 5] }) },
-  // 無王：1NT，阿禾先出 ♣K，你沒有梅花 → 沒有王吃，出什麼都贏不了
+  // 無王：1NT，阿元先出 ♣K，你沒有梅花 → 沒有王吃，出什麼都贏不了
   { id: "nt", act: 2, kind: "play", outcomes: ["lose"],
     snapshot: contractPlay(NT1, { hands: [[c(HE, 14), c(SP, 2)], [c(DI, 5)]], leadCard: c(CL, 13), tricksWon: [6, 5] }) },
-  // 第四幕之一：2♥，你 7 墩、阿禾 4 墩，剩兩墩。阿禾出 ♣K，你有 ♣A、♣3：
-  //   ♣A → 拿到第 8 墩打成，最後一墩再多拿一墩（超墩）；♣3 → 這墩輸，最後一墩阿禾出 ♦9、你的 ♣A 墊不贏 → 倒一
+  // 第四幕之一：2♥，你 7 墩、阿元 4 墩，剩兩墩。阿元出 ♣K，你有 ♣A、♣3：
+  //   ♣A → 拿到第 8 墩打成，最後一墩再多拿一墩（超墩）；♣3 → 這墩輸，最後一墩阿元出 ♦9、你的 ♣A 墊不贏 → 倒一
   { id: "last", act: 3, kind: "play", outcomes: ["made", "down"], tricks: 2,
     snapshot: contractPlay(CONTRACT, { hands: [[c(CL, 14), c(CL, 3)], [c(DI, 9)]], leadCard: c(CL, 13), tricksWon: [7, 4] }) },
-  // 第四幕之二：4♥ 被阿禾加倍，你 8 墩、阿禾 3 墩，剩兩墩。阿禾出 ♠Q，你有 ♠K、♠3：
+  // 第四幕之二：4♥ 被阿元加倍，你 8 墩、阿元 3 墩，剩兩墩。阿元出 ♠Q，你有 ♠K、♠3：
   //   ♠K → 最後兩墩都拿，剛好 10 墩，加倍打成；♠3 → 這墩輸就只剩 9 墩可能，已經打不成，最後是倒二（加倍）
   { id: "dbl", act: 3, kind: "play", outcomes: ["made", "down"], tricks: 2,
     snapshot: contractPlay(H4, { hands: [[c(SP, 13), c(SP, 3)], [c(DI, 5)]], leadCard: c(SP, 12), tricksWon: [8, 3], doubled: 1,
@@ -111,7 +111,7 @@ export interface Trick { leader: number; lead: number; follow: number; winner: n
 export interface StepRun {
   step: Step;
   game: HoneymoonGame;
-  events: GameEvent[];        // 只收「你看得到的」事件：阿禾摸到哪張暗牌不會進來
+  events: GameEvent[];        // 只收「你看得到的」事件：阿元摸到哪張暗牌不會進來
   actions: number[];          // 被接受的動作（存進度、重新整理時重播用）
   trick: Trick | null;        // 這一墩：結果留在桌上給你看
   history: Trick[];           // 這一段已經打完的墩（第四幕打兩墩）
@@ -127,8 +127,8 @@ export function start(step: Step): StepRun {
 }
 
 // 叫牌：這一步現在允許你叫什麼
-//   bid：一開始 1～4 線任選或 Pass；被阿禾加倍之後只能再加倍或 Pass
-//   bid2：先叫 2♥（照劇本），阿禾叫 2♠ 之後可以叫更高（到 3 線）或 Pass
+//   bid：一開始 1～4 線任選或 Pass；被阿元加倍之後只能再加倍或 Pass
+//   bid2：先叫 2♥（照劇本），阿元叫 2♠ 之後可以叫更高（到 3 線）或 Pass
 export const MAX_BID_LEVEL = 4;
 export function bidAllowed(run: StepRun, call: number): boolean {
   const g = run.game;
@@ -165,7 +165,7 @@ export function act(run: StepRun, a: number): { ok: boolean; events: GameEvent[]
   return { ok, events: run.events.slice(before) };
 }
 
-// 你先出時：阿禾回一張（固定的對照牌，或能出的最小那張）
+// 你先出時：阿元回一張（固定的對照牌，或能出的最小那張）
 export const needsReply = (run: StepRun) => run.step.kind === "play" && !!run.trick && run.trick.leader === ME && run.trick.follow < 0;
 const lowest = (cards: number[]) => cards.slice().sort((a, b) => rankOf(a) - rankOf(b))[0];
 export function reply(run: StepRun): GameEvent[] {
@@ -180,7 +180,7 @@ export function reply(run: StepRun): GameEvent[] {
   return run.events.slice(before);
 }
 
-// 阿禾在叫牌時怎麼回（照劇本，不是 AI）：
+// 阿元在叫牌時怎麼回（照劇本，不是 AI）：
 //   bid：你不叫 → 我也不叫（重發）；你叫 3 線以上、還沒被加倍 → 我加倍；其他 → Pass
 //   bid2：你先叫 2♥ → 我叫 2♠；之後 → Pass
 export function aheCall(run: StepRun): number {
@@ -191,7 +191,7 @@ export function aheCall(run: StepRun): number {
   return Call.Pass;
 }
 
-// 第二段：結算這一墩（出牌）／阿禾回應（叫牌）
+// 第二段：結算這一墩（出牌）／阿元回應（叫牌）
 export function settle(run: StepRun): GameEvent[] {
   const before = run.events.length;
   if (run.done) return [];
@@ -206,7 +206,7 @@ export function settle(run: StepRun): GameEvent[] {
     run.history.push({ ...run.trick });
     const more = run.history.length < (run.step.tricks ?? 1) && g.phase === Phase.Play;
     if (!more) { run.done = true; return run.events.slice(before); }
-    // 還有下一墩：贏的人先出；輪到阿禾先出就照「能出的最小那張」出
+    // 還有下一墩：贏的人先出；輪到阿元先出就照「能出的最小那張」出
     run.trick = null;
     if (g.currentPlayer === AHE) {
       const card = lowest(legalPlays(g.hands[AHE], -1));
@@ -262,11 +262,11 @@ function trickTrump(run: StepRun): number {
 }
 export function trickWhyOf(run: StepRun, t: Trick | null): string {
   if (!t || t.follow < 0 || t.winner < 0) return "";
-  const w = whyTrick(t.lead, t.follow, trickTrump(run), t.leader === ME ? "阿禾" : "你");
-  return `${t.winner === ME ? "你" : "阿禾"}贏：${w.why}`;
+  const w = whyTrick(t.lead, t.follow, trickTrump(run), t.leader === ME ? "阿元" : "你");
+  return `${t.winner === ME ? "你" : "阿元"}贏：${w.why}`;
 }
 export const trickWhy = (run: StepRun) => trickWhyOf(run, run.history.at(-1) ?? run.trick);
-export const nextLeader = (run: StepRun) => { const t = run.history.at(-1) ?? run.trick; return t && t.winner >= 0 ? `下一墩由${t.winner === ME ? "你" : "阿禾"}先出。` : ""; };
+export const nextLeader = (run: StepRun) => { const t = run.history.at(-1) ?? run.trick; return t && t.winner >= 0 ? `下一墩由${t.winner === ME ? "你" : "阿元"}先出。` : ""; };
 
 // 「2♥、沒有加倍、剛好打成，這局 +20 分」—— 數字全部來自計分程式
 export function resultLine(r: HandResult): string {
@@ -292,7 +292,7 @@ export function bidMeaning(i: number): string {
   return `${trumpText(i)}，至少要贏 ${tricksNeeded(i)} 墩（6＋${bidLevel(i)}）`;
 }
 
-// 你點了某個叫牌，阿禾的反應（叫低穩穩來、叫高嚇一跳、叫無王問你是不是要硬打）
+// 你點了某個叫牌，阿元的反應（叫低穩穩來、叫高嚇一跳、叫無王問你是不是要硬打）
 export type BidStyle = "pass" | "low" | "high" | "nt";
 export const bidStyle = (i: number): BidStyle => i === Call.Pass ? "pass" : bidStrain(i) === Strain.NoTrump ? "nt" : bidLevel(i) >= 3 ? "high" : "low";
 export function bidReaction(i: number): string {
@@ -304,7 +304,7 @@ export function bidReaction(i: number): string {
   }
 }
 
-// 這一手能不能王吃：手上沒有對方先出的花色、而且有合約的王牌（用來決定阿禾要不要提示王吃）
+// 這一手能不能王吃：手上沒有對方先出的花色、而且有合約的王牌（用來決定阿元要不要提示王吃）
 export function canRuff(run: StepRun): boolean {
   const g = run.game;
   if (g.leadCard < 0 || g.trump === Strain.NoTrump) return false;
@@ -320,7 +320,7 @@ export function preview(run: StepRun): { card: number; winner: number; ruff: boo
     const lead = g.leadCard;
     const meWins = beats(card, lead, g.trump as number);
     const w = whyTrick(lead, card, g.trump as number, "你");
-    return { card, winner: meWins ? ME : AHE, ruff: meWins && suitOf(card) !== suitOf(lead), why: `${meWins ? "你" : "阿禾"}贏：${w.why}` };
+    return { card, winner: meWins ? ME : AHE, ruff: meWins && suitOf(card) !== suitOf(lead), why: `${meWins ? "你" : "阿元"}贏：${w.why}` };
   });
 }
 
@@ -346,8 +346,8 @@ export const ACTS = [
 export const firstStepOfAct = (act: number) => STEPS.findIndex(s => s.act === act);
 
 // ---------------- 台詞 ----------------
-// 阿禾的口氣：像巷口牌店的朋友，偶爾嘴砲、偶爾講幹話；規則一定講對。
-// 每一段：情境 → 你的選擇 → 阿禾的反應 → 真的結果 → 原因 → 繼續／重試
+// 阿元的口氣：像巷口牌店的朋友，偶爾嘴砲、偶爾講幹話；規則一定講對。
+// 每一段：情境 → 你的選擇 → 阿元的反應 → 真的結果 → 原因 → 繼續／重試
 
 export type Emo = "calm" | "smug" | "shock" | "sulk" | "think" | "sigh";
 export type Tfx = "fade" | "pop" | "shout";
@@ -358,7 +358,7 @@ export interface Line { who: "ahe" | "narr"; text: string; cta?: string; emo?: E
 const A = (text: string, o: Partial<Line> = {}): Line => ({ who: "ahe", text, ...o });
 const N = (text: string): Line => ({ who: "narr", text });
 
-// 玩家這一路的選擇（開場態度、想不想搶、怎麼叫）：存在進度裡，阿禾之後偶爾會提起
+// 玩家這一路的選擇（開場態度、想不想搶、怎麼叫）：存在進度裡，阿元之後偶爾會提起
 export type Picks = Partial<Record<string, string>>;
 export interface Ctx { picks: Picks; egg?: boolean; bidCall?: number }
 
@@ -366,11 +366,11 @@ export interface Lines {
   place: string;
   table: string;                 // 本段要學什麼
   skip?: string;                 // 時間跳轉／換一手的提示
-  ask: string;                   // 出牌前：阿禾的問題（每個畫面只問一件事）
+  ask: string;                   // 出牌前：阿元的問題（每個畫面只問一件事）
   hint: string;                  // 出牌前：一行操作提示
   ask2?: string;                 // 第二墩／叫牌第二輪
   hint2?: string;
-  illegal?: (run: StepRun) => string[];   // 選了不能出的牌：阿禾一句一句講
+  illegal?: (run: StepRun) => string[];   // 選了不能出的牌：阿元一句一句講
   nudge?: string;                // 叫牌：點了不允許的叫品
   explain: (run: StepRun, o: Outcome) => string;   // 結果區：完整的原因（含下一墩誰先出）
   tried?: (seen: Outcome[]) => string;
@@ -401,11 +401,11 @@ export const LINES: Record<StepId, Lines> = {
       const drew = myDraw(run);
       const n = run.game.hands[ME].length;
       return `${trickWhy(run)} ` + (o === "win"
-        ? `明牌 ${ct(up.card)} 進了你的手牌；阿禾從牌堆摸一張暗牌（只有他看得到）。各出一張、再補一張，你手上還是 ${n} 張。${nextLeader(run)}`
-        : `明牌 ${ct(up.card)} 被阿禾拿走。你從牌堆摸到暗牌 ${drew ? ct(drew.card) : "一張"}，${ct(c(CL, 12))} 還留在你手上。你手上還是 ${n} 張。${nextLeader(run)}`);
+        ? `明牌 ${ct(up.card)} 進了你的手牌；阿元從牌堆摸一張暗牌（只有他看得到）。各出一張、再補一張，你手上還是 ${n} 張。${nextLeader(run)}`
+        : `明牌 ${ct(up.card)} 被阿元拿走。你從牌堆摸到暗牌 ${drew ? ct(drew.card) : "一張"}，${ct(c(CL, 12))} 還留在你手上。你手上還是 ${n} 張。${nextLeader(run)}`);
     },
     tried: seen => seen.length >= 2
-      ? "兩種出法你都看過了：出大牌搶明牌，或留著大牌、讓阿禾拿。"
+      ? "兩種出法你都看過了：出大牌搶明牌，或留著大牌、讓阿元拿。"
       : "兩種出法都可以。按「換一張試試」，看看另一種結果。",
     next: "下一墩：贏家先出",
     retry: "換一張試試",
@@ -416,7 +416,7 @@ export const LINES: Record<StepId, Lines> = {
     skip: "↪ 接著用 ♣Q 贏的那條線打下一墩",
     ask: "「這墩你先出。你出什麼花色，這墩就跟什麼。」",
     hint: "你先出，出哪張都可以。選好按「確認出牌」。",
-    explain: run => `${trickWhy(run)} 翻開的明牌 ♥J 只是獎品，不是領出花色。你拿走明牌 ♥J，阿禾摸走最後一張暗牌。牌堆空了，搶牌結束（真正的牌局會搶滿 13 次）。搶牌的墩不算合約，接下來進入叫牌。`,
+    explain: run => `${trickWhy(run)} 翻開的明牌 ♥J 只是獎品，不是領出花色。你拿走明牌 ♥J，阿元摸走最後一張暗牌。牌堆空了，搶牌結束（真正的牌局會搶滿 13 次）。搶牌的墩不算合約，接下來進入叫牌。`,
     next: "下一幕：這局你敢叫多大？",
     retry: "重打這墩",
   },
@@ -433,7 +433,7 @@ export const LINES: Record<StepId, Lines> = {
       const g = run.game, bid = g.highestBid;
       const d = g.doubled;
       return `${bidText(bid)}${d ? `（${doubledText(d)}）` : ""} 就是這局的「合約」：${trumpText(bid)}，你要贏到 ${tricksNeeded(bid)} 墩（6＋${bidLevel(bid)}）。` +
-        `負責打成合約的人叫「莊家」，就是你；阿禾是防守方。第一墩由防守方（阿禾）先出。` +
+        `負責打成合約的人叫「莊家」，就是你；阿元是防守方。第一墩由防守方（阿元）先出。` +
         (d ? `被${doubledText(d)}：打成拿 ${madePoints(bid, d)} 分（沒加倍是 ${madePoints(bid, 0)}），每倒一墩對手拿 ${pointsPerUndertrick(d)} 分。` : "") +
         "合約定了，出牌時就不能再改。";
     },
@@ -451,8 +451,8 @@ export const LINES: Record<StepId, Lines> = {
     explain: (run, o) => {
       const g = run.game, bid = g.highestBid;
       const base = o === "raise"
-        ? `合約 ${bidText(bid)}：${trumpText(bid)}，你是莊家，要贏 ${tricksNeeded(bid)} 墩。叫得越高，要贏的墩越多。第一墩由防守方（阿禾）先出。`
-        : `合約 ${bidText(bid)}：${trumpText(bid)}，阿禾是莊家、要贏 ${tricksNeeded(bid)} 墩；你是防守方，要阻止他。第一墩由防守方——你——先出。`;
+        ? `合約 ${bidText(bid)}：${trumpText(bid)}，你是莊家，要贏 ${tricksNeeded(bid)} 墩。叫得越高，要贏的墩越多。第一墩由防守方（阿元）先出。`
+        : `合約 ${bidText(bid)}：${trumpText(bid)}，阿元是莊家、要贏 ${tricksNeeded(bid)} 墩；你是防守方，要阻止他。第一墩由防守方——你——先出。`;
       return base + "競叫中可以一直往上叫；有人叫了、另一個人 Pass，合約就確定，出牌時不能再換。一開始兩個人都 Pass，這手牌重新發。";
     },
     tried: seen => seen.length >= 2 ? "兩種你都試過了：叫更高自己當莊家，或 Pass 讓對方當莊家。" : "也可以按「重新叫一次」，試試另一種選擇。",
@@ -496,7 +496,7 @@ export const LINES: Record<StepId, Lines> = {
     table: "學：誰先出，就決定領出花色（對照 B）",
     ask: "「這次你先出：出 ♦A。」",
     hint: "選 ♦A、按「確認出牌」。",
-    explain: run => `${withNext(run)} 對照：情況 A 阿禾先出 ♠K、你出 ♦A → ♠K 贏；情況 B 你先出方塊、阿禾出 ♠K → 方塊贏。同樣兩張牌，改變誰先出，領出花色就不同。不是先出的人一定贏，而是先出的人決定跟牌花色。`,
+    explain: run => `${withNext(run)} 對照：情況 A 阿元先出 ♠K、你出 ♦A → ♠K 贏；情況 B 你先出方塊、阿元出 ♠K → 方塊贏。同樣兩張牌，改變誰先出，領出花色就不同。不是先出的人一定贏，而是先出的人決定跟牌花色。`,
     next: "小練習：都是王牌",
     retry: "再出一次",
   },
@@ -552,7 +552,7 @@ export const LINES: Record<StepId, Lines> = {
 };
 
 // ---------------- 一句一句講 ----------------
-// 前情很短，最後一句是阿禾的問題；有 choices 的那句會出現選項，選了就插入那個選項的回應
+// 前情很短，最後一句是阿元的問題；有 choices 的那句會出現選項，選了就插入那個選項的回應
 
 const ATT: Choice[] = [{ key: "newbie", label: "完全不會。" }, { key: "some", label: "知道一點點。" }, { key: "pro", label: "我超強，來啊。" }];
 const GRAB: Choice[] = [{ key: "go", label: "搶啊，當然搶！" }, { key: "keep", label: "先不要，留牌比較重要。" }, { key: "how", label: "等等，到底怎麼搶？", info: true }];
@@ -565,7 +565,7 @@ const END: Choice[] = [{ key: "play", label: "來啊，打一場！", do: "solo"
 
 export const ASKS: Record<string, Choice[]> = { attitude: ATT, grab: GRAB, plan: PLAN, dbl: DBL, follow: FOLLOW, ruff: RUFF, egg: EGG, end: END };
 
-// 選了某個選項之後，阿禾怎麼回（只講話；牌、叫牌一律照引擎）
+// 選了某個選項之後，阿元怎麼回（只講話；牌、叫牌一律照引擎）
 export function answer(ask: string, key: string, run: StepRun, ctx: Ctx): Line[] {
   switch (`${ask}:${key}`) {
     case "attitude:newbie": return [A("「沒事，我一開始也不會。」"), A("「呃，好像是廢話。」", { emo: "sigh" }), A("「來啦，打一場比較快。」")];
@@ -594,7 +594,7 @@ export function answer(ask: string, key: string, run: StepRun, ctx: Ctx): Line[]
   return [];
 }
 
-// 開場態度：之後阿禾偶爾提一下
+// 開場態度：之後阿元偶爾提一下
 const recall = (ctx: Ctx, pro: string, newbie: string): Line[] =>
   ctx.picks.attitude === "pro" ? [A(pro, { emo: "smug" })] : ctx.picks.attitude === "newbie" ? [A(newbie)] : [];
 
@@ -610,7 +610,7 @@ export const TALK: Record<StepId, Talk> = {
       N("外面下著雨。你收起傘，走進巷口一間小小的牌店。"),
       A("「欸！新來的喔？」", { emo: "shock", fx: "pop" }),
       A("「會打橋牌嗎？」", { ask: "attitude", choices: ATT }),
-      N("阿禾把茶杯挪開，從牌堆翻開一張 ♦K，又從手裡出了 ♣9。"),
+      N("阿元把茶杯挪開，從牌堆翻開一張 ♦K，又從手裡出了 ♣9。"),
       A("「喔，這張不錯欸。」", { emo: "think" }),
       A("「想不想把它搶走？」", { ask: "grab", choices: GRAB }),
       A(LINES.grab.ask),
@@ -693,7 +693,7 @@ export const TALK: Record<StepId, Talk> = {
       A("「王吃。」", { fx: "pop" }),
       A("「尤其被別人王吃的時候，真的會很想翻桌。」", { emo: "sulk" }),
       ...recall(ctx, "「超強的人應該早就會了吧？那就當複習。」", "「完全不會的人，現在已經在學王吃了欸。」"),
-      N("阿禾放下 ♥A。你手上剩 ♥3 和 ♠2。"),
+      N("阿元放下 ♥A。你手上剩 ♥3 和 ♠2。"),
       A(LINES.follow.ask, { ask: "follow", choices: FOLLOW }),
     ],
     outro: () => [
@@ -726,7 +726,7 @@ export const TALK: Record<StepId, Talk> = {
   },
   flipA: {
     intro: () => [
-      N("換回 2♥：紅心當王牌。阿禾先出 ♠K。"),
+      N("換回 2♥：紅心當王牌。阿元先出 ♠K。"),
       N("你手上是 ♦A 和 ♣5：沒有黑桃，也沒有紅心。"),
       A(LINES.flipA.ask, { emo: "smug" }),
     ],
@@ -738,7 +738,7 @@ export const TALK: Record<StepId, Talk> = {
   flipB: {
     intro: () => [
       A("「同樣兩張牌，這次換你先出。」"),
-      N("你手上是 ♦A 和 ♦3；阿禾手上沒有方塊。"),
+      N("你手上是 ♦A 和 ♦3；阿元手上沒有方塊。"),
       A(LINES.flipB.ask),
     ],
     outro: () => [
@@ -749,7 +749,7 @@ export const TALK: Record<StepId, Talk> = {
   },
   trumps: {
     intro: () => [
-      N("紅心王牌。阿禾先出 ♥9。"),
+      N("紅心王牌。阿元先出 ♥9。"),
       A(LINES.trumps.ask),
     ],
     outro: () => [
@@ -780,7 +780,7 @@ export const TALK: Record<StepId, Talk> = {
         ? [A(`「你剛剛叫的是 ${bidText(ctx.bidCall)}。這關先用 ${bidText(CONTRACT)} 來算，道理一樣。」`)]
         : [A(`「${bidText(CONTRACT)}：紅心當王牌，要贏 ${NEED} 墩。」`)]),
       A("「現在就看你到底有沒有料。」", { emo: "smug" }),
-      N(`你已經拿 7 墩、阿禾 4 墩，還剩兩墩。阿禾放下 ♣K；你手上是 ♣A 和 ♣3。`),
+      N(`你已經拿 7 墩、阿元 4 墩，還剩兩墩。阿元放下 ♣K；你手上是 ♣A 和 ♣3。`),
       A("「欸欸欸，還差一墩！」", { emo: "shock", fx: "pop" }),
       A(LINES.last.ask),
     ],
@@ -811,9 +811,9 @@ export const TALK: Record<StepId, Talk> = {
   dbl: {
     intro: () => [
       A("「再來一局狠的。」", { emo: "smug" }),
-      N("合約 4♥，被阿禾加倍了。你要贏 10 墩，現在 8 墩、阿禾 3 墩，還剩兩墩。"),
+      N("合約 4♥，被阿元加倍了。你要贏 10 墩，現在 8 墩、阿元 3 墩，還剩兩墩。"),
       A("「我都加倍了，你最好是打得成啦。」", { emo: "smug" }),
-      N("阿禾放下 ♠Q；你手上是 ♠K 和 ♠3。"),
+      N("阿元放下 ♠Q；你手上是 ♠K 和 ♠3。"),
       A(LINES.dbl.ask),
     ],
     mid: run => {
@@ -853,10 +853,10 @@ export const TALK: Record<StepId, Talk> = {
 export const REDEAL_LINES: Line[] = [
   A("「蛤，我們兩個都不叫？」", { emo: "shock" }),
   A("「好啦，重發一局。」", { emo: "sigh" }),
-  N("阿禾把牌收回去洗了洗，又發了一次。"),
+  N("阿元把牌收回去洗了洗，又發了一次。"),
   A("「……欸怎麼又是同一手？算了，就當你運氣好。」", { emo: "think" }),
 ];
-// 阿禾加倍（你叫 3 線以上）
+// 阿元加倍（你叫 3 線以上）
 export const DOUBLE_LINES: Line[] = [
   A("「欸，我覺得你這局做不到喔。」", { emo: "smug" }),
   A(LINES.bid.ask2!, { emo: "smug", fx: "shout", ask: "dbl", choices: DBL }),

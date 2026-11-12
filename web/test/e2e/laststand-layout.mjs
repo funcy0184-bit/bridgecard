@@ -1,4 +1,4 @@
-// 逆命賭局版面校正：六種手機大小下走過「賭局契約書 → 牌桌各階段 → 每墩紀錄 → 結算 → 選單」，檢查
+// 梭了啦版面校正：六種手機大小下走過「賭局契約書 → 牌桌各階段 → 每墩紀錄 → 結算 → 選單」，檢查
 //   1. 頁面不會橫向捲動、文字按鈕沒有被自己的框切掉（同 layout-check.mjs 的規則）
 //   2. 每個階段最重要的東西整個在螢幕裡、按鈕點得到（被別的東西蓋住也算錯）
 // 瀏覽器是朋友（用邀請連結加入）；房主用 WebSocket 直接打，負責換玩法、蓋章、跟著出手
@@ -17,7 +17,7 @@ const SIZES = [
   ["LINE 內建瀏覽器（約）", 390, 600], ["Pixel 7", 412, 839], ["iPhone Pro Max", 430, 739],
 ];
 
-// 跟 layout-check.mjs 同一套檢查（這裡多排除兩個只在逆命牌桌出現的裝飾）
+// 跟 layout-check.mjs 同一套檢查（這裡多排除兩個只在梭了啦牌桌出現的裝飾）
 const probe = ([keys, scroll]) => {
   const W = document.documentElement.clientWidth, H = innerHeight;
   const issues = [];
@@ -110,22 +110,31 @@ for (const [name, w, h] of SIZES) {
   };
 
   await p.goto(`${BASE}/?room=${code}`);
-  await p.fill("#name", "阿禾"); await p.click("#join");
+  await p.fill("#name", "小美"); await p.click("#join");
   await p.waitForSelector("#wait:not([hidden])");
   let r = await H.cmd({ t: "mode", mode: "laststand" });
-  if (r.t !== "ack") fail("換成逆命賭局失敗");
+  if (r.t !== "ack") fail("換成梭了啦失敗");
   await p.waitForSelector("#contract:not([hidden])");
-  await check("賭局契約書（還沒填）", ["#contract .ctitle", "#stakeInput", "#stakePreview", "#stakeSeal"], true);
+  await check("賭局契約書（還沒填）", ["#contract .ctitle", "#contract .csub", "#stakeInput", "#vowInput", "#stakePreview", "#stakeSeal"], true);
+  // 模擬鍵盤跳出來（畫面只剩 420 高；模擬器，不是真機）：點輸入框會自己捲進畫面、蓋章捲得到
+  await p.setViewportSize({ width: w, height: Math.min(h, 420) });
+  await p.click("#stakeInput");
+  results.push(["鍵盤跳出（模擬 420 高）：賭上之物", await p.evaluate(() => { const r = document.getElementById("stakeInput").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight ? [] : [`輸入框不在畫面裡（${Math.round(r.top)}..${Math.round(r.bottom)}）`]; })]);
+  await p.click("#vowInput");
+  await check("鍵盤跳出（模擬 420 高）：豪言＋蓋章", ["#vowInput", "#stakeSeal"], true);
+  await p.evaluate(() => document.activeElement?.blur());
+  await p.setViewportSize({ width: w, height: h });
   await p.click("#stakeInput"); await p.keyboard.type("阿嬤的藍白拖阿嬤的藍白拖阿嬤的藍白拖阿嬤的藍白拖");   // 24 個字：最長的情況
-  await check("賭局契約書（填滿 24 字）", ["#stakeInput", "#stakePreview", "#stakeCount", "#stakeSeal"], true);
+  await p.fill("#vowInput", "這".repeat(30));                                                          // 豪言也填滿 30 字
+  await check("賭局契約書（填滿 24＋30 字）", ["#stakeInput", "#vowInput", "#stakePreview", "#stakeCount", "#vowCount", "#stakeSeal"], true);
   await p.click("#stakeSeal");
   await p.waitForFunction(() => !document.getElementById("readyBtn").disabled, null, { timeout: 4000 });
-  await H.cmd({ t: "stake", stake: "我最後的尊嚴我最後的尊嚴我最後的尊嚴我最後的尊嚴" });
+  await H.cmd({ t: "stake", stake: "我最後的尊嚴我最後的尊嚴我最後的尊嚴我最後的尊嚴", vow: "今天不把你打到懷疑人生我就不叫大雞今天不把你打" });
   await H.cmd({ t: "ready", ready: true });
   await p.waitForTimeout(1300);                              // 蓋章動畫＋平滑捲動
   const readyInView = await p.evaluate(() => { const r = document.getElementById("readyBtn").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
   if (!readyInView) results.push(["蓋章之後", ["「準備好了」沒有自己捲進畫面"]]);
-  await check("等待室：雙方賭上之物＋準備", ["#plateMeStake", "#plateOppStake", "#readyBtn"], true);
+  await check("等待室：雙方賭上之物＋豪言＋準備", ["#plateMeStake", "#plateOppStake", "#plateMeVow", "#plateOppVow", "#readyBtn"], true);
   await p.click("#readyBtn");
   await p.waitForSelector("#lstable:not([hidden])");
   await p.waitForTimeout(2600);                 // 開場的提示條自己收起來
@@ -185,7 +194,7 @@ for (const [name, w, h] of SIZES) {
     await check("每墩紀錄（展開、捲到它）", ["#lsLog summary"]);
     await p.evaluate(() => scrollTo(0, 0));
     await p.click("#lsMenuBtn"); await check("牌桌選單", ["#menu .sheet"]);
-  } else results.push(["再來一場", ["再來一場之後沒有回到逆命牌桌"]]);
+  } else results.push(["再來一場", ["再來一場之後沒有回到梭了啦牌桌"]]);
   if (errors.length) results.push(["頁面錯誤", errors.slice(0, 3)]);
 
   const bad = results.filter(([, r]) => r.length);
@@ -196,5 +205,5 @@ for (const [name, w, h] of SIZES) {
   await ctx.close();
 }
 await b.close();
-console.log(total ? `共 ${total} 個畫面要修` : "逆命賭局版面校正：每個大小、每個畫面都通過");
+console.log(total ? `共 ${total} 個畫面要修` : "梭了啦版面校正：每個大小、每個畫面都通過");
 process.exit(total ? 1 : 0);

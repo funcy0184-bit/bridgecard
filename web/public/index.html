@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#24170F">
-<meta name="description" content="來打橋牌：兩個人的蜜月橋牌。先跟巷口牌店的阿禾玩四幕小故事學規則，再跟電腦或朋友用手機一起打。">
+<meta name="description" content="來打橋牌：兩個人的蜜月橋牌。先跟巷口牌店的阿元玩四幕小故事學規則，再跟電腦或朋友用手機一起打；新玩法「梭了啦！這局賭什麼？」九墩比大比小、輸了交出來。">
 <title>來打橋牌</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237A2732'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23E2B860'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
 <script>try{var s=JSON.parse(localStorage.getItem("hb-web-settings")||"{}");if(s.intensity!==undefined)document.documentElement.dataset.motion=s.intensity}catch(e){}</script>
+<script>if(/^bridgecard-staging\./.test(location.hostname))document.documentElement.dataset.stage="staging"</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;500;700&display=swap">
@@ -32,14 +33,19 @@
       <p class="cv-tag">牌都發好了，就差你了。</p>
       <div class="cv-div" aria-hidden="true"><i>◆</i></div>
     </header>
+    <!-- 選玩法：經典橋牌（現在這一頁）／梭了啦！這局賭什麼？（點了有轉場，進新玩法的選單） -->
+    <div class="cv-modes" role="group" aria-label="選玩法">
+      <button id="modeClassic" class="cv-mode classic" type="button" aria-pressed="true">
+        <i class="mcard" aria-hidden="true">♠</i><span><b>經典橋牌</b><small>兩人蜜月橋牌</small></span>
+      </button>
+      <button id="modeShuo" class="cv-mode shuo" type="button" aria-pressed="false" aria-label="梭了啦！這局賭什麼？（新玩法）">
+        <i class="mcard" aria-hidden="true">梭</i><span><b>梭了啦！</b><b class="b2">這局賭什麼？</b><small>輸了交出來。</small></span><em class="newtag" aria-hidden="true">新玩法</em>
+      </button>
+    </div>
     <nav class="cv-menu" aria-label="主選單">
-      <a id="storyCard" class="cv-btn primary" href="/story/"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
-        <svg class="ic" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 6 c6 -3 12 -2 17 2 v18 c-5 -4 -11 -5 -17 -2z M20 8 c5 -4 11 -5 17 -2 v18 c-6 -3 -12 -2 -17 2"/></svg>
-        <span class="lbl" id="storyCardTitle">跟阿禾學</span><i class="chev" aria-hidden="true">›</i>
-      </a>
-      <button id="solo" class="cv-btn" type="button"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
+      <button id="solo" class="cv-btn primary" type="button"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
         <svg class="ic" viewBox="0 0 40 30" aria-hidden="true"><rect x="8" y="9" width="24" height="17" rx="5"/><path d="M20 9 V4"/><circle cx="20" cy="3" r="1.6"/><circle cx="15" cy="16" r="1.6" class="f"/><circle cx="25" cy="16" r="1.6" class="f"/><path d="M16 21 q4 3 8 0 M8 15 H5 v6 h3 M32 15 h3 v6 h-3"/></svg>
-        <span class="lbl">跟阿禾打<small id="soloSub"></small></span><i class="chev" aria-hidden="true">›</i>
+        <span class="lbl">跟阿元玩<small id="soloSub"></small></span><i class="chev" aria-hidden="true">›</i>
       </button>
       <button id="goOnline" class="cv-btn" type="button"><svg class="frame" viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="o" d="M14 1 H286 L299 29 L286 57 H14 L1 29 Z"/><path class="i" d="M18 5.5 H282 L293 29 L282 52.5 H18 L7 29 Z"/></svg>
         <svg class="ic" viewBox="0 0 40 30" aria-hidden="true"><circle cx="15" cy="10" r="5"/><path d="M5 27 c0 -7 4 -10 10 -10 s10 3 10 10 z"/><circle cx="27" cy="12" r="4"/><path d="M24 18 c1 -1 2 -1 3 -1 c5 0 8 3 8 9 h-8"/></svg>
@@ -47,9 +53,9 @@
       </button>
     </nav>
     <div class="cv-div small" aria-hidden="true"><i>♣</i></div>
-    <section class="cv-chapters" aria-label="跟阿禾學：四個章節">
+    <section class="cv-chapters" aria-label="跟阿元學：四個章節（重新教學）">
       <h2><img src="/art/sprig.svg" alt="" class="lf l"><span id="chapHead">第一次玩？</span><img src="/art/sprig.svg" alt="" class="lf r"></h2>
-      <p id="storyCardSub">沒玩過也沒關係，阿禾帶你打一場！</p>
+      <p id="storyCardSub">沒玩過也沒關係，阿元帶你打一場！</p>
       <div class="cv-cards">
         <a class="cv-card" href="/story/?act=1" data-act="0"><b>01</b><span>先來搶牌</span><img src="/art/ch1.svg" alt=""><em>✓</em></a>
         <a class="cv-card" href="/story/?act=2" data-act="1"><b>02</b><span>你敢叫多大？</span><img src="/art/ch2.svg" alt=""><em>✓</em></a>
@@ -60,11 +66,31 @@
     <div class="cv-bottom" aria-hidden="true"><img src="/art/chapel.svg" alt=""><i>◆</i></div>
   </section>
 
+  <!-- ============ 梭了啦！這局賭什麼？：新玩法的選單（酒紅、暗金） ============ -->
+  <section id="shuo" class="screen shuohome" hidden>
+    <div class="sh-top">
+      <button id="shuoBack" class="back" type="button">‹ 經典橋牌</button>
+      <button id="shuoMenu" class="sh-icon" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 H21 M3 12 H21 M3 17.5 H21"/></svg></button>
+    </div>
+    <header class="sh-title">
+      <p class="sh-kicker"><span>新玩法</span></p>
+      <h1><span class="l1">梭了啦！</span><span class="l2">這局賭什麼？</span></h1>
+      <p class="sh-tag">輸了交出來。</p>
+    </header>
+    <div class="sh-card" aria-hidden="true"><i>梭</i></div>
+    <nav class="sh-menu" aria-label="梭了啦！這局賭什麼？選單">
+      <button id="shuoCreate" class="btn gold big" type="button">找朋友開一局</button>
+      <button id="shuoJoin" class="btn shuoline" type="button">輸入房號加入</button>
+      <button id="shuoHow" class="btn ghost" type="button">怎麼玩？</button>
+    </nav>
+    <p class="sh-foot">兩個人、九墩、各 15 枚籌碼。<br>賭上之物只是遊戲敘事，不涉及任何實際交易。</p>
+  </section>
+
   <!-- ============ 06 朋友連線 ============ -->
   <section id="online" class="screen" hidden>
     <header class="subhead">
       <button id="onlineBack" class="back" type="button" aria-label="回首頁">‹ 回首頁</button>
-      <h2>找朋友玩</h2>
+      <h2 id="onlineTitle">找朋友玩</h2>
       <img src="/art/stamp-ahe.svg" alt="" width="34" height="41" class="mini-stamp">
     </header>
     <div class="paper sheetpaper">
@@ -95,7 +121,7 @@
     <p class="label">房號</p>
     <div id="bigCode" class="bigcode" aria-live="polite"></div>
     <div class="plates">
-      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b><i class="pstake" id="plateMeStake" hidden></i></span><button class="rename" id="renameBtn" type="button" aria-label="改我的暱稱" hidden>✎ 改名</button><em class="ok">已入座</em></div>
+      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b><i class="pstake" id="plateMeStake" hidden></i><i class="pvow" id="plateMeVow" hidden></i></span><button class="rename" id="renameBtn" type="button" aria-label="改我的暱稱" hidden>✎ 改名</button><em class="ok">已入座</em></div>
       <form class="renamebox" id="renameBox" hidden>
         <label class="field" for="renameInput"><span class="fieldhead">改你的暱稱 <small class="count" id="renameCount">0/16</small></span>
           <input id="renameInput" maxlength="64" autocomplete="nickname" enterkeyhint="done" aria-describedby="renameErr">
@@ -103,22 +129,30 @@
         <p class="fielderr" id="renameErr" role="alert" hidden></p>
         <div class="row"><button class="btn paper small" id="renameCancel" type="button">取消</button><button class="btn wine small" id="renameOk" type="submit">好</button></div>
       </form>
-      <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b><i class="pstake" id="plateOppStake" hidden></i></span><em class="ok">已入座</em></div>
+      <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b><i class="pstake" id="plateOppStake" hidden></i><i class="pvow" id="plateOppVow" hidden></i></span><em class="ok">已入座</em></div>
     </div>
     <div class="modes" id="modePick" role="radiogroup" aria-label="玩法（房主選）">
       <button type="button" class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>經典牌局</b><small>照正式規則計分</small></button>
-      <button type="button" class="mode" data-mode="laststand" role="radio" aria-checked="false"><b>逆命賭局</b><small>九墩心理戰</small></button>
+      <button type="button" class="mode" data-mode="laststand" role="radio" aria-checked="false"><b>梭了啦！<br>這局賭什麼？</b><small>輸了交出來。</small></button>
     </div>
     <p class="sub" id="modeNote">玩法由房主選。</p>
-    <!-- 逆命賭局：賭局契約書（各自填寫；只是遊戲敘事，不涉及實際交易） -->
+    <!-- 梭了啦：賭局契約書（各自填寫；只是遊戲敘事，不涉及實際交易） -->
     <form class="contract" id="contract" hidden autocomplete="off">
       <h3 class="ctitle">賭局契約書</h3>
+      <p class="csub">想要贏，那必須得輸得起。</p>
+      <label class="clabel" for="stakeInput">賭上之物</label>
       <div class="cfield">
-        <input id="stakeInput" maxlength="80" enterkeyhint="done" aria-label="這場要賭上的東西" aria-describedby="stakePreview stakeErr">
+        <input id="stakeInput" maxlength="80" enterkeyhint="next" aria-describedby="stakePreview stakeErr">
         <span class="cph" id="stakePh" aria-hidden="true">這場，你要賭上什麼？</span>
       </div>
       <div class="crow"><small class="cfine">僅供遊戲敘事，不涉及任何實際交易。</small><small class="count" id="stakeCount">0/24</small></div>
       <p class="fielderr" id="stakeErr" role="alert" hidden></p>
+      <label class="clabel" for="vowInput">賽前豪言 <small>選填</small></label>
+      <div class="cfield vow">
+        <input id="vowInput" maxlength="90" enterkeyhint="done" placeholder="開打前，有什麼話要先撂下？" aria-describedby="stakePreview vowErr">
+      </div>
+      <div class="crow"><small class="cfine">輸了的話，戰報會把這句原封不動唸回來。</small><small class="count" id="vowCount">0/30</small></div>
+      <p class="fielderr" id="vowErr" role="alert" hidden></p>
       <p class="cpreview" id="stakePreview" aria-live="polite">本人自願於本場賭局中賭上『我最後的尊嚴』。</p>
       <div class="csign">
         <span class="csignee">立約人<b id="contractName">你</b><small id="contractState">尚未蓋章</small></span>
@@ -134,7 +168,7 @@
     <button id="cancelWait" class="btn ghost small" type="button">離開這桌</button>
   </section>
 
-  <!-- ============ 逆命賭局牌桌：九墩、比大／比小、鎖牌、下注 ============ -->
+  <!-- ============ 梭了啦牌桌：九墩、比大／比小、鎖牌、下注 ============ -->
   <section id="lstable" class="screen" hidden>
     <header class="lsbar">
       <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1 · 單人上限 3</small></div>
@@ -212,7 +246,7 @@
       <p class="quip" id="quip" role="status" aria-live="polite" hidden></p>
     </div>
 
-    <!-- 回個話：五句短句（純社交，不影響牌局）；跟阿禾打時阿禾會回一句，朋友連線時對方看到你的暱稱 -->
+    <!-- 回個話：五句短句（純社交，不影響牌局）；跟阿元打時阿元會回一句，朋友連線時對方看到你的暱稱 -->
     <div class="emotepop" id="emotePop" hidden role="dialog" aria-label="回個話"><div class="emotes" id="emoteList"></div></div>
 
     <!-- 牌局紀錄：預設收合；只放公開過的牌（雙方搶走的明牌、每墩打出來的兩張、叫牌） -->
@@ -220,7 +254,7 @@
       <div class="rechead"><b>牌局紀錄</b><small><span id="handNo"></span> · 先到 <span id="target">100</span> 分的人贏</small><button class="px" type="button" data-rclose aria-label="關閉">✕</button></div>
       <div class="rectabs" role="tablist">
         <button type="button" role="tab" data-tab="mine">你的明牌 <i id="cntMine">0</i></button>
-        <button type="button" role="tab" data-tab="opp"><span id="recOppName">阿禾</span>的明牌 <i id="cntOpp">0</i></button>
+        <button type="button" role="tab" data-tab="opp"><span id="recOppName">阿元</span>的明牌 <i id="cntOpp">0</i></button>
         <button type="button" role="tab" data-tab="tricks">出牌紀錄</button>
         <button type="button" role="tab" data-tab="auction">叫牌</button>
       </div>
@@ -244,7 +278,7 @@
       <!-- 03 叫牌 -->
       <div class="bidpanel" id="bidPanel" hidden>
         <div class="bidvs">
-          <div class="bidcard opp" id="bidOppCard"><small id="bidOppName">阿禾</small><b>—</b></div>
+          <div class="bidcard opp" id="bidOppCard"><small id="bidOppName">阿元</small><b>—</b></div>
           <span class="vs">vs</span>
           <div class="bidcard me" id="bidMeCard"><small>你</small><b>—</b></div>
         </div>
@@ -297,7 +331,7 @@
       <details class="resmore" id="resMore"><summary>計分明細</summary><div class="breakdown" id="resBody"></div></details>
       <div class="totals">
         <div class="tot me" id="totMe"><small>你</small><b id="rtMe">0</b></div>
-        <div class="tot opp" id="totOpp"><small id="rtOppName">阿禾</small><b id="rtOpp">0</b></div>
+        <div class="tot opp" id="totOpp"><small id="rtOppName">阿元</small><b id="rtOpp">0</b></div>
       </div>
       <div id="resTotal" class="restotal"></div>
       <p class="h2hline" id="resStats" hidden></p>
@@ -367,7 +401,7 @@
       <h3>選單</h3>
       <button class="btn paper" id="goRules" type="button">規則小抄</button>
       <button class="btn paper" id="goSettings" type="button">設定（動畫、音效、回報問題）</button>
-      <a class="btn paper" href="/story/">跟阿禾學（四個章節）</a>
+      <a class="btn paper" id="reTeach" href="/story/?act=1">重新教學（跟阿元學四個章節）</a>
       <button class="btn ghost close" data-close type="button">關閉</button>
     </div>
   </div>
@@ -377,16 +411,16 @@
     <div class="sheet rules">
       <h3>最新消息</h3>
       <ul>
-        <li><b>阿禾活過來了</b>：教學每一幕都會問你，選不同答案他回的也不一樣；正式對戰時王吃、加倍、打成、倒約他都有話要說（設定裡可以調成精簡或關掉）。</li>
-        <li><b>回個話</b>：阿禾頭像旁的對話鈕，可以回他「有料喔！」「哭啊！」「別太囂張！」……跟朋友連線時對方會看到你的暱稱。</li>
+        <li><b>阿元活過來了</b>：教學每一幕都會問你，選不同答案他回的也不一樣；正式對戰時王吃、加倍、打成、倒約他都有話要說（設定裡可以調成精簡或關掉）。</li>
+        <li><b>回個話</b>：阿元頭像旁的對話鈕，可以回他「有料喔！」「哭啊！」「別太囂張！」……跟朋友連線時對方會看到你的暱稱。</li>
         <li><b>牌桌變清爽</b>：上面只留現在的階段、最重要的數字和比分；流程每一格點一下就有說明，規則按提示旁的「?」，搶到的明牌和每一墩的紀錄按「牌局紀錄」再看。</li>
         <li><b>花色張數</b>：手牌上方直接寫你每種花色有幾張，打出去或摸到牌會馬上更新。</li>
         <li><b>出牌更安全</b>：點牌只是選起來（再點一下放下），手指左右滑可以一張一張挑；往上拖到桌上是「預覽」，按「確認出牌」才會真的出。點兩下不會再誤出牌了。</li>
         <li><b>手機橫拿也能打</b>：牌桌在左、手牌在右，整個畫面固定不會捲動。</li>
-        <li><b>大家講話變自然了</b>：選單、牌桌、阿禾的台詞都換成平常講話的樣子。</li>
-        <li><b>阿禾會回嘴</b>：跟阿禾打的時候，他偶爾會講兩句，王吃、關鍵墩、連贏才比較會開口。</li>
+        <li><b>大家講話變自然了</b>：選單、牌桌、阿元的台詞都換成平常講話的樣子。</li>
+        <li><b>阿元會回嘴</b>：跟阿元打的時候，他偶爾會講兩句，王吃、關鍵墩、連贏才比較會開口。</li>
         <li><b>新封面</b>：下面四張章節卡，想練哪一幕就直接點。</li>
-        <li><b>對話自己點</b>：教學時阿禾講完一句，你點一下才換下一句。</li>
+        <li><b>對話自己點</b>：教學時阿元講完一句，你點一下才換下一句。</li>
         <li><b>遇到問題？</b>到「設定」最下面按「遇到問題？告訴我們」，連同截圖一起傳過來。</li>
       </ul>
       <button class="btn paper close" data-close type="button">知道了</button>
@@ -403,22 +437,48 @@
         <li><b>加倍</b>：防守方可以加倍，被加倍的莊家可以再加倍；只要有人再往上叫，加倍就清掉。</li>
         <li><b>後半場｜出牌</b>：莊家的對手先出。先出的花色你手上有，就一定要跟；沒有才可以墊別的牌，或出王牌王吃。</li>
         <li><b>計分</b>：打成拿「線數 × 10 × 倍率」，每多贏 1 墩再加 2 分；倒約的話，防守方每墩拿「10 × 倍率」。先到 100 分的人贏。</li>
-        <li><a class="link" href="/story/">忘了？跟阿禾再打一次教學 ›</a></li>
+        <li><a class="link" href="/story/">忘了？跟阿元再打一次教學 ›</a></li>
       </ul>
       <button class="btn paper close" data-close type="button">關閉</button>
     </div>
   </div>
 
-  <!-- 第一次玩：先問要不要跟阿禾學 -->
+  <!-- 第一次玩：先問要不要跟阿元學 -->
   <div id="storyOffer" class="modal" hidden>
-    <div class="sheet offer">
-      <img src="/art/stamp-ahe.svg" alt="" width="64" height="77">
-      <h3>第一次玩？</h3>
-      <p>沒玩過也沒關係，阿禾帶你打一場！搶牌、叫牌、王吃、打成，大概 5 分鐘。</p>
-      <a class="btn wine big" href="/story/">跟阿禾學</a>
-      <button class="btn paper" id="offerSkip" type="button">我會了，直接開打！</button>
+    <div class="sheet offer" role="dialog" aria-labelledby="offerQ">
+      <img src="/art/stamp-ahe.svg" alt="阿元" width="64" height="77">
+      <h3 id="offerQ">「要我先教你怎麼玩嗎？」</h3>
+      <p id="offerText">搶牌、叫牌、王吃、打成，大概 5 分鐘。教完直接跟我打一局。</p>
+      <a class="btn wine big" id="offerTeach" href="/story/?then=play">先教我一下</a>
+      <button class="btn paper" id="offerSkip" type="button">直接開打</button>
     </div>
   </div>
+
+  <!-- 梭了啦！這局賭什麼？：規則小抄 -->
+  <div id="shuoRules" class="modal" hidden>
+    <div class="sheet rules shuo">
+      <h3>梭了啦！怎麼玩</h3>
+      <ul>
+        <li><b>兩個人、九墩</b>，各 15 枚籌碼。每人 9 張：大（J–A）、中（7–10）、小（2–6）各 3 張，同點不比花色。</li>
+        <li><b>比大還是比小</b>：九墩裡 5 墩比大、4 墩比小，看得到這一墩和下一墩。</li>
+        <li><b>每一墩</b>：有宣戰權的人可以把這墩翻成相反方向（每場一次）→ 可以用保命（這墩每人只押 1 枚、不能加注，每場一次）→ 兩人各鎖一張牌 → 下注 → 翻牌。</li>
+        <li><b>底注／每人上限</b>：第 1–3 墩 1／3；第 4–6 墩 2／4；第 7–9 墩 3／可梭哈。</li>
+        <li><b>下注</b>：過牌、加注、反加、接戰、棄牌。被加注時可以用讀心，看對方鎖的是大、中還是小（每場一次）。</li>
+        <li><b>棄牌</b>：輸掉自己已經押的；對方多押的退回去。雙方的牌只公開大中小。</li>
+        <li><b>同點</b>：雙方押的進疊池，下一個翻牌贏、或逼對方棄牌的人整池拿走。</li>
+        <li><b>梭哈</b>：每人押到「雙方較少的籌碼」，不是各自把全部推出去。</li>
+        <li><b>結束</b>：有人籌碼歸零就結束；九墩打完，籌碼多的贏。</li>
+        <li>賭局契約書上的「賭上之物」只是遊戲敘事，不涉及任何實際交易。</li>
+      </ul>
+      <button class="btn ghost close" data-close type="button">知道了</button>
+    </div>
+  </div>
+</div>
+<!-- 換玩法的轉場：綠牌桌暗下 → 中間的牌翻面 → 背景換成酒紅暗金 → 標題換成新玩法（約 0.6 秒） -->
+<div id="modeFx" aria-hidden="true" hidden>
+  <i class="mf-felt"></i><i class="mf-dim"></i><i class="mf-wine"></i>
+  <div class="mf-card"><div class="mf-flip"><i class="f">♠</i><i class="b">梭</i></div></div>
+  <div class="mf-title"><b class="t1">來打橋牌</b><b class="t2"><span>梭了啦！</span><span>這局賭什麼？</span></b></div>
 </div>
 <div id="fx" aria-hidden="true"></div>
 <script type="module" src="/app.js"></script>

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, setMode, setName, setReady, setRematch, setStake, startMatch,
 } from "../src/server/lobby";
-import { DEFAULT_STAKE, MODES, NAME_MAX, STAKE_MAX, TIMING, checkName, checkStake, isValidCode, nameLength, CODE_ALPHABET } from "../src/server/protocol";
+import { DEFAULT_STAKE, MODES, NAME_MAX, STAKE_MAX, TIMING, VOW_MAX, checkName, checkStake, checkVow, isValidCode, nameLength, CODE_ALPHABET, tooHarsh } from "../src/server/protocol";
 import { LoggedEvent, RecordRow, highlights, isPublic, pairStats } from "../src/server/records";
 import { HoneymoonGame, Phase } from "../src/game/game";
 import { seededRng } from "../src/game/cards";
@@ -117,7 +117,7 @@ describe("C1 房間：準備、模式、房主", () => {
     expect(m.status).toBe("READY");
   });
 
-  it("只有房主能換模式；沒開放的模式會被拒絕；不存在的模式也拒絕（舊的「籌碼對決」已經換成逆命賭局）", () => {
+  it("只有房主能換模式；沒開放的模式會被拒絕；不存在的模式也拒絕（舊的「籌碼對決」已經換成梭了啦）", () => {
     const m = twoSeated();
     expect(setMode(m, 1, "classic")).toMatchObject({ ok: false, code: "NOT_HOST" });
     expect(setMode(m, 0, "chips" as never)).toMatchObject({ ok: false, code: "BAD_REQUEST" });
@@ -141,7 +141,7 @@ describe("C1 房間：準備、模式、房主", () => {
     expect(setMode(m, 0, "classic")).toMatchObject({ ok: false, code: "MODE_LOCKED" });
   });
 
-  it("逆命賭局：沒在契約書蓋章不能按準備；蓋了章可以改，按了準備或開打後鎖定；只能改自己的", () => {
+  it("梭了啦：沒在契約書蓋章不能按準備；蓋了章可以改，按了準備或開打後鎖定；只能改自己的", () => {
     const m = twoSeated();
     setMode(m, 0, "laststand");
     expect(setReady(m, 0, true)).toMatchObject({ ok: false, code: "BAD_STATE" });
@@ -445,7 +445,7 @@ describe("C1 暱稱：修改、鎖定", () => {
   });
 });
 
-describe("逆命賭局：賭上之物（純遊戲敘事）", () => {
+describe("梭了啦：賭上之物（純遊戲敘事）", () => {
   const ok = (raw: unknown) => { const r = checkStake(raw); if (!r.ok) throw new Error(r.msg); return r.stake; };
   const bad = (raw: unknown) => { const r = checkStake(raw); expect(r.ok).toBe(false); return r.ok ? "" : r.msg; };
   it("空白 → 我最後的尊嚴；去頭尾空白；中英文、數字、常見標點都可以", () => {
@@ -468,7 +468,45 @@ describe("逆命賭局：賭上之物（純遊戲敘事）", () => {
   });
 });
 
-describe("同桌戰績：逆命賭局可能平手、依模式分開算", () => {
+describe("梭了啦：賽前豪言（選填）與太衝的字眼", () => {
+  const okV = (raw: unknown) => { const r = checkVow(raw); if (!r.ok) throw new Error(r.msg); return r.vow; };
+  const badV = (raw: unknown) => { const r = checkVow(raw); expect(r.ok).toBe(false); return r.ok ? "" : r.msg; };
+  it(`空白＝沒寫；最多 ${VOW_MAX} 個字；同樣不能放網址、電話、HTML`, () => {
+    expect(okV("")).toBe("");
+    expect(okV(undefined)).toBe("");
+    expect(okV("  這局我閉著眼睛都能贏  ")).toBe("這局我閉著眼睛都能贏");
+    expect(okV("一".repeat(30))).toHaveLength(30);
+    expect(badV("一".repeat(31))).toContain("縮短");
+    expect(badV("看 https://x.tw")).toContain("網址");
+    expect(badV("call 0912345678")).toContain("電話");
+    expect(badV("<b>")).toContain("「<」");
+  });
+  it("太衝的髒話、歧視字眼擋下（中間插空白或標點也一樣）；日常用字不誤擋", () => {
+    for (const t of ["幹你娘", "幹 你 娘", "操。你。媽", "你這個智障", "F.U.C.K you", "雞掰啦"]) {
+      expect(tooHarsh(t)).toBe(true);
+      expect(badV(t)).toContain("太衝");
+      expect((() => { const r = checkStake(t); return r.ok ? "" : r.msg; })()).toContain("太衝");
+    }
+    for (const t of ["幹嘛這麼認真", "我最後的尊嚴", "阿嬤的藍白拖", "今天輸了請喝珍奶", "白飯吃到飽", "能幹的人"]) {
+      expect(tooHarsh(t)).toBe(false);
+      expect(checkStake(t).ok).toBe(true);
+    }
+  });
+  it("蓋章存下賭上之物＋豪言；只改豪言也算改過；按了準備就不能改", () => {
+    const m = newRoom("ABCDEF", T0);
+    join(m, null, fresh(1), "甲", T0); join(m, null, fresh(2), "乙", T0);
+    setMode(m, 0, "laststand");
+    expect(setStake(m, 0, "藍白拖", "我穩贏").ok).toBe(true);
+    expect(m.seats[0]!.vow).toBe("我穩贏");
+    const r = setStake(m, 0, "藍白拖", "");
+    expect(r.ok && r.value.changed).toBe(true);
+    expect(m.seats[0]!.vow).toBe("");
+    setReady(m, 0, true);
+    expect(setStake(m, 0, "藍白拖", "改一下").ok).toBe(false);
+  });
+});
+
+describe("同桌戰績：梭了啦可能平手、依模式分開算", () => {
   it("平手算進 draws、打斷連勝；只算目前模式", async () => {
     const { pairStats } = await import("../src/server/records");
     const row = (gid: string, at: number, winner: number, mode: "classic" | "laststand") => ({ gid, at, winner, reason: "nine" as const, scores: [15, 15] as [number, number], hands: 9, pids: ["a", "b"] as [string, string], mode });

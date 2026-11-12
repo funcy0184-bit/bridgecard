@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#24170F">
-<meta name="description" content="走進台南巷口的小牌店，跟店主阿禾邊玩邊學雙人蜜月橋牌：搶牌、叫牌、王吃、打成，四幕約 5 分鐘。">
-<title>阿禾的牌店｜來打橋牌</title>
+<meta name="description" content="走進台南巷口的小牌店，跟店主阿元邊玩邊學雙人蜜月橋牌：搶牌、叫牌、王吃、打成，四幕約 5 分鐘。">
+<title>阿元的牌店｜來打橋牌</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237A2732'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle' fill='%23F0C25A'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
 <script>try{var s=JSON.parse(localStorage.getItem("hb-web-settings")||"{}");if(s.intensity!==undefined)document.documentElement.dataset.motion=s.intensity}catch(e){}</script>
+<script>if(/^bridgecard-staging\./.test(location.hostname))document.documentElement.dataset.stage="staging"</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;500;700&display=swap">
@@ -18,9 +19,9 @@
 <header class="sbar">
   <a class="brand" href="/" aria-label="回到來打橋牌首頁"><span aria-hidden="true">‹</span><b>來打橋牌</b></a>
   <nav class="snav" aria-label="遊戲模式">
-    <a class="on" href="/story/" aria-current="page">跟阿禾學</a>
+    <a class="on" href="/story/" aria-current="page">跟阿元學</a>
     <a href="#contentsBox" id="navChapters">章節</a>
-    <a href="/?solo=1">跟阿禾打</a>
+    <a href="/?solo=1">跟阿元玩</a>
   </nav>
   <button class="notes" id="setBtn" type="button" aria-label="設定">⚙</button>
   <button class="notes" id="notesBtn" type="button" aria-label="規則小抄">小抄</button>
@@ -35,12 +36,12 @@
   </div>
 
   <div class="spread">
-    <section class="stable" id="stable" aria-label="阿禾的牌桌">
+    <section class="stable" id="stable" aria-label="阿元的牌桌">
       <div class="frame" aria-hidden="true"></div>
       <img class="cup" src="/story/teacup.svg" alt="" aria-hidden="true">
       <div class="tlabel"><i aria-hidden="true"></i><span id="tableLabel"></span></div>
       <div class="skip" id="skip" hidden></div>
-      <div class="sopp"><div class="fan" id="sOppFan"></div><span class="sname">阿禾 · <b id="sOppCount"></b> 張（只看得到牌背）</span></div>
+      <div class="sopp"><div class="fan" id="sOppFan"></div><span class="sname">阿元 · <b id="sOppCount"></b> 張（只看得到牌背）</span></div>
       <div class="sboard" id="sBoard"></div>
       <div class="sstat" id="sStat"></div>
       <div class="shandbox">
@@ -52,8 +53,8 @@
       <div class="anchor" id="aMe"></div>
     </section>
 
-    <section class="narrator" id="narrator" aria-label="阿禾說">
-      <div class="seller"><img src="/art/stamp-ahe.svg" alt="" width="44" height="53"><div><strong id="who">阿禾</strong><small>巷口牌店店主</small></div></div>
+    <section class="narrator" id="narrator" aria-label="阿元說">
+      <div class="seller"><img src="/art/stamp-ahe.svg" alt="" width="44" height="53"><div><strong id="who">阿元</strong><small>巷口牌店店主</small></div></div>
       <div class="ntext">
         <h2 id="spoken" aria-live="polite"></h2>
         <p id="more"></p>

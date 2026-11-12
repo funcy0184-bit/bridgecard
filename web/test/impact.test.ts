@@ -39,7 +39,7 @@ describe("Impact Tier：每一級的觸發條件", () => {
     expect(i.hitstop).toBeLessThanOrEqual(100);
   });
   it("合約不可能打成的那一刻就判倒約，不用等到最後一墩（規格的例子：要 9 墩、5 墩、剩 3 墩）", () => {
-    // 3♥ 要 9 墩。你是莊家 5 墩、阿禾 4 墩，這墩阿禾贏 → 阿禾 5 墩、剩 3 墩，你最多 8 墩
+    // 3♥ 要 9 墩。你是莊家 5 墩、阿元 4 墩，這墩阿元贏 → 阿元 5 墩、剩 3 墩，你最多 8 墩
     const s = st({ highestBid: bidIndex(3, Strain.Hearts), myTricks: 5, oppTricks: 4 });
     const i = evaluateTrick(won(OPP), s);
     expect([i.tier, i.kind, i.good, i.winnerMe]).toEqual([3, "set", false, false]);
@@ -55,7 +55,7 @@ describe("Impact Tier：每一級的觸發條件", () => {
     expect(evaluateTrick(won(ME), st({ myTricks: 7, oppTricks: 3 })).tier).toBe(3);
   });
   it("對方把加倍合約打倒：Tier 3，沉重不是歡慶（不是金色）", () => {
-    // 4♥ 要 10 墩、倒約點是防守方 4 墩：阿禾 3 墩時再贏一墩
+    // 4♥ 要 10 墩、倒約點是防守方 4 墩：阿元 3 墩時再贏一墩
     const i = evaluateTrick(won(OPP), st({ highestBid: bidIndex(4, Strain.Hearts), myTricks: 5, oppTricks: 3, doubled: 1 }));
     expect([i.tier, i.kind, i.good, i.crack]).toEqual([3, "set", false, "ink"]);
   });
@@ -69,7 +69,7 @@ describe("Impact Tier：每一級的觸發條件", () => {
     expect([def.tier, def.kind, def.good]).toEqual([4, "match", true]);
   });
   it("背水一墩：需要剩下每一墩、拿下來了（Tier 2）", () => {
-    // 2♥ 要 8 墩：你 4 墩、阿禾 5 墩、剩 4 墩 → 每墩都要
+    // 2♥ 要 8 墩：你 4 墩、阿元 5 墩、剩 4 墩 → 每墩都要
     const i = evaluateTrick(won(ME), st({ myTricks: 4, oppTricks: 5 }));
     expect([i.tier, i.kind, i.label]).toEqual([2, "pivot", "關鍵一墩"]);
   });
@@ -99,7 +99,7 @@ describe("不盲目累加、決定性事件優先", () => {
     expect(got).toEqual(order);
   });
   it("一整手 13 墩：大部分是 Tier 1，Tier 3 以上最多一次", () => {
-    // 2♥：你贏 8 墩、阿禾 5 墩，交錯出現
+    // 2♥：你贏 8 墩、阿元 5 墩，交錯出現
     const seq = [ME, OPP, ME, ME, OPP, ME, OPP, ME, ME, OPP, ME, OPP, ME];
     let my = 0, opp = 0;
     const tiers = seq.map(w => { const t = evaluateTrick(won(w), st({ myTricks: my, oppTricks: opp })).tier; if (w === ME) my++; else opp++; return t; });

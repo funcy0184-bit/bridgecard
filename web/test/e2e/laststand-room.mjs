@@ -1,6 +1,6 @@
-// 逆命賭局 P1（連線層）：兩條 WebSocket 打好幾場完整九墩
+// 梭了啦 P1（連線層）：兩條 WebSocket 打好幾場完整九墩
 //   賭局契約書（沒蓋章不能準備、空白＝我最後的尊嚴、雙方看得到）、開局、隱藏資訊不外洩、
-//   單人重新整理、雙方斷線再回來、版本過期、不合法動作、經典指令在逆命房被擋、
+//   單人重新整理、雙方斷線再回來、版本過期、不合法動作、經典指令在梭了啦房被擋、
 //   梭哈被接、同點疊池、棄牌退回、籌碼歸零、九墩打完、再戰交換第 1 墩宣戰權、同桌戰績（含平手）
 // 用法：先 npx wrangler dev，再 node test/e2e/laststand-room.mjs [http://127.0.0.1:8787]
 const BASE = process.argv[2] ?? "http://127.0.0.1:8787";
@@ -46,14 +46,14 @@ function player(code, name, token = null) {
 
 const { code } = await (await fetch(`${BASE}/api/rooms`, { method: "POST" })).json();
 let A = player(code, "大雞"); await A.joined;
-let B = player(code, "阿禾"); await B.joined;
+let B = player(code, "小美"); await B.joined;
 let r = await A.cmd({ t: "mode", mode: "laststand" });
-if (r.t !== "ack") fail("換成逆命賭局失敗：" + JSON.stringify(r));
+if (r.t !== "ack") fail("換成梭了啦失敗：" + JSON.stringify(r));
 r = await A.cmd({ t: "mode", mode: "chips" });
 if (r.t !== "reject") fail("舊的「籌碼對決」應該不存在");
 await sleep(150);
-if (A.room.mode !== "laststand" || B.room.mode !== "laststand") fail("雙方沒看到逆命賭局");
-ok("房主把玩法換成逆命賭局，雙方同步（舊的籌碼對決已不存在）");
+if (A.room.mode !== "laststand" || B.room.mode !== "laststand") fail("雙方沒看到梭了啦");
+ok("房主把玩法換成梭了啦，雙方同步（舊的籌碼對決已不存在）");
 
 // ---- 賭局契約書 ----
 r = await A.cmd({ t: "ready", ready: true });
@@ -69,7 +69,7 @@ if (A.room.seats.map(s => s.stake).join("|") !== "阿嬤的藍白拖|我最後�
 ok("賭局契約書：沒蓋章不能準備、HTML 符號擋下；「阿嬤的藍白拖」去頭尾空白、空白＝「我最後的尊嚴」；雙方都看得到");
 
 r = await B.cmd({ t: "play", card: 0 });
-if (r.t !== "reject") fail("逆命房送經典指令應該被擋");
+if (r.t !== "reject") fail("梭了啦房送經典指令應該被擋");
 
 // ---- 一直打：多場直到每種情況都看過 ----
 const seen = { allInCalled: 0, tie: 0, poolTaken: 0, foldExcess: 0, elimination: 0, nine: 0, draw: 0, refund: 0, flip: 0, safeguard: 0, insight: 0 };
@@ -129,7 +129,7 @@ for (let match = 1; match <= 14; match++) {
       const info = await (await fetch(`${BASE}/api/rooms/${code}`)).json();
       A = player(code, "大雞", A.token); await A.joined;
       if (A.room.status !== "PAUSED") fail("一個人回來時應該是暫停：" + A.room.status);
-      B = player(code, "阿禾", B.token); await B.joined; await sleep(200);
+      B = player(code, "小美", B.token); await B.joined; await sleep(200);
       if (A.room.status !== "IN_GAME") fail("兩人都回來應該繼續");
       if (JSON.stringify({ a: A.v.hand, b: B.v.hand, s: A.v.stacks, c: A.v.commit }) !== before) fail("雙方斷線再回來牌桌不一樣");
       bothDropped = true;

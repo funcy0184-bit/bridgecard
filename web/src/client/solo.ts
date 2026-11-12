@@ -1,4 +1,4 @@
-// 單機：跟電腦（阿禾）打。規則引擎、電腦都跟雲端房間同一份（src/game），只是改在手機上跑。
+// 單機：跟電腦（阿元）打。規則引擎、電腦都跟雲端房間同一份（src/game），只是改在手機上跑。
 // 對牌桌畫面來說，它跟雲端連線長得一樣：收 ClientMsg、回 ServerMsg（事件一定比狀態先到），
 // 所以 main.ts 的動畫、叫牌面板、結算都不用另外寫一套。
 // 牌局每一步都存進 localStorage，重新整理或關掉再開，回來還是同一局。
@@ -29,7 +29,7 @@ export interface Link {
 }
 
 export const SOLO_KEY = "hb-solo-v1";
-export const AI_NAME = "阿禾";
+export const AI_NAME = "阿元";
 export const ME = 0, AI = 1;
 
 export interface SoloDelays { trick: number; play: number; lead: number; call: number; }

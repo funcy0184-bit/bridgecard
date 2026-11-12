@@ -1,8 +1,8 @@
-// 阿禾的四幕故事＋單機（跟電腦打）的測試
+// 阿元的四幕故事＋單機（跟電腦打）的測試
 //   · 每一幕都用正式規則引擎跑：兩種搶牌、跟牌、王吃／墊牌、最後兩墩、計分
 //   · 分支：開場態度、想不想搶、叫牌計畫、被加倍怎麼回、兩人都不叫重發——台詞不同，結果一律照引擎
 //   · 重來回到同一手、存檔重播得到同一個結果；「比較看看」不動正式牌局
-//   · 阿禾的手牌和他摸的暗牌不會出現在你看得到的東西裡
+//   · 阿元的手牌和他摸的暗牌不會出現在你看得到的東西裡
 //   · 單機：電腦打完整場（含加倍），存檔／讀檔，重新發牌
 import { describe, expect, it, vi } from "vitest";
 import { Call, Strain, Suit, bidIndex, cardId, cardText, suitOf, tricksNeeded } from "../src/game/cards";
@@ -74,7 +74,7 @@ describe("故事：四幕、十二段", () => {
 });
 
 describe("第一幕：搶牌與一墩的完整循環", () => {
-  it("開場三種態度：完全不會／知道一點點／我超強，阿禾各有不同回法", () => {
+  it("開場三種態度：完全不會／知道一點點／我超強，阿元各有不同回法", () => {
     const run = start(step("grab"));
     const a = ["newbie", "some", "pro"].map(k => texts(answer("attitude", k, run, ctx())));
     expect(new Set(a).size).toBe(3);
@@ -94,7 +94,7 @@ describe("第一幕：搶牌與一墩的完整循環", () => {
     const l = play("grab", C(CL, 4));
     expect(outcomeOf(l.run)).toBe("lose");
     expect(LINES.grab.explain(l.run, "lose")).toContain("你從牌堆摸到暗牌 ♠6，♣Q 還留在你手上");
-    expect(LINES.grab.explain(l.run, "lose")).toContain("下一墩由阿禾先出");
+    expect(LINES.grab.explain(l.run, "lose")).toContain("下一墩由阿元先出");
   });
   it("想搶、保守、不知道怎麼搶：結果照引擎，台詞跟著你的選擇（保守不判錯）", () => {
     const w = play("grab", C(CL, 12)).run, l = play("grab", C(CL, 4)).run;
@@ -116,12 +116,12 @@ describe("第一幕：搶牌與一墩的完整循環", () => {
       expect(run.game.phase).toBe(Phase.Bidding);   // 牌堆空了 → 叫牌
       expect(run.game.viewFor(ME).myTricks).toBe(0); // 搶牌的墩不算合約
       expect(LINES.grab2.explain(run, "win")).toContain("不是領出花色");
-      // 阿禾有沒有跟：照真的牌講
+      // 阿元有沒有跟：照真的牌講
       const followed = suitOf(run.trick!.follow) === suitOf(card);
       expect(texts(TALK.grab2.outro("win", run, ctx()))).toContain(followed ? "可惜比你小" : "只好墊一張");
     }
   });
-  it("第一幕結尾的幹話彩蛋：只有抽到才出現，選「蛤？」阿禾會圓回來", () => {
+  it("第一幕結尾的幹話彩蛋：只有抽到才出現，選「蛤？」阿元會圓回來", () => {
     const run = play("grab2", C(DI, 13)).run;
     expect(texts(TALK.grab2.outro("win", run, ctx({}, { egg: false })))).not.toContain("今天就是明天的昨天");
     const withEgg = TALK.grab2.outro("win", run, ctx({}, { egg: true }));
@@ -131,14 +131,14 @@ describe("第一幕：搶牌與一墩的完整循環", () => {
 });
 
 describe("第二幕：叫牌、加倍、合約與首攻", () => {
-  it("叫得低：阿禾 Pass，合約成立，防守方先出", () => {
+  it("叫得低：阿元 Pass，合約成立，防守方先出", () => {
     expect(act(start(step("bid")), bidIndex(5, Strain.Spades)).ok).toBe(false);          // 這關最多 4 線
     const { run, v } = play("bid", CONTRACT);
     expect(outcomeOf(run)).toBe("contract");
     expect([v.declarer, v.leaderSeat, v.highestBid, v.doubled]).toEqual([ME, AHE, CONTRACT, 0]);
     expect(LINES.bid.explain(run, "contract")).toContain("8 墩（6＋2）");
   });
-  it("叫 3 線以上：阿禾加倍 → 你可以再加倍或直接打；加倍後不能亂叫", () => {
+  it("叫 3 線以上：阿元加倍 → 你可以再加倍或直接打；加倍後不能亂叫", () => {
     const run = start(step("bid"));
     expect(act(run, bidIndex(3, Strain.Hearts)).ok).toBe(true);
     settle(run);
@@ -154,13 +154,13 @@ describe("第二幕：叫牌、加倍、合約與首攻", () => {
     expect(LINES.bid.explain(r2, "contract")).toContain("打成拿 60 分（沒加倍是 30）");
     expect(texts(answer("dbl", "what", run, ctx()))).toContain("沒加倍打成 30 分，加倍變 60、再加倍變 120");
   });
-  it("叫無王：阿禾說這局不能靠王吃；叫低／叫高的反應不一樣", () => {
+  it("叫無王：阿元說這局不能靠王吃；叫低／叫高的反應不一樣", () => {
     expect(bidReaction(bidIndex(1, Strain.NoTrump))).toContain("不能靠王吃");
     expect(bidReaction(bidIndex(2, Strain.Diamonds))).toContain("先穩一點");
     expect(bidReaction(bidIndex(3, Strain.Diamonds))).toContain("這麼敢");
     expect(bidReaction(Call.Pass)).toContain("先看看對手怎麼講");
   });
-  it("你不叫、阿禾也不叫：照規則重發（教學回到同一手）", () => {
+  it("你不叫、阿元也不叫：照規則重發（教學回到同一手）", () => {
     const run = start(step("bid"));
     expect(act(run, Call.Pass).ok).toBe(true);
     settle(run);
@@ -172,7 +172,7 @@ describe("第二幕：叫牌、加倍、合約與首攻", () => {
     expect(handSummary(step("bid").snapshot.hands[ME])).toBe("你現在：♠ 2 張、♥ 6 張、♦ 3 張、♣ 2 張；大牌有 ♠K ♥A ♥K ♥Q ♣A。");
     expect(texts(answer("plan", "help", start(step("bid")), ctx()))).toContain("花色多不代表一定贏");
   });
-  it("競叫：你叫 2♥、阿禾叫 2♠，再輪到你：比 2♠ 低的不能叫、可以叫更高或 Pass", () => {
+  it("競叫：你叫 2♥、阿元叫 2♠，再輪到你：比 2♠ 低的不能叫、可以叫更高或 Pass", () => {
     const run = start(step("bid2"));
     expect(act(run, CONTRACT).ok).toBe(true);
     settle(run);
@@ -191,7 +191,7 @@ describe("第二幕：叫牌、加倍、合約與首攻", () => {
 });
 
 describe("第三幕：先後順序、跟牌與王牌", () => {
-  it("黑桃是王牌、阿禾出 ♥A：有紅心不能王吃；企圖王吃阿禾會攔；為什麼要跟有說明", () => {
+  it("黑桃是王牌、阿元出 ♥A：有紅心不能王吃；企圖王吃阿元會攔；為什麼要跟有說明", () => {
     expect(act(start(step("follow")), C(SP, 2)).ok).toBe(false);
     expect(texts(answer("follow", "ruff", start(step("follow")), ctx()))).toContain("你還有紅心啊");
     expect(texts(answer("follow", "why", start(step("follow")), ctx()))).toContain("等你真的沒有紅心");
@@ -217,17 +217,17 @@ describe("第三幕：先後順序、跟牌與王牌", () => {
     expect(run.actions).toEqual([]);
     expect(texts(answer("ruff", "compare", run, ctx()))).toContain("這只是看看，還沒出喔");
   });
-  it("對照 A：阿禾先出 ♠K、你出 ♦A → ♠K 贏（♦A 不是黑桃也不是王牌）", () => {
+  it("對照 A：阿元先出 ♠K、你出 ♦A → ♠K 贏（♦A 不是黑桃也不是王牌）", () => {
     const { run } = play("flipA", C(DI, 14));
     expect(run.trick!.winner).toBe(AHE);
-    expect(trickWhy(run)).toContain("阿禾贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌");
-    expect(nextLeader(run)).toBe("下一墩由阿禾先出。");
+    expect(trickWhy(run)).toContain("阿元贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌");
+    expect(nextLeader(run)).toBe("下一墩由阿元先出。");
   });
-  it("對照 B：你先出 ♦A、阿禾沒有方塊出 ♠K → ♦A 贏", () => {
+  it("對照 B：你先出 ♦A、阿元沒有方塊出 ♠K → ♦A 贏", () => {
     const { run } = play("flipB", C(DI, 14));
     expect(run.trick!.follow).toBe(C(SP, 13));
     expect(run.trick!.winner).toBe(ME);
-    expect(trickWhy(run)).toContain("你贏：本墩先出方塊，阿禾的黑桃不是領出花色，也不是王牌");
+    expect(trickWhy(run)).toContain("你贏：本墩先出方塊，阿元的黑桃不是領出花色，也不是王牌");
     expect(LINES.flipB.explain(run, "win")).toContain("同樣兩張牌，改變誰先出，領出花色就不同");
   });
   it("都是王牌比點數；有領出花色不能改出別的", () => {
@@ -262,7 +262,7 @@ describe("第四幕：打成、超墩、倒約、加倍", () => {
     const m = midway(run)!;
     expect([m.won, m.mine, m.left, m.possible]).toEqual([false, 7, 1, true]);
     expect(texts(TALK.last.mid!(run, ctx()))).toContain("拿到就打成");
-    expect(run.trick!.lead).toBe(C(DI, 9));                          // 阿禾先出最後一墩
+    expect(run.trick!.lead).toBe(C(DI, 9));                          // 阿元先出最後一墩
     act(run, C(CL, 14)); settle(run);
     const r = run.game.lastResult!;
     expect([outcomeOf(run), r.made, r.undertricks, r.points, run.game.tricksWon[ME], run.game.tricksWon[AHE]]).toEqual(["down", false, 1, 10, 7, 6]);
@@ -325,7 +325,7 @@ describe("存檔、重播、不外洩", () => {
     expect(replay(step("bid2"), [bidIndex(1, Strain.Clubs)])).toBeNull();
     expect(replay(step("grab"), [C(CL, 12), C(CL, 4)])).toBeNull();
   });
-  it.each(paths)("%s 出 %j：阿禾沒出過的手牌、他摸的暗牌都看不到", (id, acts) => {
+  it.each(paths)("%s 出 %j：阿元沒出過的手牌、他摸的暗牌都看不到", (id, acts) => {
     const run = runIt(id, acts);
     const v = run.game.viewFor(ME);
     const s = step(id).snapshot;
@@ -372,7 +372,7 @@ function attachPlayer(t: LocalTable, rng: () => number) {
   return log;
 }
 
-describe("單機：跟電腦（阿禾）打", () => {
+describe("單機：跟電腦（阿元）打", () => {
   it("一整場打到有人先到 100 分；每一步都守規則、看不到電腦的牌", async () => {
     vi.useFakeTimers();
     try {
@@ -436,14 +436,14 @@ describe("單機：跟電腦（阿禾）打", () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it("連線前先送 welcome（座位 0）和 lobby（對手叫阿禾）", async () => {
+  it("連線前先送 welcome（座位 0）和 lobby（對手叫阿元）", async () => {
     const t = new LocalTable("小明", true, { trick: 1e9, play: 1e9, lead: 1e9, call: 1e9 }, new MemStore());
     const got: ServerMsg[] = [];
     t.onMessage = m => got.push(m);
     t.open();
     await flush();
     expect(got[0]).toMatchObject({ t: "welcome", seat: 0 });
-    expect(got[1]).toMatchObject({ t: "lobby", started: true, seats: [{ name: "小明" }, { name: "阿禾" }] });
+    expect(got[1]).toMatchObject({ t: "lobby", started: true, seats: [{ name: "小明" }, { name: "阿元" }] });
     expect(got.some(m => m.t === "state")).toBe(true);
     t.close();
   });

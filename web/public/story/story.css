@@ -1,4 +1,4 @@
-/* 阿禾的牌店：故事書的一頁 = 一張可以點的牌桌（左／上）＋阿禾說話的米色紙（右／下）
+/* 阿元的牌店：故事書的一頁 = 一張可以點的牌桌（左／上）＋阿元說話的米色紙（右／下）
    顏色跟著牌桌主題（暮色藍／酒紅／經典綠），變數都在 /style.css */
 html:has(body.story), body.story { height: auto; min-height: 100%; }
 body.story { overscroll-behavior: auto; background-attachment: fixed; }
@@ -32,7 +32,7 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .opening h1:focus { outline: none; }
 .setting { grid-column: 1 / -1; margin: 8px 0 0; color: #E3D3B0; line-height: 1.8; font-size: 15px; }
 
-/* ---------------- 一頁：牌桌＋阿禾 ---------------- */
+/* ---------------- 一頁：牌桌＋阿元 ---------------- */
 .spread { display: grid; grid-template-columns: 1fr; border-radius: 20px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.4), 0 0 0 1px rgba(233,201,139,.18); }
 @media (min-width: 860px) { .spread { grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); } }
 
@@ -118,7 +118,7 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .tally small { font-size: 12px; color: #EADFC6; }
 .tally .pts { font-style: normal; font: 700 15px var(--display); color: #2A1B05; background: var(--gold-hi); padding: 1px 10px; border-radius: 999px; margin-top: 3px; }
 
-/* ---------------- 阿禾說（米色紙） ---------------- */
+/* ---------------- 阿元說（米色紙） ---------------- */
 .narrator { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 20px 20px 18px;
   background: linear-gradient(120deg, #FFFBF2, #F6EEDC); color: #2B2A33; }
 .seller { display: flex; gap: 10px; align-items: center; }
@@ -329,7 +329,7 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
   .tally strong { font-size: 26px; }
   .narrator h2 { font-size: 16.5px; }
   .narrator { padding: 8px 12px; }
-  /* 叫牌這一頁最擠：阿禾的牌背先收起來（上面的字已經說了 13 張），按鈕、間距收一點 */
+  /* 叫牌這一頁最擠：阿元的牌背先收起來（上面的字已經說了 13 張），按鈕、間距收一點 */
   .stable[data-step="bid"] { padding-top: 26px; }
   .stable[data-step="bid"] .sopp { display: none; }
   /* 意思和「叫 2♥」並排，省下一整行 */
@@ -369,7 +369,7 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .auct.mini { font-size: 12px; text-align: center; opacity: .9; }
 .auct.mini span { margin: 0 2px; } .auct.mini i { margin: 0 4px; font-style: normal; opacity: .6; }
 
-/* ---------- 阿禾問你：A／B／C 選項（像在跟朋友回話，不像考卷） ---------- */
+/* ---------- 阿元問你：A／B／C 選項（像在跟朋友回話，不像考卷） ---------- */
 .choices { width: 100%; display: flex; flex-direction: column; gap: 7px; }
 .s-choice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 9px 14px; border: 0; border-radius: 12px; cursor: pointer; text-align: left; text-decoration: none;
   font: 500 15.5px/1.35 var(--display); color: #2B2118; background: rgba(255,250,235,.92);
@@ -387,7 +387,7 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
 .sgrid button small { font: 500 10.5px/1.2 var(--body); color: #6A563E; letter-spacing: 0; }
 .sgrid button.sel small { color: #2A1B05; }
 .splate .big .x, .auct .x { margin-left: 6px; font-size: .6em; padding: 0 6px; border-radius: 3px; color: #F7E9CC; background: var(--wine); vertical-align: middle; }
-/* 手機：選項改成會換行的小籤，阿禾的問題和手牌都要看得到 */
+/* 手機：選項改成會換行的小籤，阿元的問題和手牌都要看得到 */
 @media (max-width: 700px) {
   .choices { flex-direction: row; flex-wrap: wrap; gap: 6px; }
   .s-choice { width: auto; flex: 1 1 auto; min-height: 38px; padding: 6px 12px 6px 8px; gap: 7px; font-size: 14.5px; border-radius: 10px; }
@@ -396,3 +396,7 @@ body.story { overscroll-behavior: auto; background-attachment: fixed; }
   .narrator[data-choosing="1"] #more { display: none; }
   .narrator[data-choosing="1"] { max-height: 58%; }
 }
+
+/* 測試站：上方中間一個小標（正式站不會出現） */
+html[data-stage="staging"] body::after { content: "測試站"; position: fixed; z-index: 90; top: env(safe-area-inset-top); left: 50%; translate: -50% 0; pointer-events: none;
+  padding: 1px 10px 2px; border-radius: 0 0 8px 8px; font: 700 11px/1.4 var(--display, serif); letter-spacing: .3em; color: #2B2118; background: #F3D488; box-shadow: 0 1px 4px rgba(0,0,0,.35); }

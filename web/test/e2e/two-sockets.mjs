@@ -63,7 +63,7 @@ const ghost = player("ZZZZZZ", "x"); await ghost.ready;
 if (!ghost.msgs.some(m => m.t === "gone")) fail("不存在的房號應該回 gone");
 console.log("✓ 打錯房號會被告知房間不存在");
 
-// 回個話：轉給兩邊（標座位，不是阿禾講的）；連點只過第一句；亂傳的編號丟掉；牌局不受影響
+// 回個話：轉給兩邊（標座位，不是阿元講的）；連點只過第一句；亂傳的編號丟掉；牌局不受影響
 {
   const before = JSON.stringify(host.state), evBefore = guest.events.length;
   const got = () => guest.msgs.filter(m => m.t === "emote");

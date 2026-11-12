@@ -21,7 +21,7 @@ export interface FxSettings {
   muted: boolean;         // 一鍵靜音
   coach: boolean;         // 對局中的新手提示（每個階段第一次出現一次）
   quality: Quality;       // 特效品質
-  talk: "full" | "lite" | "off";   // 阿禾吐槽：正常互動／精簡互動／關閉額外吐槽（規則、錯誤、結算照常顯示）
+  talk: "full" | "lite" | "off";   // 阿元吐槽：正常互動／精簡互動／關閉額外吐槽（規則、錯誤、結算照常顯示）
 }
 export const INTENSITY_LABELS = ["關閉", "簡化", "標準", "強"];
 const KEY = "hb-web-settings";

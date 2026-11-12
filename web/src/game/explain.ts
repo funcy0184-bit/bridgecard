@@ -44,7 +44,7 @@ export function whyTrick(lead: number, follow: number, trump: number, followName
     why: `本墩先出${ln}，${followName}的${SUIT_NAME[fs]}不是領出花色${notTrump}${bigger ? `，${bigger}` : ""}。` };
 }
 
-// 一句完整的結果：「阿禾贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌。」
+// 一句完整的結果：「阿元贏：本墩先出黑桃，你的方塊不是領出花色，也不是王牌。」
 export function trickSentence(lead: number, follow: number, trump: number, leaderName: string, followerName: string): { winnerIsLeader: boolean; text: string } {
   const w = whyTrick(lead, follow, trump, followerName === "你" ? "你" : followerName);
   return { winnerIsLeader: w.leaderWins, text: `${w.leaderWins ? leaderName : followerName}贏：${w.why}` };

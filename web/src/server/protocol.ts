@@ -34,17 +34,17 @@ export const PROTOCOL_VERSION = 2;
 
 export type RoomStatus = "WAITING" | "READY" | "IN_GAME" | "PAUSED" | "SETTLEMENT" | "REMATCH" | "CLOSED";
 export type Mode = "classic" | "laststand";
-// 模式：經典蜜月橋牌；逆命賭局（雙人九墩心理戰，規則引擎在 src/laststand）
+// 模式：經典蜜月橋牌；梭了啦（雙人九墩心理戰，規則引擎在 src/laststand）
 export const MODES: Record<Mode, { label: string; enabled: boolean }> = {
   classic: { label: "經典牌局", enabled: true },
-  laststand: { label: "逆命賭局", enabled: true },
+  laststand: { label: "梭了啦！這局賭什麼？", enabled: true },
 };
 
 export type ClientMsg =
   | { t: "hello"; v?: number; token?: string | null; name?: string }
   | { t: "name"; name: string; cid?: string }
-  | { t: "stake"; stake: string; cid?: string }                                  // 逆命賭局：賭局契約書（賭上之物）
-  | { t: "ls"; a: LSAction; cid?: string; ver?: number; gid?: string }          // 逆命賭局：牌局動作
+  | { t: "stake"; stake: string; vow?: string; cid?: string }                    // 梭了啦：賭局契約書（賭上之物＋選填的賽前豪言）
+  | { t: "ls"; a: LSAction; cid?: string; ver?: number; gid?: string }          // 梭了啦：牌局動作
   | { t: "ready"; ready: boolean; cid?: string }
   | { t: "mode"; mode: Mode; cid?: string }
   | { t: "play"; card: number; cid?: string; ver?: number; gid?: string }
@@ -61,9 +61,10 @@ export interface SeatInfo {
   taken: boolean; online: boolean; name: string;
   ready: boolean; rematch: boolean;
   offlineSince: number | null;           // 斷線從什麼時候開始（伺服器時間；畫面算經過幾秒）
-  stake: string;                         // 逆命賭局：契約書上賭上之物（空的 = 還沒簽）
+  stake: string;                         // 梭了啦：契約書上賭上之物（空的 = 還沒簽）
+  vow: string;                           // 梭了啦：賽前豪言（選填，空的 = 沒寫）
 }
-// 結束原因：target 經典到目標分數；nine 逆命九墩打完；elimination 逆命有人籌碼歸零；forfeit 認輸；timeout 斷線逾時
+// 結束原因：target 經典到目標分數；nine 梭了啦九墩打完；elimination 梭了啦有人籌碼歸零；forfeit 認輸；timeout 斷線逾時
 export type EndReason = "target" | "nine" | "elimination" | "forfeit" | "timeout";
 export interface MatchRecord { gid: string; at: number; winner: number; reason: EndReason; scores: [number, number]; hands: number; mode?: Mode; coin?: number }
 export interface PairStats { played: number; wins: [number, number]; draws: number; streak: { seat: number; n: number } | null; last: MatchRecord[] }
@@ -91,14 +92,14 @@ export type ServerMsg =
   | { t: "ack"; cid: string; ver: number }
   | { t: "reject"; cid?: string; code: RejectCode; msg: string; ver: number }
   | { t: "resync"; r: RoomView; s: TableState | null; ver: number; eid: number; ls?: LSView | null }
-  | { t: "lsEvent"; e: LSEvent; eid?: number; ver?: number; gid?: string }        // 逆命賭局事件（私人的只給那個座位）
-  | { t: "lsState"; s: LSView; ver?: number; gid?: string }                       // 逆命賭局：你看得到的牌桌
+  | { t: "lsEvent"; e: LSEvent; eid?: number; ver?: number; gid?: string }        // 梭了啦事件（私人的只給那個座位）
+  | { t: "lsState"; s: LSView; ver?: number; gid?: string }                       // 梭了啦：你看得到的牌桌
   | { t: "recap"; gid: string; items: Highlight[] }
   | { t: "full" }
   | { t: "gone" }                                           // 房間不存在（打錯房號或已過期）
   | { t: "closed"; msg: string }                            // 房間關了（兩人都離開、過期）
   | { t: "error"; msg: string; code?: "VERSION" | "RATE" | "NAME" }
-  | { t: "emote"; seat: number; i: number }                 // 某個座位回了一句（照暱稱顯示，不是阿禾講的）
+  | { t: "emote"; seat: number; i: number }                 // 某個座位回了一句（照暱稱顯示，不是阿元講的）
   | { t: "pong" };
 
 // 斷線時間軸（集中在這裡，方便調整；本機測試可以用環境變數縮短）
@@ -151,21 +152,42 @@ export function normalizeName(raw: unknown): string {
     .replace(/[\p{Cc}\p{Zl}\p{Zp}\s]+/gu, " ")
     .trim();
 }
-// 逆命賭局：賭上之物（純遊戲敘事，不涉及實際交易）
-//   空白 → 預設「我最後的尊嚴」；最多 24 個字；不接受網址、email、電話號碼、HTML／程式碼符號
+// 梭了啦！這局賭什麼？（程式代號 laststand）：賭局契約書（純遊戲敘事，不涉及實際交易）
+//   賭上之物：空白 → 預設「我最後的尊嚴」；最多 24 個字
+//   賽前豪言：選填；最多 30 個字（輸了會在戰報被原句唸回來）
+//   兩個都不接受：網址、email、電話號碼、HTML／程式碼符號、太衝的髒話與歧視字眼（對方會看到）
 export const DEFAULT_STAKE = "我最後的尊嚴";
 export const STAKE_MAX = 24;
+export const VOW_MAX = 30;
+// 太衝的字眼：比對前去掉空白和標點、英文轉小寫（「幹 你 娘」「F.u.c.k」一樣擋）；只放明確的辱罵／歧視，不擋單一個「幹」這種日常用字
+const BLOCKED = ["幹你娘", "干你娘", "幹您娘", "幹你老", "操你媽", "操你妈", "操你娘", "草泥馬", "草你媽", "肏", "雞掰", "機掰", "雞巴", "鸡巴", "屌你", "死全家", "去死", "王八蛋",
+  "婊子", "賤人", "賤貨", "妓女", "支那", "黑鬼", "智障", "腦殘", "白痴", "白癡", "低能", "fuck", "cunt", "nigger", "nigga", "faggot", "retard", "bitch"];
+const squash = (t: string) => t.toLowerCase().replace(/[\s\p{P}\p{S}_]+/gu, "");
+export const tooHarsh = (t: string) => { const x = squash(t); return BLOCKED.some(w => x.includes(w)); };
+function unsafeText(text: string, what: string): string | null {
+  if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(text)) return "這裡不能放 email。";
+  if (/https?:|www\.|\.(com|net|org|tw|io|me|cc|ly)\b/i.test(text)) return "這裡不能放網址。";
+  if (/\d[\d\s-]{6,}\d/.test(text)) return "這裡不能放電話號碼或長串數字。";
+  const bad = [...text].find(ch => /[<>{}[\]\\`|^$]/.test(ch) || /[\p{Cc}\p{Cf}]/u.test(ch) && ch !== "\u200D" && ch !== "\uFE0F");
+  if (bad) return `${what}不能用「${bad}」。`;
+  if (tooHarsh(text)) return "這句有點太衝了（對方也看得到），換個說法吧。";
+  return null;
+}
 export type StakeCheck = { ok: true; stake: string } | { ok: false; msg: string };
 export function checkStake(raw: unknown): StakeCheck {
   const stake = normalizeName(raw);
   if (!stake) return { ok: true, stake: DEFAULT_STAKE };
   if (nameLength(stake) > STAKE_MAX || [...stake].length > STAKE_MAX * 3) return { ok: false, msg: `賭上之物最多 ${STAKE_MAX} 個字，請縮短一點。` };
-  if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(stake)) return { ok: false, msg: "這裡不能放 email。" };
-  if (/https?:|www\.|\.(com|net|org|tw|io|me|cc|ly)\b/i.test(stake)) return { ok: false, msg: "這裡不能放網址。" };
-  if (/\d[\d\s-]{6,}\d/.test(stake)) return { ok: false, msg: "這裡不能放電話號碼或長串數字。" };
-  const bad = [...stake].find(ch => /[<>{}[\]\\`|^$]/.test(ch) || /[\p{Cc}\p{Cf}]/u.test(ch) && ch !== "\u200D" && ch !== "\uFE0F");
-  if (bad) return { ok: false, msg: `賭上之物不能用「${bad}」。` };
-  return { ok: true, stake };
+  const bad = unsafeText(stake, "賭上之物");
+  return bad ? { ok: false, msg: bad } : { ok: true, stake };
+}
+export type VowCheck = { ok: true; vow: string } | { ok: false; msg: string };
+export function checkVow(raw: unknown): VowCheck {
+  const vow = normalizeName(raw ?? "");
+  if (!vow) return { ok: true, vow: "" };
+  if (nameLength(vow) > VOW_MAX || [...vow].length > VOW_MAX * 3) return { ok: false, msg: `賽前豪言最多 ${VOW_MAX} 個字，請縮短一點。` };
+  const bad = unsafeText(vow, "賽前豪言");
+  return bad ? { ok: false, msg: bad } : { ok: true, vow };
 }
 
 export type NameCheck = { ok: true; name: string } | { ok: false; code: "EMPTY" | "TOO_LONG" | "BAD_CHARS"; msg: string };

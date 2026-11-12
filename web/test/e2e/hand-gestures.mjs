@@ -8,7 +8,7 @@ const base = process.argv[2] ?? "http://127.0.0.1:8787";
 let fails = 0; const ok = (c, m) => { console.log(c ? "  ✓" : "  ✗", m); if (!c) fails++; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// 固定牌局：2♥ 你是莊家；阿禾先出 ♠K；你手上 8 張，只有 ♠3、♠9 能出（要跟黑桃）
+// 固定牌局：2♥ 你是莊家；阿元先出 ♠K；你手上 8 張，只有 ♠3、♠9 能出（要跟黑桃）
 const c = (s, r) => s * 13 + (r - 2);
 const CL = 0, DI = 1, HE = 2, SP = 3;
 const MINE = [c(SP, 3), c(SP, 9), c(HE, 5), c(HE, 11), c(CL, 9), c(CL, 12), c(DI, 2), c(DI, 13)];
