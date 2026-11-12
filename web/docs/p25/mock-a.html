@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- P2.5-A 版面示意（設計參考，不是正式程式；先開 npx wrangler dev，再用瀏覽器開這個檔，?s=bet／lock／wait 切狀態） -->
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P2.5-A 版面示意</title>
+<base href="http://127.0.0.1:8787/">
+<link rel="stylesheet" href="http://127.0.0.1:8787/style.css">
+<style>
+/* P2.5-A 版面示意（只是示意圖，不是正式程式）：沿用 style.css 的木桌、紙張、綠絨、黑金細框 */
+html, body { height: 100%; overflow: hidden; }
+.p25 { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto auto; gap: 6px;
+  padding: 8px 12px 10px; background: var(--grain), linear-gradient(180deg, var(--wood-1), var(--wood-2) 55%, var(--wood-3)); color: var(--on-wood); }
+/* ① 頂列 */
+.z-top { display: flex; align-items: center; gap: 8px; height: 40px; }
+.z-top .z-tk { font: 600 15px var(--display); letter-spacing: .1em; color: var(--gold-pale); white-space: nowrap; }
+.z-top .z-tk small { font-size: 12px; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.z-top .z-live { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: right; }
+.z-top .z-live i { font-style: normal; font-size: 10.5px; padding: 0 5px; border-radius: 5px; background: rgba(226,184,96,.18); color: var(--gold-pale); margin-right: 5px; }
+.z-top .z-menu { width: 38px; height: 38px; flex: none; }
+/* ② 對手座位：一條紙牌名牌 */
+.z-opp { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 10px; padding: 6px 10px; border-radius: 10px;
+  background: rgba(251,244,228,.06); box-shadow: inset 0 0 0 1px rgba(226,184,96,.32); }
+.z-seal { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 700 17px var(--display); color: #F7E9CC;
+  background: radial-gradient(circle at 35% 30%, #9E3A47, #6A1E29 60%, #4A141C); box-shadow: 0 0 0 2px rgba(226,184,96,.5); }
+.z-who b { font: 500 16px var(--display); }
+.z-who small { font-size: 11.5px; color: var(--muted); margin-left: 6px; }
+.z-who .z-say { display: inline-block; margin-left: 6px; font-size: 12px; padding: 0 7px; border-radius: 9px; color: var(--paper-hi); background: rgba(122,39,50,.85); }
+.z-meta { grid-column: 2; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.z-backs { display: flex; } .z-backs .card { --cw: 13px; margin-left: -8px; box-shadow: 0 1px 2px rgba(0,0,0,.5); } .z-backs .card:first-child { margin-left: 0; }
+.z-pips span { margin-right: 5px; } .z-pips b { color: var(--on-wood); font-weight: 500; }
+.z-skills { display: flex; gap: 3px; } .z-skills i { font-style: normal; font-size: 10.5px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%;
+  color: var(--ink); background: var(--gold-pale); } .z-skills i.z-used { background: rgba(255,255,255,.12); color: rgba(241,227,196,.35); text-decoration: line-through; }
+.z-bank { grid-row: 1 / span 2; grid-column: 3; display: flex; align-items: center; gap: 6px; }
+.z-bank b { font: 700 24px/1 var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
+/* 籌碼（只是靜態示意；C 階段才會動） */
+.z-chips { position: relative; width: 26px; height: 26px; }
+.z-chip { position: absolute; left: 0; width: 26px; height: 9px; border-radius: 50%; background: radial-gradient(ellipse at 50% 35%, #E9C979, #B98A3E 70%);
+  box-shadow: inset 0 -2px 0 #7a5a25, 0 1px 1px rgba(0,0,0,.5); }
+.z-chip.z-r { background: radial-gradient(ellipse at 50% 35%, #C8505C, #7A2732 70%); box-shadow: inset 0 -2px 0 #4a141c, 0 1px 1px rgba(0,0,0,.5); }
+/* ③ 牌桌（綠絨）：對手的出牌位在上、我的在下；中間是本墩方向與疊池 */
+.z-felt { position: relative; border-radius: 18px; min-height: 0; display: grid; grid-template-rows: 1fr auto 1fr; align-items: center; padding: 10px 14px;
+  background: radial-gradient(90% 75% at 50% 45%, var(--felt) 0%, var(--felt-dark) 70%, var(--felt-deep) 100%);
+  box-shadow: inset 0 0 0 2px rgba(185,138,62,.6), inset 0 0 0 6px var(--felt-dark), inset 0 0 0 7px rgba(185,138,62,.3), 0 6px 16px rgba(0,0,0,.4); }
+.z-seatrow { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.z-slot { --cw: clamp(44px, 13vw, 58px); position: relative; width: var(--cw); height: calc(var(--cw) * 1.42); border-radius: 7px; display: grid; place-items: center; }
+.z-slot.z-empty { box-shadow: inset 0 0 0 1.5px rgba(226,184,96,.45); background: rgba(0,0,0,.12); }
+.z-slot.z-empty span { font-size: 10.5px; color: rgba(243,212,136,.75); text-align: center; line-height: 1.3; padding: 0 3px; }
+.z-slot .card { --cw: inherit; }
+.z-slot .z-peek { position: absolute; right: -6px; bottom: -8px; font: 700 11px var(--display); padding: 1px 5px; border-radius: 6px; color: var(--ink); background: var(--paper-hi); box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.z-bet { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 52px; }
+.z-bet .z-chips { height: 30px; }
+.z-bet small { font-size: 11px; color: rgba(241,227,196,.8); white-space: nowrap; }
+.z-bet b { font: 700 16px var(--display); color: var(--gold-pale); }
+.z-mid { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 4px 0; }
+.z-medal { display: flex; flex-direction: column; align-items: center; padding: 4px 14px 5px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.32)); box-shadow: inset 0 0 0 1px rgba(226,184,96,.55); }
+.z-medal b { font: 700 28px/1.1 var(--display); letter-spacing: .3em; padding-left: .3em; color: #CFE3F2; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.z-medal small { font-size: 10.5px; color: rgba(241,227,196,.7); }
+.z-pot { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.z-pot small { font-size: 10.5px; color: rgba(241,227,196,.75); }
+.z-last { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: rgba(241,227,196,.85); padding: 1px 7px; border-radius: 8px; background: rgba(0,0,0,.25); }
+.z-last b { color: var(--good); font-weight: 500; }
+/* 我的名牌：細細一條（角色、技能、籌碼） */
+.z-me { display: flex; align-items: center; gap: 8px; padding: 0 4px; height: 26px; font-size: 12px; color: var(--muted); }
+.z-me b { font: 500 15px var(--display); color: var(--on-wood); }
+.z-me .z-bank2 { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+.z-me .z-bank2 b { font: 700 20px/1 var(--display); color: var(--gold-pale); }
+.z-me .z-chips { width: 22px; height: 20px; } .z-me .z-chip { width: 22px; height: 8px; }
+/* ④ 手牌：扇形重疊，選到的升起 */
+.z-hand { display: flex; justify-content: center; align-items: flex-end; height: calc(var(--hw) * 1.42 + 10px); padding-top: 10px; --hw: clamp(46px, 14.5vw, 62px); }
+.z-hand .card { --cw: var(--hw); margin-left: calc(var(--hw) * -0.38); box-shadow: -2px 2px 5px rgba(0,0,0,.45); transition: translate .2s; }
+.z-hand .card:first-child { margin-left: 0; }
+.z-hand .card.z-sel { translate: 0 -12px; box-shadow: 0 0 0 2px var(--gold-pale), 0 8px 14px rgba(0,0,0,.5); }
+.z-hand .card.z-dim { filter: saturate(.75) brightness(.82); }
+/* ⑤ 行動列：一句話＋主要按鈕 */
+.z-act { display: flex; flex-direction: column; gap: 7px; }
+.z-ask { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; }
+.z-ask p { margin: 0; flex: 1; font: 600 15px/1.35 var(--display); color: var(--ink); }
+.z-ask p small { display: block; font: 400 12px var(--body); color: var(--ink-soft); }
+.z-ask .z-q { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 0; font: 700 14px var(--display); color: var(--ink); background: var(--paper-2); box-shadow: inset 0 0 0 1px rgba(185,138,62,.7); }
+.z-row { display: flex; gap: 8px; }
+.z-row .btn { flex: 1; min-width: 0; padding: 11px 6px; font-size: 15px; line-height: 1.2; }
+.z-row .btn small { display: block; font-size: 11.5px; font-weight: 500; letter-spacing: 0; opacity: .85; }
+.z-row .z-eye { flex: none; width: 50px; padding: 6px 0; font-size: 12px; }
+.z-wait { text-align: center; font: 500 14px var(--display); color: var(--gold-pale); padding: 14px 0; }
+/* 小螢幕（短）：牌桌和手牌一起縮，不捲動 */
+@media (max-height: 600px) {
+  .p25 { gap: 5px; padding-top: 6px; }
+  .z-medal b { font-size: 23px; }
+  .z-slot { --cw: 40px; }
+  .z-hand { --hw: 44px; padding-top: 10px; }
+  .z-opp { padding: 4px 8px; } .z-seal { width: 32px; height: 32px; font-size: 15px; }
+  .z-row .btn { padding: 9px 4px; }
+}
+</style></head>
+<body><div class="p25" id="root"></div>
+<script>
+const SUIT = ["♣", "♦", "♥", "♠"], RT = { 11: "J", 12: "Q", 13: "K", 14: "A" };
+const card = (r, s, cls = "") => `<div class="card ${s === 1 || s === 2 ? "red" : ""} ${r >= 11 && r <= 13 ? "face" : ""} ${cls}"><span class="ix"><b>${RT[r] ?? r}</b><i>${SUIT[s]}</i></span><span class="pip">${SUIT[s]}</span><span class="ix rev"><b>${RT[r] ?? r}</b><i>${SUIT[s]}</i></span></div>`;
+const back = (cls = "") => `<div class="card back ${cls}"></div>`;
+const stack = (n, red) => `<div class="z-chips">${Array.from({ length: Math.min(n, 6) }, (_, i) => `<div class="z-chip ${red ? "z-r" : ""}" style="bottom:${i * 4}px"></div>`).join("")}</div>`;
+const menu = `<button class="icon brass z-menu" type="button"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>`;
+const S = new URLSearchParams(location.search).get("s") ?? "bet";
+const hand = (cards, sel = -1, dim = false) => `<div class="z-hand">${cards.map(([r, s], i) => card(r, s, (i === sel ? "z-sel " : "") + (dim ? "z-dim" : ""))).join("")}</div>`;
+const opp = (say, n, used = []) => `<div class="z-opp"><div class="z-seal">測</div><div class="z-who"><b>測試 AI</b><small>宣戰權</small>${say ? `<span class="z-say">${say}</span>` : ""}</div>
+  <div class="z-bank">${stack(4)}<b>${n}</b></div>
+  <div class="z-meta"><span class="z-backs">${back().repeat(6)}</span><span class="z-pips"><span>大<b>2</b></span><span>中<b>3</b></span><span>小<b>1</b></span></span>
+  <span class="z-skills"><i class="${used.includes("f") ? "z-used" : ""}">翻</i><i>保</i><i class="${used.includes("r") ? "z-used" : ""}">讀</i></span></div></div>`;
+const topbar = (live) => `<div class="z-top"><span class="z-tk">第 3／9 墩<small>底注 1</small></span><span class="z-live">${live}</span>${menu}</div>`;
+const me = (role, n, used = []) => `<div class="z-me"><b>你</b><span>${role}</span><span class="z-skills"><i class="${used.includes("f") ? "z-used" : ""}">翻</i><i class="${used.includes("s") ? "z-used" : ""}">保</i><i class="${used.includes("r") ? "z-used" : ""}">讀</i></span><span class="z-bank2"><span class="z-chips">${[0,1,2].map(i => `<div class="z-chip" style="bottom:${i*4}px"></div>`).join("")}</span><b>${n}</b></span></div>`;
+const H = [[13, 3], [12, 1], [11, 0], [9, 2], [9, 3], [8, 0], [5, 3], [3, 1]];
+let html = "";
+if (S === "bet") html = topbar(`<i>聊天室</i>這已經是測試 AI 本場第 3 次加注。`) + opp("加注到 3", 12, ["f"]) +
+  `<div class="z-felt">
+    <div class="z-seatrow"><div class="z-slot">${back()}</div><div class="z-bet">${stack(3, true)}<b>3</b><small>測試 AI 押</small></div></div>
+    <div class="z-mid"><div class="z-medal"><b>比小</b><small>下一墩 比大</small></div><div class="z-pot">${stack(2)}<small>疊池 2</small></div></div>
+    <div class="z-seatrow"><div class="z-slot">${back()}<span class="z-peek">J♣</span></div><div class="z-bet">${stack(1)}<b>1</b><small>你押</small></div></div>
+    <span class="z-last">上一墩：你贏 <b>+2</b></span></div>` +
+  me("下注先手", 14, ["r"]) + hand(H.filter((_, i) => i !== 2)) +
+  `<div class="z-act"><div class="z-ask paper"><p>測試 AI 加注到 3，你要跟嗎？<small>跟：翻牌比小，贏 +3、輸 −3（＋疊池 2）</small></p><button class="z-q" type="button">?</button></div>
+   <div class="z-row"><button class="btn wine" type="button">接戰<small>補 2</small></button><button class="btn paper" type="button">棄牌<small>輸 1</small></button><button class="btn paper" type="button">反加<small>到 4</small></button><button class="btn paper z-eye" type="button">讀心</button></div></div>`;
+if (S === "lock") html = topbar(`<i>主播</i>第三墩。兩邊都還在想。`) + opp("已蓋牌", 12) +
+  `<div class="z-felt">
+    <div class="z-seatrow"><div class="z-slot">${back()}</div><div class="z-bet">${stack(1, true)}<b>1</b><small>底注</small></div></div>
+    <div class="z-mid"><div class="z-medal"><b>比小</b><small>下一墩 比大</small></div></div>
+    <div class="z-seatrow"><div class="z-slot z-empty"><span>蓋牌區</span></div><div class="z-bet">${stack(1)}<b>1</b><small>底注</small></div></div>
+    <span class="z-last">上一墩：你贏 <b>+2</b></span></div>` +
+  me("下注先手", 14) + hand(H, 2) +
+  `<div class="z-act"><div class="z-ask paper"><p>選一張牌蓋到桌上<small>比小：數字越小越好。蓋了就不能換。</small></p><button class="z-q" type="button">?</button></div>
+   <div class="z-row"><button class="btn wine" type="button">蓋牌（J♣）</button></div></div>`;
+if (S === "wait") html = topbar(`<i>公告</i>疊池目前 2 枚。`) + opp("思考中…", 12) +
+  `<div class="z-felt">
+    <div class="z-seatrow"><div class="z-slot z-empty"><span>思考中</span></div><div class="z-bet">${stack(1, true)}<b>1</b><small>底注</small></div></div>
+    <div class="z-mid"><div class="z-medal"><b>比小</b><small>下一墩 比大</small></div><div class="z-pot">${stack(2)}<small>疊池 2</small></div></div>
+    <div class="z-seatrow"><div class="z-slot">${back()}<span class="z-peek">5♠</span></div><div class="z-bet">${stack(1)}<b>1</b><small>底注</small></div></div>
+    <span class="z-last">上一墩：你贏 <b>+2</b></span></div>` +
+  me("下注先手", 14) + hand(H.filter((_, i) => i !== 6), -1, true) +
+  `<div class="z-act"><p class="z-wait">等測試 AI 蓋牌…</p></div>`;
+document.getElementById("root").innerHTML = html;
+</script></body></html>
