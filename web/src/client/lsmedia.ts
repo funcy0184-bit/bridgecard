@@ -33,7 +33,7 @@ const CH_LABEL: Record<string, string> = { chat: "聊天室", anchor: "主播", 
 const PROGRAM_LABEL = Object.fromEntries(PROGRAMS.map(p => [p.id, p.label]));
 
 // 驗收用：最近演過什麼（不含任何隱藏資訊；都是畫面上本來就會出現的字）
-const played: { id: string; channel: string; title?: string; text: string; at: number; mode: string }[] = [];
+const played: { id: string; channel: string; title?: string; text: string; at: number; mode: string; pr: number }[] = [];
 Object.assign(globalThis, { __hbCast: () => ({ gid, played: played.slice(), press: $("lstable").dataset.press ?? "1", pending: stage.pending }) });
 
 export function mediaInit(deps: MediaDeps) {
@@ -227,6 +227,6 @@ function clearScreen() {
 
 function log(c: Cue, mode: string, t: number) {
   if (played.some(p => p.id === c.id)) return;
-  played.push({ id: c.id, channel: c.channel, title: c.title, text: c.lines.map(l => (l.who ? `${l.who}：` : "") + l.text).join("／"), at: Math.round(t), mode });
+  played.push({ id: c.id, channel: c.channel, title: c.title, text: c.lines.map(l => (l.who ? `${l.who}：` : "") + l.text).join("／"), at: Math.round(t), mode, pr: c.priority });
   if (played.length > 80) played.shift();
 }
