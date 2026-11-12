@@ -1,6 +1,6 @@
 # 梭了啦！這局賭什麼？ P1.5：UI 改版與驗收紀錄
 
-分支：`feature/laststand-v1`（**沒有合併、沒有部署**；正式網站沒有任何變動）
+分支：`feature/laststand-v1`；**2026-11-12 已上線**（見最後「部署紀錄」）
 程式代號照舊是 `laststand`（舊名「逆命賭局」），房間、戰績、規則引擎的資料格式都沒改名。
 
 ## 這一版做了什麼
@@ -65,3 +65,19 @@
 ## 待人工驗收（必須真機）
 
 清單在 `test/MANUAL-online.md` 的 C3（梭了啦，15 項）、C4（阿元與教學分流，5 項），全部標「待人工驗收」：iPhone Safari 注音選字、Android 中文輸入法、LINE 內建瀏覽器、鍵盤彈出、iOS 安全區域（瀏海／動態島／Home 指示條、直拿橫拿）、底部固定操作列、長文字與內容限制、首頁轉場在舊手機的流暢度、阿元教學分流（含舊手機存檔）、兩支真手機不同網路的連線、斷線恢復、再戰。
+
+## 部署紀錄（2026-11-12）
+
+- 正式網址：https://bridgecard.funcy0184.workers.dev/
+- 版本：`1d3d96d`（`feature/web-online-v1` 從 `0b0e8c2` 快轉；沒有合併提交、沒有強制推送）；Workers Builds 自動建置，網站版本戳記 `1d3d96d`（2026/11/12 12:52:33 台灣時間）
+- 回復點：`backup/web-online-v1-0b0e8c2`
+- 部署前檢查：
+  - Durable Object 設定沒變（Room／Limiter 兩個類別、v1／v2 兩個遷移標籤原封不動）；`env.staging` 只在 `--env staging` 才用到；`npx wrangler deploy` 乾跑只部署頂層的 `bridgecard`
+  - 房間內的 SQLite 結構 v2 → v3 只有三個 `ADD COLUMN`（舊資料讀成經典、coin = -1），同一次同步執行一起寫入
+  - 升級演練（同一份本機資料：正式版 → 新版 → 再退回正式版）：對局中的經典房間、舊戰績、等待中的房間全部接得上；舊房間可以改玩梭了啦；退回正式版後經典房間和戰績照常
+- 上線後檢查（正式站）：首頁、教學頁、圖檔、程式都是新版；two-sockets、laststand-room（一致性 155 次）、p15-ui（36 項）、two-phones 全過（two-phones 第一次有一項動畫計數的時間差，重跑全過）
+
+### 要退回的話
+1. 最快：Cloudflare 後台 → Workers & Pages → `bridgecard` → Deployments → 選上一個版本 → Rollback（不動 GitHub）
+2. 或在 GitHub 上用一個新的提交把 `feature/web-online-v1` 改回 `backup/web-online-v1-0b0e8c2` 的內容（不要強制推送）
+3. 注意：退回時**正在打梭了啦的房間**會壞掉（舊版不認得梭了啦的牌局）；經典房間、戰績、等待中的房間都沒問題
