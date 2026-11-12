@@ -154,10 +154,13 @@ export function buildReport(m: PublicMatch, cast: Cast, gid: string, o: { taste?
     if (fl && fl.outcome !== "pending" && fl.outcome !== "tie") habits.push({ seat: s, kind: fl.outcome === "won" ? "flipWon" : "flipLost", w: 4, vars: v });
     if (st.won > st.lost && st.won >= 3) habits.push({ seat: s, kind: "winsMore", w: 1, vars: { ...v, n: String(st.won), m: String(st.lost) } });
   }
-  habits.sort((a, b) => b.w - a.w || a.seat - b.seat);
+  // 不跟「本場最荒謬」講同一件事；同一類句子只出現一次（不然兩個人會拿到一模一樣的句型）
+  const dup: Record<string, string> = { flip_lost: "flipLost", lose_streak3: "loseStreak", fold_streak3: "manyFolds", fold_after_raiser: "manyRaises", raise_streak_more: "manyRaises" };
+  const pool = habits.filter(h => !(ab && dup[ab.kind] === h.kind && ab.b.seat === h.seat)).sort((a, b) => b.w - a.w || a.seat - b.seat);
   const chosen: Habit[] = [];
-  for (const s of [0, 1]) { const h = habits.find(x => x.seat === s); if (h) chosen.push(h); }
-  for (const h of habits) { if (chosen.length >= 3) break; if (!chosen.includes(h) && chosen.filter(x => x.seat === h.seat).length < 2) chosen.push(h); }
+  const add = (h: Habit) => { if (chosen.length < 3 && !chosen.includes(h) && !chosen.some(x => x.kind === h.kind) && chosen.filter(x => x.seat === h.seat).length < 2) chosen.push(h); };
+  for (const s of [0, 1]) { const h = pool.find(x => x.seat === s && !chosen.some(c => c.kind === x.kind)); if (h) add(h); }
+  for (const h of pool) add(h);
   chosen.sort((a, b) => b.w - a.w);
   const habitLines = chosen.map(h => use(pick(`habit:${h.kind}:${h.seat}`, R_HABITS[h.kind]), h.vars));
 

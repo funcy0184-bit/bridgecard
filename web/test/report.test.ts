@@ -64,6 +64,9 @@ describe("P2-C 賽後戰報 × 300 場", () => {
       const matched = g.s.history.filter(r => r.outcome === "showdown" || r.outcome === "tie").map(r => Math.min(r.commit[0], r.commit[1]));
       const kb = a.sections.find(s => s.key === "keyBet");
       if (matched.length) expect(kb!.lines[0]).toContain(`各押 ${Math.max(...matched)} 枚`);
+      // 記仇小本本：同一類句子不會出現兩次
+      const hb = a.sections.find(x => x.key === "habits");
+      if (hb) { const tails = hb.lines.map(l => l.slice(l.indexOf("：")).replace(/\d+/g, "N")); expect(new Set(tails).size, `第 ${seed} 場記仇重複：${hb.lines.join("／")}`).toBe(tails.length); }
       for (const id of a.ids) used.set(id, (used.get(id) ?? 0) + 1);
       titles.set(a.title, (titles.get(a.title) ?? 0) + 1);
       if (a.ids.some(id => V2_IDS.has(id) && ORIGINAL.find(e => e.id === id)!.phase === "title")) v2Titles++;
