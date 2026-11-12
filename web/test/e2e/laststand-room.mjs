@@ -12,7 +12,7 @@ let n = 0, seed = 12345;
 const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
 
 function player(code, name, token = null) {
-  const p = { name, seat: -1, token, room: null, v: null, ver: 0, gid: null, msgs: [], closed: null };
+  const p = { name, seat: -1, token, room: null, v: null, ver: 0, vver: 0, gid: null, msgs: [], closed: null };
   p.ws = new WebSocket(`${WS}/api/rooms/${code}/ws`);
   p.joined = new Promise(res => {
     p.ws.onopen = () => p.ws.send(JSON.stringify({ t: "hello", v: 2, token, name }));
@@ -20,9 +20,9 @@ function player(code, name, token = null) {
       const m = JSON.parse(ev.data);
       p.msgs.push(m);
       if (m.t === "welcome") { p.seat = m.seat; p.token = m.token; }
-      if (m.t === "resync") { p.room = m.r; p.ver = m.ver; p.gid = m.r.gid; if (m.ls) p.v = m.ls; res(); }
+      if (m.t === "resync") { p.room = m.r; p.ver = m.ver; p.gid = m.r.gid; if (m.ls) { p.v = m.ls; p.vver = m.ver; } res(); }
       if (m.t === "room") { p.room = m.r; p.ver = m.r.ver; p.gid = m.r.gid; }
-      if (m.t === "lsState") { p.v = m.s; p.ver = m.ver; p.gid = m.gid ?? p.gid; }
+      if (m.t === "lsState") { p.v = m.s; p.ver = m.ver; p.vver = m.ver; p.gid = m.gid ?? p.gid; }
       if (m.t === "lsEvent") p.ver = m.ver;
       if (["full", "gone", "error", "closed"].includes(m.t)) res();
     };
@@ -35,10 +35,10 @@ function player(code, name, token = null) {
     for (let i = 0; i < 200; i++) { const r = p.msgs.slice(k).find(m => (m.t === "ack" || m.t === "reject") && m.cid === cid); if (r) return r; await sleep(15); }
     fail("沒有回覆：" + JSON.stringify(o));
   };
-  // 牌局動作：帶版本和場次；成功後等新的牌桌到（真的網路上 ack 和牌桌分開到）
+  // 牌局動作：帶版本和場次；成功後等新的牌桌真的到（真的網路上 ack、room、lsEvent 會先把版本號推上去，牌桌晚一點才到）
   p.ls = async a => {
     const r = await p.cmd({ t: "ls", a }, { ver: p.ver, gid: p.gid });
-    if (r.t === "ack") for (let i = 0; i < 100 && p.ver < r.ver; i++) await sleep(15);
+    if (r.t === "ack") for (let i = 0; i < 200 && p.vver < r.ver; i++) await sleep(15);
     return r;
   };
   return p;

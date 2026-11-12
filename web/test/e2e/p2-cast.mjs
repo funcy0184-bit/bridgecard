@@ -32,6 +32,7 @@ async function phone(label, ctxOpt, name = "大雞") {
 }
 // 開一場 AI 測試局（AI 快速）
 async function startAi(P, stake = "宵夜錢", vow = "這局我閉著眼睛都能贏") {
+  await P.goto(BASE + "/?dev=1");                       // 正式站的入口藏起來（LS_AI=dev）：這支手機先打開
   await P.goto(BASE + "/?play=shuo");
   await P.click("#shuoAi");
   await P.waitForSelector("#contract:not([hidden])");
