@@ -3,7 +3,8 @@
 // 一場：2 人、9 墩、各 15 枚（總共 30 枚，永遠守恆）
 // 發牌：一副 52 張不放回，每人 3 大（J–A）、3 中（7–10）、3 小（2–6），花色與點數隨機
 // 方向：9 墩洗成 5 個比大、4 個比小；只公開當墩與下一墩；同點不看花色
-// 底注／上限（每人「本墩總承諾」）：第 1–3 墩 1／3；第 4–6 墩 2／6；第 7–9 墩 3／雙方有效籌碼（可梭哈）
+// 底注／上限（每人「本墩總承諾」）：第 1–3 墩 1／3；第 4–6 墩 2／4；第 7–9 墩 3／雙方有效籌碼（可梭哈）
+//   （P0 模擬後採方案 B：中段上限從企劃書的 6 降到 4，減少第 4–6 墩就有人被打光；企劃書原值留在 GDD_STAGES 方便比較）
 //   有效底注 = min(階段底注, 雙方該墩開始時的手上籌碼)；上限 = min(階段上限, 雙方該墩開始時的手上籌碼)
 //   上限用「該墩開始時」的籌碼算，扣了底注之後不會再被降低一次
 
@@ -41,7 +42,9 @@ export function compare(a: number, b: number, dir: Dir): 1 | -1 | 0 {
 // 階段：底注與每人最高承諾總額（第 7–9 墩上限是雙方有效籌碼，cap = -1 表示「可梭哈」）
 // 預設照企劃書 V2.0；做成參數只是為了平衡模擬比較不同數值，正式對局用預設值
 export interface Stage { ante: number; cap: number }
-export const DEFAULT_STAGES: Stage[] = [{ ante: 1, cap: 3 }, { ante: 2, cap: 6 }, { ante: 3, cap: -1 }];
+export const DEFAULT_STAGES: Stage[] = [{ ante: 1, cap: 3 }, { ante: 2, cap: 4 }, { ante: 3, cap: -1 }];     // 方案 B（正式）
+export const GDD_STAGES: Stage[] = [{ ante: 1, cap: 3 }, { ante: 2, cap: 6 }, { ante: 3, cap: -1 }];         // 企劃書原值（方案 A）
+export const PLAN_C_STAGES: Stage[] = [{ ante: 1, cap: 3 }, { ante: 1, cap: 4 }, { ante: 3, cap: -1 }];      // 方案 C（比較用）
 export function stageOf(trick: number, stages: Stage[] = DEFAULT_STAGES): { ante: number; cap: number } {
   const st = stages[trick <= 3 ? 0 : trick <= 6 ? 1 : 2];
   return { ante: st.ante, cap: st.cap < 0 ? Infinity : st.cap };

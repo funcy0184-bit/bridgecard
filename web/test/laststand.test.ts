@@ -2,7 +2,7 @@
 // 保命（禁止條件、順序）、翻轉、讀心、梭哈同點、最終墩同點、耗盡退款、淘汰、守恆、隱私、快照
 import { describe, expect, it } from "vitest";
 import { Action, LSEvent, LastStandGame, actorsNow, randomAction } from "../src/laststand/engine";
-import { Dir, HIGH, LOW, MID, TOTAL_CHIPS, catOf, declarerOf, deal, firstBettorOf, seededRng, stageOf } from "../src/laststand/rules";
+import { Dir, GDD_STAGES, HIGH, LOW, MID, TOTAL_CHIPS, catOf, declarerOf, deal, firstBettorOf, seededRng, stageOf } from "../src/laststand/rules";
 
 const C = (rank: number, suit = 0) => suit * 13 + (rank - 2);
 // 兩手固定的牌（各 3 大 3 中 3 小）
@@ -47,8 +47,9 @@ describe("發牌、方向、權利輪替", () => {
       if (t > 1) expect(declarerOf(coin, t)).not.toBe(declarerOf(coin, t - 1));
     }
   });
-  it("底注／上限分三段", () => {
-    expect([1, 3, 4, 6, 7, 9].map(t => stageOf(t))).toEqual([{ ante: 1, cap: 3 }, { ante: 1, cap: 3 }, { ante: 2, cap: 6 }, { ante: 2, cap: 6 }, { ante: 3, cap: Infinity }, { ante: 3, cap: Infinity }]);
+  it("底注／上限分三段（正式採方案 B：中段上限 4；企劃書原值 6 保留給比較用）", () => {
+    expect([1, 3, 4, 6, 7, 9].map(t => stageOf(t))).toEqual([{ ante: 1, cap: 3 }, { ante: 1, cap: 3 }, { ante: 2, cap: 4 }, { ante: 2, cap: 4 }, { ante: 3, cap: Infinity }, { ante: 3, cap: Infinity }]);
+    expect(stageOf(5, GDD_STAGES)).toEqual({ ante: 2, cap: 6 });
   });
 });
 
@@ -112,10 +113,10 @@ describe("下注流程（每墩最多首次加注 1 次＋反加 1 次）", () =
     lockBoth(g, HA[0], HB[1]);
     const a = g.firstBettor(), b = 1 - a;
     ok(g, a, { t: "check" });
-    expect(g.legal(b)).toMatchObject({ check: true, raise: [3, 6] });
-    ok(g, b, { t: "raise", to: 4 });
-    expect(g.legal(a)).toMatchObject({ call: true, fold: true, raise: [5, 6] });
-    ok(g, a, { t: "raise", to: 6 });
+    expect(g.legal(b)).toMatchObject({ check: true, raise: [3, 4] });
+    ok(g, b, { t: "raise", to: 3 });
+    expect(g.legal(a)).toMatchObject({ call: true, fold: true, raise: [4, 4] });
+    ok(g, a, { t: "raise", to: 4 });
     expect(g.legal(b)).toMatchObject({ call: true, fold: true, raise: null, check: false });
     ok(g, b, { t: "fold" });
     expect(g.s.history[0].steps).toHaveLength(4);
@@ -138,24 +139,31 @@ describe("下注流程（每墩最多首次加注 1 次＋反加 1 次）", () =
 });
 
 describe("棄牌：只輸被跟到的部分，沒被跟到的退回；雙方鎖牌消耗、只公開分類", () => {
-  it("第 4 墩：先手加到 5、對手棄牌 → 對手輸 2（底注），加注方多押的 3 退回", () => {
+  it("第 4 墩：先手加到 4、對手棄牌 → 對手輸 2（底注），加注方多押的 2 退回；企劃書數值（上限 6）加到 5 則退 3", () => {
     const { g } = rig();
     atTrick(g, 4, [15, 15]);
     lockBoth(g, HA[8], HB[0]);
     const a = g.firstBettor(), b = 1 - a;
-    ok(g, a, { t: "raise", to: 5 });
+    no(g, a, { t: "raise", to: 5 });                                  // 方案 B 中段上限 4
+    ok(g, a, { t: "raise", to: 4 });
     ok(g, b, { t: "fold" });
     const r = g.s.history[0];
-    expect(r).toMatchObject({ outcome: "fold", folder: b, winner: a, transfer: 2, excessReturned: 3, cards: null });
+    expect(r).toMatchObject({ outcome: "fold", folder: b, winner: a, transfer: 2, excessReturned: 2, cards: null });
     expect(g.s.stacks[a]).toBe(17); expect(g.s.stacks[b]).toBe(13);
+    const g2 = LastStandGame.setup({ hands: [HA, HB], directions: ALL_HIGH, coin: 0, stages: GDD_STAGES });
+    atTrick(g2, 4, [15, 15]);
+    lockBoth(g2, HA[8], HB[0]);
+    const a2 = g2.firstBettor();
+    ok(g2, a2, { t: "raise", to: 5 }); ok(g2, 1 - a2, { t: "fold" });
+    expect(g2.s.history[0]).toMatchObject({ transfer: 2, excessReturned: 3 });
   });
-  it("反加後棄牌：加 3、對手反加 6、原加注方棄牌 → 他輸 3，反加方多押的 3 退回", () => {
+  it("反加後棄牌：加 3、對手反加 4、原加注方棄牌 → 他輸 3，反加方多押的 1 退回", () => {
     const { g } = rig();
     atTrick(g, 4, [15, 15]);
     lockBoth(g, HA[8], HB[0]);
     const a = g.firstBettor(), b = 1 - a;
-    ok(g, a, { t: "raise", to: 3 }); ok(g, b, { t: "raise", to: 6 }); ok(g, a, { t: "fold" });
-    expect(g.s.history[0]).toMatchObject({ folder: a, winner: b, transfer: 3, excessReturned: 3 });
+    ok(g, a, { t: "raise", to: 3 }); ok(g, b, { t: "raise", to: 4 }); ok(g, a, { t: "fold" });
+    expect(g.s.history[0]).toMatchObject({ folder: a, winner: b, transfer: 3, excessReturned: 1 });
     expect(g.s.stacks[a]).toBe(12); expect(g.s.stacks[b]).toBe(18);
   });
   it("棄牌：兩張鎖牌都從手上消耗、公開分類；確切牌面不出現在任何公開事件或畫面資料，只留在伺服器", () => {

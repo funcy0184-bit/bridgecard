@@ -6,12 +6,14 @@
 import { DurableObject } from "cloudflare:workers";
 import { GameEvent, GameSnapshot, HoneymoonGame, Phase } from "../game/game";
 import { illegalReason } from "../game/explain";
+import { Action as LSAction, LSEvent, LSState, LastStandGame } from "../laststand/engine";
+import { deal } from "../laststand/rules";
 import {
   ClientMsg, EMOTE_COUNT, EMOTE_WINDOW_MS, MODES, Notice, PROTOCOL_VERSION, RejectCode, RoomView, ServerMsg, TIMING, Timing,
-  checkName, emoteAllowed,
+  checkName, checkStake, emoteAllowed,
 } from "./protocol";
 import {
-  RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, seatOfToken, setMode, setName, setReady, setRematch, startMatch,
+  RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, seatOfToken, setMode, setName, setReady, setRematch, setStake, startMatch,
 } from "./lobby";
 import { RoomStore, randomId, randomToken, sha256 } from "./store";
 import { RecordRow, highlights, pairStats } from "./records";
@@ -35,6 +37,8 @@ export class Room extends DurableObject<Env> {
   private meta: RoomMeta | null = null;
   private game: HoneymoonGame | null = null;
   private pending: { e: GameEvent; to: number }[] = [];
+  private ls: LastStandGame | null = null;            // 逆命賭局（跟經典牌局分開）
+  private lsPending: { e: LSEvent; to: number }[] = [];
   private timing: Timing;
   private trickAt = 0;                   // 兩張牌都上桌：這個時間點結算這一墩
   private records: RecordRow[] | null = null;
@@ -52,8 +56,9 @@ export class Room extends DurableObject<Env> {
     ctx.blockConcurrencyWhile(async () => {
       await this.store.migrate();
       this.meta = this.store.loadMeta();
-      const snap = this.store.loadSnapshot();
-      if (snap) this.attach(HoneymoonGame.restore(snap, cryptoRng));
+      const saved = this.store.loadGame();
+      if (saved?.kind === "laststand") this.attachLS(LastStandGame.restore(saved.snapshot as LSState));
+      else if (saved) this.attach(HoneymoonGame.restore(saved.snapshot as GameSnapshot, cryptoRng));
       if (!this.meta) return;
       // 房間重新開機（部署、閒置被收走）：沒有連線的座位當作斷線，中離照存下來的斷線時間算
       const online = this.onlineSeats();
@@ -68,6 +73,10 @@ export class Room extends DurableObject<Env> {
   private attach(g: HoneymoonGame) {
     this.game = g;
     g.on((e, to) => this.pending.push({ e, to }));
+  }
+  private attachLS(g: LastStandGame) {
+    this.ls = g;
+    g.on((e, to) => this.lsPending.push({ e, to }));
   }
 
   // ---------------- HTTP：建立房間、查房間、升級成 WebSocket ----------------
@@ -130,6 +139,8 @@ export class Room extends DurableObject<Env> {
       case "ready": this.onReady(ws, seat, cid, !!msg.ready); break;
       case "mode": this.onMode(ws, seat, cid, msg.mode); break;
       case "name": this.onName(ws, seat, cid, msg.name); break;
+      case "stake": this.onStake(ws, seat, cid, msg.stake); break;
+      case "ls": this.onLS(ws, seat, cid, msg); break;
       case "rematch": this.onRematch(ws, seat, cid, !!msg.ready); break;
       case "leave": this.onLeave(ws, seat, cid, !!msg.forfeit); break;
       case "play": case "call": case "next": this.onGame(ws, seat, cid, msg); break;
@@ -231,6 +242,17 @@ export class Room extends DurableObject<Env> {
     if (r.value.changed) this.broadcastRoom("name", seat);
   }
 
+  // 逆命賭局：賭局契約書（賭上之物）。空白＝我最後的尊嚴；伺服器檢查、存檔，再同步給同桌
+  private onStake(ws: WebSocket, seat: number, cid: string | undefined, raw: unknown) {
+    const v = checkStake(raw);
+    if (!v.ok) return this.reject(ws, seat, cid, "STAKE_INVALID", v.msg);
+    const r = setStake(this.meta!, seat, v.stake);
+    if (!r.ok) return this.reject(ws, seat, cid, r.code, r.msg);
+    this.commitRoom(seat, cid);
+    this.ack(ws, cid);
+    this.broadcastRoom("stake", seat);
+  }
+
   private onRematch(ws: WebSocket, seat: number, cid: string | undefined, want: boolean) {
     const m = this.meta!;
     const r = setRematch(m, seat, want);
@@ -269,7 +291,7 @@ export class Room extends DurableObject<Env> {
 
   private onGame(ws: WebSocket, seat: number, cid: string | undefined, msg: Extract<ClientMsg, { t: "play" | "call" | "next" }>) {
     const m = this.meta!, g = this.game;
-    if (!g || !(m.status === "IN_GAME" || m.status === "PAUSED")) return this.reject(ws, seat, cid, "BAD_STATE", "現在沒有進行中的牌局。");
+    if (!g || m.mode !== "classic" || !(m.status === "IN_GAME" || m.status === "PAUSED")) return this.reject(ws, seat, cid, "BAD_STATE", "現在沒有進行中的牌局。");
     if (m.status === "PAUSED") return this.reject(ws, seat, cid, "PAUSED", `${m.seats[1 - seat]?.name || "對方"}連線中斷，牌局先暫停，等他回來。`);
     if ((msg.gid && msg.gid !== m.gid) || (typeof msg.ver === "number" && msg.ver !== m.ver))
       return this.reject(ws, seat, cid, "STALE", "牌桌已經更新了，幫你同步到最新。");
@@ -327,10 +349,83 @@ export class Room extends DurableObject<Env> {
     void this.scheduleAlarm();
   }
 
+  // ---------------- 逆命賭局：牌局動作 ----------------
+  private onLS(ws: WebSocket, seat: number, cid: string | undefined, msg: Extract<ClientMsg, { t: "ls" }>) {
+    const m = this.meta!, g = this.ls;
+    if (!g || m.mode !== "laststand" || !inMatch(m)) return this.reject(ws, seat, cid, "BAD_STATE", "現在沒有進行中的逆命賭局。");
+    if (m.status === "PAUSED") return this.reject(ws, seat, cid, "PAUSED", `${m.seats[1 - seat]?.name || "對方"}連線中斷，牌局先暫停，等他回來。`);
+    if ((msg.gid && msg.gid !== m.gid) || (typeof msg.ver === "number" && msg.ver !== m.ver))
+      return this.reject(ws, seat, cid, "STALE", "牌桌已經更新了，幫你同步到最新。");
+    if (!msg.a || typeof msg.a !== "object") return this.reject(ws, seat, cid, "BAD_REQUEST", "看不懂這個動作。");
+    const before = g.snapshot();
+    const metaBefore = JSON.stringify(m);
+    this.lsPending = [];
+    let r: ReturnType<LastStandGame["act"]>;
+    try { r = g.act(seat, msg.a as LSAction); } catch { r = { ok: false, code: "BAD_REQUEST", msg: "看不懂這個動作。" }; }
+    if (!r.ok) {
+      this.lsPending = [];
+      if (JSON.stringify(g.snapshot()) !== JSON.stringify(before)) this.attachLS(LastStandGame.restore(before));
+      return this.reject(ws, seat, cid, r.code === "NOT_YOUR_TURN" ? "NOT_YOUR_TURN" : r.code === "BAD_REQUEST" ? "BAD_REQUEST" : "ILLEGAL", r.msg);
+    }
+    const evs = this.lsPending; this.lsPending = [];
+    m.ver++;
+    m.lastActive = Date.now();
+    const logged = evs.map(x => ({ eid: ++m.eid, to: x.to, e: x.e }));
+    let record: RecordRow | undefined;
+    const res = g.s.result;
+    if (res && finishMatch(m, res.winner, res.reason)) record = this.recordRow(res.winner, res.reason);
+    try {
+      this.store.commit({ meta: m, snapshot: g.snapshot(), kind: "laststand", events: logged, command: cid ? { cid, seat, ok: true } : undefined, record });
+    } catch {
+      this.attachLS(LastStandGame.restore(before));
+      this.meta = JSON.parse(metaBefore) as RoomMeta;
+      this.send(ws, { t: "reject", cid, code: "SAVE_FAILED", msg: "存檔失敗，再試一次。", ver: this.meta.ver });
+      return;
+    }
+    if (record) this.records = null;
+    this.ack(ws, cid);
+    this.broadcastLS(logged);
+    if (record) this.broadcastRoom();
+    void this.scheduleAlarm();
+  }
+
+  // 逆命賭局開新的一場：第一場擲硬幣決定第 1 墩宣戰權，再戰時交換
+  private beginLS(ws: WebSocket, seat: number, cid: string | undefined) {
+    const m = this.meta!;
+    const coin: 0 | 1 = m.lsCoin === 0 ? 1 : m.lsCoin === 1 ? 0 : cryptoRng() < 0.5 ? 0 : 1;
+    m.lsCoin = coin;
+    this.lsPending = [];
+    this.game = null;
+    const { hands, directions } = deal(cryptoRng);
+    const g = LastStandGame.setup({ hands, directions, coin }, (e, to) => this.lsPending.push({ e, to }));
+    this.ls = g;
+    const evs = this.lsPending; this.lsPending = [];
+    m.ver++;
+    m.lastActive = Date.now();
+    const logged = evs.map(x => ({ eid: ++m.eid, to: x.to, e: x.e }));
+    this.store.commit({ meta: m, snapshot: g.snapshot(), kind: "laststand", events: logged, command: cid ? { cid, seat, ok: true } : undefined });
+    this.ack(ws, cid);
+    this.broadcastRoom("started", seat);
+    this.broadcastLS(logged);
+    void this.scheduleAlarm();
+  }
+
+  private broadcastLS(logged: { eid: number; to: number; e: LSEvent }[]) {
+    const m = this.meta!;
+    for (const ws of this.ctx.getWebSockets()) {
+      const seat = this.seatOf(ws);
+      if (seat < 0) continue;
+      for (const x of logged) if (x.to < 0 || x.to === seat) this.send(ws, { t: "lsEvent", e: x.e, eid: x.eid, ver: m.ver, gid: m.gid ?? undefined });
+      if (this.ls) this.send(ws, { t: "lsState", s: this.ls.viewFor(seat), ver: m.ver, gid: m.gid ?? undefined });
+    }
+  }
+
   // 開新的一場（兩人都準備、或兩人都按再來一場）
   private beginMatch(ws: WebSocket, seat: number, cid: string | undefined) {
     const m = this.meta!;
     startMatch(m, randomId());
+    if (m.mode === "laststand") return this.beginLS(ws, seat, cid);
+    this.ls = null;
     this.attach(new HoneymoonGame(cryptoRng));
     const g = this.game!;
     this.pending = [];
@@ -393,7 +488,7 @@ export class Room extends DurableObject<Env> {
     const empty = this.ctx.getWebSockets().filter(w => this.seatOf(w) >= 0).length === 0;
     if (empty && (now >= d.expireAt || (m.status === "CLOSED" && !this.hasRecords() && now >= m.lastActive + CLOSED_EMPTY_MS))) {
       if (inMatch(m) && this.hasRecords()) { m.status = "CLOSED"; m.lastActive = now; this.store.commit({ meta: m }); }
-      else { await this.store.wipe(); this.meta = null; this.game = null; return; }
+      else { await this.store.wipe(); this.meta = null; this.game = null; this.ls = null; return; }
     }
     this.store.pruneCommands(now - COMMAND_KEEP_MS);
     await this.scheduleAlarm();
@@ -405,6 +500,11 @@ export class Room extends DurableObject<Env> {
 
   private recordRow(winner: number, reason: RecordRow["reason"]): RecordRow {
     const m = this.meta!, g = this.game;
+    if (m.mode === "laststand" && this.ls) {
+      const s = this.ls.s;
+      return { gid: m.gid ?? randomId(), at: Date.now(), winner, reason, scores: [s.stacks[0], s.stacks[1]], hands: s.trick,
+        pids: [m.seats[0]?.pid ?? "", m.seats[1]?.pid ?? ""], mode: "laststand", coin: s.coin };
+    }
     return { gid: m.gid ?? randomId(), at: Date.now(), winner, reason, scores: g ? [g.scores[0], g.scores[1]] : [0, 0], hands: g?.handsPlayed ?? 0,
       pids: [m.seats[0]?.pid ?? "", m.seats[1]?.pid ?? ""] };
   }
@@ -414,8 +514,8 @@ export class Room extends DurableObject<Env> {
     const online = this.onlineSeats();
     return {
       code: m.code, status: m.status, mode: m.mode, host: m.host, ver: m.ver, gid: m.gid, now: Date.now(), result: m.result,
-      seats: m.seats.map((s, i) => ({ taken: !!s, online: online[i], name: s?.name ?? "", ready: !!s?.ready, rematch: !!s?.rematch, offlineSince: s?.offlineSince ?? null })),
-      stats: pairStats(this.recordList(), [m.seats[0]?.pid ?? null, m.seats[1]?.pid ?? null]),
+      seats: m.seats.map((s, i) => ({ taken: !!s, online: online[i], name: s?.name ?? "", ready: !!s?.ready, rematch: !!s?.rematch, offlineSince: s?.offlineSince ?? null, stake: s?.stake ?? "" })),
+      stats: pairStats(this.recordList(), [m.seats[0]?.pid ?? null, m.seats[1]?.pid ?? null], m.mode),
       timing: { notice: this.timing.notice, choice: this.timing.choice, forfeit: this.timing.forfeit },
       ...(({ forfeitAt, forfeitSeat }) => ({ forfeitAt, forfeitSeat }))(deadlines(m, this.timing, false)),
     };
@@ -423,13 +523,15 @@ export class Room extends DurableObject<Env> {
 
   private resync(ws: WebSocket, seat: number) {
     const m = this.meta!;
-    this.send(ws, { t: "resync", r: this.view(), s: this.game && m.gid ? this.game.viewFor(seat) : null, ver: m.ver, eid: m.eid });
+    this.send(ws, { t: "resync", r: this.view(), ver: m.ver, eid: m.eid,
+      s: m.mode === "classic" && this.game && m.gid ? this.game.viewFor(seat) : null,
+      ls: m.mode === "laststand" && this.ls && m.gid ? this.ls.viewFor(seat) : null });
   }
 
   private recap(ws: WebSocket, seat: number, gid: unknown) {
     const m = this.meta!;
     const id = typeof gid === "string" && gid ? gid : m.gid;
-    if (!id || seat < 0) { this.send(ws, { t: "recap", gid: id ?? "", items: [] }); return; }
+    if (!id || seat < 0 || m.mode === "laststand") { this.send(ws, { t: "recap", gid: id ?? "", items: [] }); return; }     // 逆命賭局的戰報在 P2
     const names: [string, string] = [m.seats[0]?.name ?? "房主", m.seats[1]?.name ?? "朋友"];
     this.send(ws, { t: "recap", gid: id, items: highlights(this.store.events(id), names) });
   }

@@ -28,20 +28,23 @@
 //   recap                        這一場的精彩回顧（只有公開資訊）
 //   full／gone／closed／error／emote／pong
 import type { GameEvent, TableState } from "../game/game";
+import type { Action as LSAction, LSEvent, LSView } from "../laststand/engine";
 
 export const PROTOCOL_VERSION = 2;
 
 export type RoomStatus = "WAITING" | "READY" | "IN_GAME" | "PAUSED" | "SETTLEMENT" | "REMATCH" | "CLOSED";
-export type Mode = "classic" | "chips";
-// 模式：籌碼對決還沒做出來，伺服器會拒絕（不用假籌碼冒充）
+export type Mode = "classic" | "laststand";
+// 模式：經典蜜月橋牌；逆命賭局（雙人九墩心理戰，規則引擎在 src/laststand）
 export const MODES: Record<Mode, { label: string; enabled: boolean }> = {
   classic: { label: "經典牌局", enabled: true },
-  chips: { label: "籌碼對決", enabled: false },
+  laststand: { label: "逆命賭局", enabled: true },
 };
 
 export type ClientMsg =
   | { t: "hello"; v?: number; token?: string | null; name?: string }
   | { t: "name"; name: string; cid?: string }
+  | { t: "stake"; stake: string; cid?: string }                                  // 逆命賭局：賭局契約書（賭上之物）
+  | { t: "ls"; a: LSAction; cid?: string; ver?: number; gid?: string }          // 逆命賭局：牌局動作
   | { t: "ready"; ready: boolean; cid?: string }
   | { t: "mode"; mode: Mode; cid?: string }
   | { t: "play"; card: number; cid?: string; ver?: number; gid?: string }
@@ -58,9 +61,11 @@ export interface SeatInfo {
   taken: boolean; online: boolean; name: string;
   ready: boolean; rematch: boolean;
   offlineSince: number | null;           // 斷線從什麼時候開始（伺服器時間；畫面算經過幾秒）
+  stake: string;                         // 逆命賭局：契約書上賭上之物（空的 = 還沒簽）
 }
-export type EndReason = "target" | "forfeit" | "timeout";
-export interface MatchRecord { gid: string; at: number; winner: number; reason: EndReason; scores: [number, number]; hands: number }
+// 結束原因：target 經典到目標分數；nine 逆命九墩打完；elimination 逆命有人籌碼歸零；forfeit 認輸；timeout 斷線逾時
+export type EndReason = "target" | "nine" | "elimination" | "forfeit" | "timeout";
+export interface MatchRecord { gid: string; at: number; winner: number; reason: EndReason; scores: [number, number]; hands: number; mode?: Mode; coin?: number }
 export interface PairStats { played: number; wins: [number, number]; draws: number; streak: { seat: number; n: number } | null; last: MatchRecord[] }
 export interface RoomView {
   code: string; status: RoomStatus; mode: Mode; host: number; seats: SeatInfo[];
@@ -70,12 +75,12 @@ export interface RoomView {
   timing: { notice: number; choice: number; forfeit: number };   // 斷線多久提示／可以選離開／判負（毫秒）
   forfeitAt: number | null; forfeitSeat: number;            // 對局中有人斷線：伺服器時間幾點會照規則判他中離（沒有就是 null）
 }
-export type Notice = "joined" | "left" | "ready" | "mode" | "name" | "disconnected" | "reconnected" | "started" | "forfeit" | "timeout" | "rematch" | "host";
+export type Notice = "joined" | "left" | "ready" | "mode" | "name" | "stake" | "disconnected" | "reconnected" | "started" | "forfeit" | "timeout" | "rematch" | "host";
 
 export interface Highlight { kind: "ruff" | "doubleMade" | "doubleDown" | "decider" | "bigHand" | "matchPoint"; hand: number; text: string; cards?: [number, number]; seats?: [number, number] }
 
 export type RejectCode = "STALE" | "ILLEGAL" | "NOT_YOUR_TURN" | "PAUSED" | "BAD_STATE" | "NOT_HOST" | "MODE_LOCKED" | "MODE_UNAVAILABLE" | "NOT_SEATED" | "SAVE_FAILED" | "BAD_REQUEST"
-  | "NAME_INVALID" | "NAME_LOCKED";
+  | "NAME_INVALID" | "NAME_LOCKED" | "STAKE_INVALID";
 
 export type ServerMsg =
   | { t: "welcome"; v: number; seat: number; token: string; code: string; gid: string | null }
@@ -85,7 +90,9 @@ export type ServerMsg =
   | { t: "state"; s: TableState; ver?: number; gid?: string }
   | { t: "ack"; cid: string; ver: number }
   | { t: "reject"; cid?: string; code: RejectCode; msg: string; ver: number }
-  | { t: "resync"; r: RoomView; s: TableState | null; ver: number; eid: number }
+  | { t: "resync"; r: RoomView; s: TableState | null; ver: number; eid: number; ls?: LSView | null }
+  | { t: "lsEvent"; e: LSEvent; eid?: number; ver?: number; gid?: string }        // 逆命賭局事件（私人的只給那個座位）
+  | { t: "lsState"; s: LSView; ver?: number; gid?: string }                       // 逆命賭局：你看得到的牌桌
   | { t: "recap"; gid: string; items: Highlight[] }
   | { t: "full" }
   | { t: "gone" }                                           // 房間不存在（打錯房號或已過期）
@@ -144,6 +151,23 @@ export function normalizeName(raw: unknown): string {
     .replace(/[\p{Cc}\p{Zl}\p{Zp}\s]+/gu, " ")
     .trim();
 }
+// 逆命賭局：賭上之物（純遊戲敘事，不涉及實際交易）
+//   空白 → 預設「我最後的尊嚴」；最多 24 個字；不接受網址、email、電話號碼、HTML／程式碼符號
+export const DEFAULT_STAKE = "我最後的尊嚴";
+export const STAKE_MAX = 24;
+export type StakeCheck = { ok: true; stake: string } | { ok: false; msg: string };
+export function checkStake(raw: unknown): StakeCheck {
+  const stake = normalizeName(raw);
+  if (!stake) return { ok: true, stake: DEFAULT_STAKE };
+  if (nameLength(stake) > STAKE_MAX || [...stake].length > STAKE_MAX * 3) return { ok: false, msg: `賭上之物最多 ${STAKE_MAX} 個字，請縮短一點。` };
+  if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(stake)) return { ok: false, msg: "這裡不能放 email。" };
+  if (/https?:|www\.|\.(com|net|org|tw|io|me|cc|ly)\b/i.test(stake)) return { ok: false, msg: "這裡不能放網址。" };
+  if (/\d[\d\s-]{6,}\d/.test(stake)) return { ok: false, msg: "這裡不能放電話號碼或長串數字。" };
+  const bad = [...stake].find(ch => /[<>{}[\]\\`|^$]/.test(ch) || /[\p{Cc}\p{Cf}]/u.test(ch) && ch !== "\u200D" && ch !== "\uFE0F");
+  if (bad) return { ok: false, msg: `賭上之物不能用「${bad}」。` };
+  return { ok: true, stake };
+}
+
 export type NameCheck = { ok: true; name: string } | { ok: false; code: "EMPTY" | "TOO_LONG" | "BAD_CHARS"; msg: string };
 export function checkName(raw: unknown): NameCheck {
   const name = normalizeName(raw);

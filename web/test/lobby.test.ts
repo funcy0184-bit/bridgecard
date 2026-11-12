@@ -1,9 +1,9 @@
 // 房間狀態機（C1）、同桌戰績與精彩回顧（C4）：純函式測試
 import { describe, expect, it } from "vitest";
 import {
-  RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, setMode, setName, setReady, setRematch, startMatch,
+  RoomMeta, canSeatNew, deadlines, finishMatch, forfeit, inMatch, join, leave, markOffline, markOnline, newRoom, setMode, setName, setReady, setRematch, setStake, startMatch,
 } from "../src/server/lobby";
-import { MODES, NAME_MAX, TIMING, checkName, isValidCode, nameLength, CODE_ALPHABET } from "../src/server/protocol";
+import { DEFAULT_STAKE, MODES, NAME_MAX, STAKE_MAX, TIMING, checkName, checkStake, isValidCode, nameLength, CODE_ALPHABET } from "../src/server/protocol";
 import { LoggedEvent, RecordRow, highlights, isPublic, pairStats } from "../src/server/records";
 import { HoneymoonGame, Phase } from "../src/game/game";
 import { seededRng } from "../src/game/cards";
@@ -117,10 +117,14 @@ describe("C1 房間：準備、模式、房主", () => {
     expect(m.status).toBe("READY");
   });
 
-  it("只有房主能換模式；籌碼對決還沒開放會被拒絕（不會用假籌碼冒充）", () => {
+  it("只有房主能換模式；沒開放的模式會被拒絕；不存在的模式也拒絕（舊的「籌碼對決」已經換成逆命賭局）", () => {
     const m = twoSeated();
     expect(setMode(m, 1, "classic")).toMatchObject({ ok: false, code: "NOT_HOST" });
-    expect(setMode(m, 0, "chips")).toMatchObject({ ok: false, code: "MODE_UNAVAILABLE" });
+    expect(setMode(m, 0, "chips" as never)).toMatchObject({ ok: false, code: "BAD_REQUEST" });
+    const was = MODES.laststand.enabled;
+    MODES.laststand.enabled = false;                    // 假設暫時關掉：要回「還沒開放」
+    try { expect(setMode(m, 0, "laststand")).toMatchObject({ ok: false, code: "MODE_UNAVAILABLE" }); }
+    finally { MODES.laststand.enabled = was; }
     expect(m.mode).toBe("classic");
     expect(setMode(m, 0, "classic")).toEqual({ ok: true, value: { changed: false } });
     expect(setMode(m, 0, "nope" as never)).toMatchObject({ ok: false, code: "BAD_REQUEST" });
@@ -128,16 +132,30 @@ describe("C1 房間：準備、模式、房主", () => {
 
   it("換了模式雙方都要重新準備；開打之後模式鎖定", () => {
     const m = twoSeated();
-    const was = MODES.chips.enabled;
-    MODES.chips.enabled = true;                         // 假設以後開放了：換模式的流程要對
-    try {
-      setReady(m, 0, true); setReady(m, 1, false);
-      expect(setMode(m, 0, "chips")).toEqual({ ok: true, value: { changed: true } });
-      expect(m.seats.every(s => !s!.ready)).toBe(true);
-      setReady(m, 0, true); setReady(m, 1, true);
-      startMatch(m, "g1");
-      expect(setMode(m, 0, "classic")).toMatchObject({ ok: false, code: "MODE_LOCKED" });
-    } finally { MODES.chips.enabled = was; }
+    setReady(m, 0, true); setReady(m, 1, false);
+    expect(setMode(m, 0, "laststand")).toEqual({ ok: true, value: { changed: true } });
+    expect(m.seats.every(s => !s!.ready)).toBe(true);
+    setStake(m, 0, "阿嬤的藍白拖"); setStake(m, 1, "我最後的尊嚴");
+    setReady(m, 0, true); setReady(m, 1, true);
+    startMatch(m, "g1");
+    expect(setMode(m, 0, "classic")).toMatchObject({ ok: false, code: "MODE_LOCKED" });
+  });
+
+  it("逆命賭局：沒在契約書蓋章不能按準備；蓋了章可以改，按了準備或開打後鎖定；只能改自己的", () => {
+    const m = twoSeated();
+    setMode(m, 0, "laststand");
+    expect(setReady(m, 0, true)).toMatchObject({ ok: false, code: "BAD_STATE" });
+    expect(setStake(m, 0, "阿嬤的藍白拖")).toEqual({ ok: true, value: { changed: true } });
+    expect(m.seats[1]!.stake).toBeUndefined();
+    expect(setStake(m, 0, "影印機最後一張紙")).toEqual({ ok: true, value: { changed: true } });
+    expect(setReady(m, 0, true)).toEqual({ ok: true, value: { start: false } });
+    expect(setStake(m, 0, "又改")).toMatchObject({ ok: false, code: "BAD_STATE" });
+    setReady(m, 0, false);
+    expect(setStake(m, 0, "又改")).toMatchObject({ ok: true });
+    expect(setStake(m, 2, "x")).toMatchObject({ ok: false, code: "NOT_SEATED" });
+    // 經典牌局不用契約
+    const c = twoSeated();
+    expect(setReady(c, 0, true)).toEqual({ ok: true, value: { start: false } });
   });
 
   it("房主離開：剩下的人變房主、狀態回 WAITING；兩個都走了就關房", () => {
@@ -424,5 +442,39 @@ describe("C1 暱稱：修改、鎖定", () => {
     expect(canSeatNew(m)).toBe(true);
     join(m, null, fresh(2), "乙", T0);
     expect(canSeatNew(m)).toBe(false);
+  });
+});
+
+describe("逆命賭局：賭上之物（純遊戲敘事）", () => {
+  const ok = (raw: unknown) => { const r = checkStake(raw); if (!r.ok) throw new Error(r.msg); return r.stake; };
+  const bad = (raw: unknown) => { const r = checkStake(raw); expect(r.ok).toBe(false); return r.ok ? "" : r.msg; };
+  it("空白 → 我最後的尊嚴；去頭尾空白；中英文、數字、常見標點都可以", () => {
+    expect(ok("")).toBe(DEFAULT_STAKE);
+    expect(ok("   ")).toBe("我最後的尊嚴");
+    expect(ok("  阿嬤的藍白拖 ")).toBe("阿嬤的藍白拖");
+    expect(ok("下週便當的決定權！")).toBe("下週便當的決定權！");
+    expect(ok("一隻沒有穿褲子的皮卡丘（限量版）")).toBeTruthy();
+    expect(ok("星期三的早餐資格, 2 份")).toBeTruthy();
+  });
+  it(`最多 ${STAKE_MAX} 個字；不能放網址、email、電話號碼、HTML／程式碼符號`, () => {
+    expect(ok("一".repeat(24))).toHaveLength(24);
+    expect(bad("一".repeat(25))).toContain("縮短");
+    expect(bad("https://x.com")).toContain("網址");
+    expect(bad("看 www.example.tw")).toContain("網址");
+    expect(bad("寄到 a.b@mail.com")).toContain("email");
+    expect(bad("打 0912-345-678")).toContain("電話");
+    expect(bad("<script>")).toContain("「<」");
+    expect(bad("a{b}")).toContain("「{」");
+  });
+});
+
+describe("同桌戰績：逆命賭局可能平手、依模式分開算", () => {
+  it("平手算進 draws、打斷連勝；只算目前模式", async () => {
+    const { pairStats } = await import("../src/server/records");
+    const row = (gid: string, at: number, winner: number, mode: "classic" | "laststand") => ({ gid, at, winner, reason: "nine" as const, scores: [15, 15] as [number, number], hands: 9, pids: ["a", "b"] as [string, string], mode });
+    const rows = [row("1", 1, 0, "laststand"), row("2", 2, 0, "laststand"), row("3", 3, -1, "laststand"), row("4", 4, 1, "classic")];
+    const s = pairStats(rows, ["a", "b"], "laststand");
+    expect(s).toMatchObject({ played: 3, wins: [2, 0], draws: 1, streak: null });
+    expect(pairStats(rows, ["a", "b"], "classic")).toMatchObject({ played: 1, wins: [0, 1] });
   });
 });

@@ -6,10 +6,11 @@
 //   matches   打完的場次（同桌戰績；場次編號是主鍵，不會重複記）
 // 每次成功的操作：牌局快照、事件、指令紀錄、房間狀態在同一個交易裡寫入（全成功或全不寫）。
 import type { GameEvent, GameSnapshot } from "../game/game";
+import type { LSEvent, LSState } from "../laststand/engine";
 import type { RoomMeta } from "./lobby";
 import type { RecordRow, LoggedEvent } from "./records";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 // 每一版要跑的 SQL（以後改結構就往後加，不要改前面的）
 const MIGRATIONS: Record<number, string[]> = {
@@ -21,13 +22,20 @@ const MIGRATIONS: Record<number, string[]> = {
     "CREATE TABLE IF NOT EXISTS commands (cid TEXT PRIMARY KEY, seat INTEGER, ok INTEGER, code TEXT, msg TEXT, ver INTEGER, at INTEGER)",
     "CREATE TABLE IF NOT EXISTS matches (gid TEXT PRIMARY KEY, at INTEGER, winner INTEGER, reason TEXT, score0 INTEGER, score1 INTEGER, hands INTEGER, pid0 TEXT, pid1 TEXT)",
   ],
+  // 第 3 版：逆命賭局。牌局快照記是哪一種遊戲；戰績記模式和第 1 墩宣戰權（算位置勝率用）
+  3: [
+    "ALTER TABLE game ADD COLUMN kind TEXT",
+    "ALTER TABLE matches ADD COLUMN mode TEXT",
+    "ALTER TABLE matches ADD COLUMN coin INTEGER",
+  ],
 };
 
 export interface CommandRow { ok: boolean; code: string; msg: string; ver: number }
 export interface Commit {
   meta: RoomMeta;
-  snapshot?: GameSnapshot | null;          // undefined：牌局沒變
-  events?: { eid: number; to: number; e: GameEvent }[];
+  snapshot?: GameSnapshot | LSState | null;   // undefined：牌局沒變
+  kind?: "classic" | "laststand";             // 快照是哪一種遊戲（沒寫就是經典）
+  events?: { eid: number; to: number; e: GameEvent | LSEvent }[];
   command?: { cid: string; seat: number; ok: boolean; code?: string; msg?: string };
   record?: RecordRow;
 }
@@ -72,16 +80,21 @@ export class RoomStore {
     const r = this.sql.exec<{ v: string }>("SELECT v FROM meta WHERE k = 'room'").toArray()[0];
     return r ? JSON.parse(r.v) as RoomMeta : null;
   }
+  // 經典牌局的快照（逆命賭局的快照不會從這裡拿到）
   loadSnapshot(): GameSnapshot | null {
-    const r = this.sql.exec<{ snapshot: string | null }>("SELECT snapshot FROM game WHERE id = 1").toArray()[0];
-    return r?.snapshot ? JSON.parse(r.snapshot) as GameSnapshot : null;
+    const g = this.loadGame();
+    return g && g.kind === "classic" ? g.snapshot as GameSnapshot : null;
+  }
+  loadGame(): { kind: "classic" | "laststand"; snapshot: GameSnapshot | LSState } | null {
+    const r = this.sql.exec<{ snapshot: string | null; kind: string | null }>("SELECT snapshot, kind FROM game WHERE id = 1").toArray()[0];
+    return r?.snapshot ? { kind: r.kind === "laststand" ? "laststand" : "classic", snapshot: JSON.parse(r.snapshot) } : null;
   }
 
   // 一次寫完：房間狀態＋牌局快照＋事件＋指令紀錄＋戰績（交易：任何一步失敗，全部不寫）
   commit(c: Commit) {
     this.storage.transactionSync(() => {
       this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('room', ?)", JSON.stringify(c.meta));
-      if (c.snapshot !== undefined) this.sql.exec("INSERT OR REPLACE INTO game (id, gid, snapshot) VALUES (1, ?, ?)", c.meta.gid, c.snapshot ? JSON.stringify(c.snapshot) : null);
+      if (c.snapshot !== undefined) this.sql.exec("INSERT OR REPLACE INTO game (id, gid, snapshot, kind) VALUES (1, ?, ?, ?)", c.meta.gid, c.snapshot ? JSON.stringify(c.snapshot) : null, c.kind ?? "classic");
       const now = Date.now();
       for (const x of c.events ?? [])
         this.sql.exec("INSERT INTO events (eid, gid, ver, to_seat, type, data, at) VALUES (?, ?, ?, ?, ?, ?, ?)", x.eid, c.meta.gid, c.meta.ver, x.to, x.e.type, JSON.stringify(x.e), now);
@@ -89,8 +102,8 @@ export class RoomStore {
         c.command.cid, c.command.seat, c.command.ok ? 1 : 0, c.command.code ?? "", c.command.msg ?? "", c.meta.ver, now);
       if (c.record) {
         const r = c.record;
-        this.sql.exec("INSERT OR IGNORE INTO matches (gid, at, winner, reason, score0, score1, hands, pid0, pid1) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          r.gid, r.at, r.winner, r.reason, r.scores[0], r.scores[1], r.hands, r.pids[0], r.pids[1]);
+        this.sql.exec("INSERT OR IGNORE INTO matches (gid, at, winner, reason, score0, score1, hands, pid0, pid1, mode, coin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          r.gid, r.at, r.winner, r.reason, r.scores[0], r.scores[1], r.hands, r.pids[0], r.pids[1], r.mode ?? "classic", r.coin ?? -1);
       }
     });
   }
@@ -107,8 +120,9 @@ export class RoomStore {
   }
 
   records(): RecordRow[] {
-    return this.sql.exec<{ gid: string; at: number; winner: number; reason: string; score0: number; score1: number; hands: number; pid0: string; pid1: string }>("SELECT * FROM matches ORDER BY at").toArray()
-      .map(r => ({ gid: r.gid, at: r.at, winner: r.winner, reason: r.reason as RecordRow["reason"], scores: [r.score0, r.score1], hands: r.hands, pids: [r.pid0, r.pid1] }));
+    return this.sql.exec<{ gid: string; at: number; winner: number; reason: string; score0: number; score1: number; hands: number; pid0: string; pid1: string; mode: string | null; coin: number | null }>("SELECT * FROM matches ORDER BY at").toArray()
+      .map(r => ({ gid: r.gid, at: r.at, winner: r.winner, reason: r.reason as RecordRow["reason"], scores: [r.score0, r.score1], hands: r.hands, pids: [r.pid0, r.pid1],
+        mode: (r.mode === "laststand" ? "laststand" : "classic") as RecordRow["mode"], coin: r.coin ?? -1 }));
   }
 
   // 舊的指令紀錄清掉（重送只會在幾秒內發生；留一天就很夠）

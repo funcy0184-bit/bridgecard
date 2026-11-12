@@ -17,6 +17,7 @@ export interface SeatMeta {
   rematch: boolean;
   offlineSince: number | null; // 斷線開始的時間（存起來：房間重開機後也能算中離）
   onlineAt?: number;           // 最近一次連上的時間（兩邊都斷過線時，中離從「對方回來」才開始算）
+  stake?: string;              // 逆命賭局：契約書上賭上之物（沒簽就是 undefined）
   joinedAt: number;
 }
 
@@ -33,6 +34,7 @@ export interface RoomMeta {
   eid: number;                  // 最後一個事件序號
   gid: string | null;           // 這一場的編號（再來一場會換新的）
   result: { winner: number; reason: EndReason } | null;
+  lsCoin?: 0 | 1;               // 逆命賭局：上一場第 1 墩宣戰權給誰（再戰時交換）
 }
 
 export type Fail = { ok: false; code: RejectCode; msg: string };
@@ -82,6 +84,17 @@ export function setName(m: RoomMeta, seat: number, name: string): Ok<{ changed: 
   return ok({ changed });
 }
 
+// 逆命賭局：在契約書上蓋章（寫好賭上之物）；開局前、還沒按準備才能改，只能改自己的
+export function setStake(m: RoomMeta, seat: number, stake: string): Ok<{ changed: boolean }> | Fail {
+  const s = m.seats[seat];
+  if (!s) return fail("NOT_SEATED", "你不在這桌。");
+  if (!(m.status === "WAITING" || m.status === "READY")) return fail("BAD_STATE", "對局開始後契約就生效了，這一場結束後再改。");
+  if (s.ready) return fail("BAD_STATE", "已經按準備了：先取消準備再改契約。");
+  const changed = s.stake !== stake;
+  s.stake = stake;
+  return ok({ changed });
+}
+
 // 開局前離開：讓出座位；房主走了換剩下的人當房主；兩個都走了就關房
 // 整場結束後（結算／再來一場）離開：也讓出座位，戰績還留著
 export function leave(m: RoomMeta, seat: number): Ok | Fail {
@@ -102,6 +115,7 @@ export function setReady(m: RoomMeta, seat: number, ready: boolean): Ok<{ start:
   if (!s) return fail("NOT_SEATED", "你不在這桌。");
   if (m.status !== "READY") return fail("BAD_STATE", m.status === "WAITING" ? "朋友還沒來，等他入座再準備。" : "現在不能改準備。");
   if (ready && s.offlineSince !== null) return fail("BAD_STATE", "連線中斷時不能準備。");
+  if (ready && m.mode === "laststand" && !s.stake) return fail("BAD_STATE", "先在賭局契約書上蓋章，再按準備。");
   s.ready = ready;
   return ok({ start: m.seats.every(x => x?.ready) });
 }

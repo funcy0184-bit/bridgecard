@@ -8,18 +8,20 @@ import type { Highlight, MatchRecord, PairStats } from "./protocol";
 export interface RecordRow extends MatchRecord { pids: [string, string] }
 export interface LoggedEvent { eid: number; to: number; e: GameEvent }
 
-// 只算現在這兩個人（座位上的人換了，就是另一組同桌）
-export function pairStats(rows: RecordRow[], pids: [string | null, string | null]): PairStats {
-  const mine = rows.filter(r => r.pids[0] === pids[0] && r.pids[1] === pids[1]).sort((a, b) => a.at - b.at);
+// 只算現在這兩個人（座位上的人換了，就是另一組同桌）；有給模式就只算那個模式（逆命賭局可能平手）
+export function pairStats(rows: RecordRow[], pids: [string | null, string | null], mode?: string): PairStats {
+  const mine = rows.filter(r => r.pids[0] === pids[0] && r.pids[1] === pids[1] && (!mode || (r.mode ?? "classic") === mode)).sort((a, b) => a.at - b.at);
   const wins: [number, number] = [0, 0];
-  for (const r of mine) wins[r.winner]++;
+  let draws = 0;
+  for (const r of mine) { if (r.winner === 0 || r.winner === 1) wins[r.winner]++; else draws++; }
   let streak: PairStats["streak"] = null;
   for (let i = mine.length - 1; i >= 0; i--) {
+    if (mine[i].winner < 0) break;                       // 平手打斷連勝
     if (!streak) streak = { seat: mine[i].winner, n: 1 };
     else if (mine[i].winner === streak.seat) streak.n++;
     else break;
   }
-  return { played: mine.length, wins, draws: 0, streak, last: mine.slice(-5).reverse().map(({ pids: _p, ...r }) => r) };
+  return { played: mine.length, wins, draws, streak, last: mine.slice(-5).reverse().map(({ pids: _p, ...r }) => r) };
 }
 
 // 公開事件：發給兩邊的（to = -1），而且不是「摸暗牌」「非法出牌」這種私人提示

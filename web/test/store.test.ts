@@ -44,6 +44,11 @@ describe("C4 保存：結構與升級", () => {
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map(r => r.name);
     expect(tables).toEqual(["commands", "events", "game", "matches", "meta"]);
     expect((db.prepare("SELECT v FROM meta WHERE k = 'schema'").get() as { v: string }).v).toBe(String(SCHEMA_VERSION));
+    expect(SCHEMA_VERSION).toBe(3);
+    // 第 3 版：牌局快照記遊戲種類；戰績記模式和第 1 墩宣戰權
+    const cols = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map(c => c.name);
+    expect(cols("game")).toContain("kind");
+    expect(cols("matches")).toEqual(expect.arrayContaining(["mode", "coin"]));
     expect(s.loadMeta()).toBeNull();
     expect(s.loadSnapshot()).toBeNull();
   });
