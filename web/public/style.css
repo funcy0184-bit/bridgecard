@@ -997,3 +997,100 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   box-shadow: 0 0 0 1px rgba(150,105,40,.8), 0 6px 14px rgba(0,0,0,.4); }
 .myquip .who { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 8px; font-size: 11.5px; color: #F7E9CC; background: var(--wine); vertical-align: 1px; }
 @media (max-width: 360px) { .talkbtn { width: 34px; height: 34px; } }
+
+/* ================= 逆命賭局：賭局契約書（等待室） ================= */
+.pstake { display: block; font-style: normal; font-size: 12px; color: var(--wine); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pstake.unsigned { color: var(--ink-soft); }
+.contract { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 14px; text-align: left; color: var(--ink);
+  background: linear-gradient(180deg, var(--paper-hi), var(--paper) 70%, var(--paper-2)); clip-path: var(--torn-a);
+  box-shadow: inset 0 0 0 6px transparent, inset 0 0 0 7px rgba(122,39,50,.45), inset 0 0 0 10px transparent, inset 0 0 0 10.6px rgba(122,39,50,.25); }
+.ctitle { margin: 0; text-align: center; font: 600 21px var(--display); letter-spacing: .5em; color: var(--wine); padding-left: .5em; }
+.ctitle::before, .ctitle::after { content: "❦"; font-size: 13px; letter-spacing: 0; margin: 0 .6em; color: var(--gold); vertical-align: middle; }
+.cfield { position: relative; }
+.cfield input { background: rgba(251,244,228,.75); box-shadow: inset 0 -1.5px 0 var(--wine), inset 0 0 0 1px rgba(185,138,62,.35); border-radius: 4px; font-family: var(--display); font-size: 17px; }
+.cfield input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--wine), 0 0 0 2px rgba(226,184,96,.6); }
+/* 輪播的提示文字：疊在輸入框上（不吃點擊），只在輸入框是空的時候看得到 */
+.cph { position: absolute; left: 14px; right: 14px; top: 50%; translate: 0 -50%; pointer-events: none; font: 17px var(--display); color: rgba(90,70,40,.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity .45s ease; }
+.cph.fade { opacity: 0; }
+.cph[hidden] { display: none; }
+.crow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cfine { font-size: 11.5px; color: var(--ink-soft); }
+.cpreview { margin: 0; font: 15px/1.7 var(--display); color: var(--ink); padding: 8px 10px; background: rgba(122,39,50,.06); border-left: 3px solid rgba(122,39,50,.55); word-break: break-all; }
+.csign { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.csignee { display: flex; flex-direction: column; font-size: 12px; color: var(--ink-soft); }
+.csignee b { font: 500 17px var(--display); color: var(--ink); border-bottom: 1px solid rgba(43,33,24,.4); padding: 0 6px 1px; min-width: 6em; }
+.csignee small { margin-top: 3px; }
+.csignee small.done { color: var(--wine); font-weight: 700; }
+/* 印章式確認：紅色封蠟 */
+.seal { flex: none; width: 92px; height: 92px; border: 0; border-radius: 50%; cursor: pointer; color: #FBE9D6; font: 700 15px/1.25 var(--display);
+  background: radial-gradient(circle at 35% 30%, #B24453, var(--wine) 55%, var(--wine-dark)); transform: rotate(-8deg);
+  box-shadow: 0 0 0 3px rgba(122,39,50,.35), inset 0 0 0 4px rgba(251,233,214,.35), inset 0 0 0 6px rgba(122,39,50,.6), 0 4px 8px rgba(0,0,0,.35); }
+.seal span { display: flex; flex-direction: column; align-items: center; }
+.seal small { font-size: 11px; font-weight: 500; opacity: .9; }
+.seal:active { transform: rotate(-8deg) scale(.95); }
+.seal.signed { background: radial-gradient(circle at 35% 30%, #9E3A47, #6A1E29 60%, #4A141C); opacity: .92; }
+.seal:disabled { opacity: .5; cursor: default; }
+
+/* ================= 逆命賭局：牌桌 ================= */
+#lstable { gap: 8px; overflow-y: auto; padding-top: calc(env(safe-area-inset-top) + 10px); }
+.lsbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lstrick { display: flex; flex-direction: column; }
+.lstrick b { font: 600 18px var(--display); letter-spacing: .12em; color: var(--gold-pale); }
+.lstrick small { font-size: 12.5px; color: var(--muted); }
+.lsside { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "who chips" "meta meta" "st st"; gap: 2px 10px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(251,244,228,.07); box-shadow: inset 0 0 0 1px rgba(226,184,96,.35); }
+.lsside.me { box-shadow: inset 0 0 0 1px rgba(243,212,136,.6); }
+.lswho { grid-area: who; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.lswho b { font: 500 17px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lswho small { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.lschips { grid-area: chips; display: flex; align-items: baseline; gap: 3px; }
+.lschips b { font: 700 26px var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
+.lschips small { font-size: 12px; color: var(--muted); }
+.lsmeta { grid-area: meta; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--on-wood); }
+.lsmeta span:last-child { color: var(--muted); }
+.lsstatus { grid-area: st; font-size: 12.5px; color: var(--gold-pale); min-height: 1em; }
+.lsdir { text-align: center; padding: 6px 0 2px; }
+.lsdirbig { font: 700 40px/1.1 var(--display); letter-spacing: .3em; padding-left: .3em; color: var(--paper-hi); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.lsdirbig.low { color: #CFE3F2; }
+.lsdirbig.flipped::after { content: "（翻轉）"; font-size: 13px; letter-spacing: 0; color: var(--gold-pale); vertical-align: middle; }
+.lsdir small { font-size: 13px; color: var(--muted); }
+.lspot { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; color: var(--paper-hi);
+  background: radial-gradient(90% 90% at 50% 40%, var(--felt) 0%, var(--felt-dark) 75%, var(--felt-deep) 100%); box-shadow: inset 0 0 0 2px rgba(185,138,62,.55); }
+.lscommit { display: flex; justify-content: space-between; font-size: 14px; }
+.lscommit b { font: 700 20px var(--display); color: var(--gold-pale); margin-left: 2px; font-variant-numeric: tabular-nums; }
+.lspool { font-size: 13px; color: var(--gold-pale); text-align: center; padding: 3px 8px; border-radius: 12px; background: rgba(0,0,0,.25); }
+.lsrisk { margin: 0; font-size: 13px; line-height: 1.55; color: #E8F0E8; }
+.lsrisk b { color: var(--gold-pale); }
+.lsrisk .allin { display: block; margin-top: 2px; color: #FFD7A8; font-weight: 700; }
+.lsreveal { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 6px; border-radius: 8px; background: rgba(0,0,0,.28); --cw: 40px; }
+.lsreveal figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--muted); }
+.lsreveal .cat { width: var(--cw); height: calc(var(--cw) * 1.42); display: grid; place-items: center; border-radius: 4px; font: 700 18px var(--display);
+  color: var(--ink); background: repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 4px, var(--paper) 4px, var(--paper) 8px); box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); }
+.lsreveal p { margin: 0; flex-basis: 100%; text-align: center; font-size: 13.5px; }
+.lsreveal p b { color: var(--gold-pale); }
+.lsturn { margin: 0; text-align: center; font: 500 15px var(--display); color: var(--gold-pale); min-height: 1.4em; }
+.lsturn.mine { color: #FFE7B0; text-shadow: 0 0 10px rgba(243,212,136,.4); }
+.lshand { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; --cw: 44px; padding: 4px 0; }
+.lscard { position: relative; border: 0; padding: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 6px; }
+.lscard small { font-size: 11px; color: var(--muted); }
+.lscard.sel .card { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--gold-pale), 0 6px 10px rgba(0,0,0,.4); }
+.lscard.locked .card { box-shadow: 0 0 0 3px var(--wine-hi); }
+.lscard.locked small { color: #FFC9C9; font-weight: 700; }
+.lscard:disabled { cursor: default; }
+.lscard:disabled:not(.locked) .card { filter: saturate(.7) brightness(.85); }
+.lsactions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.lsactions .btn { flex: 1 1 40%; min-width: 0; padding: 11px 10px; font-size: 15.5px; }
+.lsactions .btn.wide { flex-basis: 100%; }
+.lsactions .note { flex-basis: 100%; margin: 0; text-align: center; font-size: 12.5px; color: var(--muted); }
+.lsraise { flex-basis: 100%; display: flex; align-items: center; gap: 8px; }
+.lsraise .step { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; font: 700 22px var(--display); color: var(--ink); background: var(--paper); cursor: pointer; }
+.lsraise .step:disabled { opacity: .4; }
+.lsraise .btn { flex: 1; }
+.lsraise .btn.allin { background: linear-gradient(180deg, #B24453, var(--wine-dark)); }
+.lslog { font-size: 13px; color: var(--on-wood); }
+.lslog summary { cursor: pointer; color: var(--muted); text-align: center; padding: 4px; }
+.lslog ol { margin: 4px 0 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
+.lslog li b { color: var(--gold-pale); font-weight: 500; }
+@media (max-height: 640px) { .lsdirbig { font-size: 32px; } .lshand { --cw: 40px; } .lsside { padding: 7px 10px; } }
+@media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard.sel .card { transform: none; } }

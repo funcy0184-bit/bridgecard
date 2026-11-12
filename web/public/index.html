@@ -95,7 +95,7 @@
     <p class="label">房號</p>
     <div id="bigCode" class="bigcode" aria-live="polite"></div>
     <div class="plates">
-      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b></span><button class="rename" id="renameBtn" type="button" aria-label="改我的暱稱" hidden>✎ 改名</button><em class="ok">已入座</em></div>
+      <div class="plate in" id="plateMe"><img src="/art/seal.svg" alt=""><span><small>房主</small><b id="plateMeName">你</b><i class="pstake" id="plateMeStake" hidden></i></span><button class="rename" id="renameBtn" type="button" aria-label="改我的暱稱" hidden>✎ 改名</button><em class="ok">已入座</em></div>
       <form class="renamebox" id="renameBox" hidden>
         <label class="field" for="renameInput"><span class="fieldhead">改你的暱稱 <small class="count" id="renameCount">0/16</small></span>
           <input id="renameInput" maxlength="64" autocomplete="nickname" enterkeyhint="done" aria-describedby="renameErr">
@@ -103,13 +103,28 @@
         <p class="fielderr" id="renameErr" role="alert" hidden></p>
         <div class="row"><button class="btn paper small" id="renameCancel" type="button">取消</button><button class="btn wine small" id="renameOk" type="submit">好</button></div>
       </form>
-      <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b></span><em class="ok">已入座</em></div>
+      <div class="plate" id="plateOpp"><img src="/art/stamp-ahe.svg" alt=""><span><small>朋友</small><b id="plateOppName">還沒來…</b><i class="pstake" id="plateOppStake" hidden></i></span><em class="ok">已入座</em></div>
     </div>
     <div class="modes" id="modePick" role="radiogroup" aria-label="玩法（房主選）">
       <button type="button" class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>經典牌局</b><small>照正式規則計分</small></button>
-      <button type="button" class="mode locked" data-mode="chips" role="radio" aria-checked="false"><b>籌碼對決</b><small>還沒開放</small></button>
+      <button type="button" class="mode" data-mode="laststand" role="radio" aria-checked="false"><b>逆命賭局</b><small>九墩心理戰</small></button>
     </div>
     <p class="sub" id="modeNote">玩法由房主選。</p>
+    <!-- 逆命賭局：賭局契約書（各自填寫；只是遊戲敘事，不涉及實際交易） -->
+    <form class="contract" id="contract" hidden autocomplete="off">
+      <h3 class="ctitle">賭局契約書</h3>
+      <div class="cfield">
+        <input id="stakeInput" maxlength="80" enterkeyhint="done" aria-label="這場要賭上的東西" aria-describedby="stakePreview stakeErr">
+        <span class="cph" id="stakePh" aria-hidden="true">這場，你要賭上什麼？</span>
+      </div>
+      <div class="crow"><small class="cfine">僅供遊戲敘事，不涉及任何實際交易。</small><small class="count" id="stakeCount">0/24</small></div>
+      <p class="fielderr" id="stakeErr" role="alert" hidden></p>
+      <p class="cpreview" id="stakePreview" aria-live="polite">本人自願於本場賭局中賭上『我最後的尊嚴』。</p>
+      <div class="csign">
+        <span class="csignee">立約人<b id="contractName">你</b><small id="contractState">尚未蓋章</small></span>
+        <button class="seal" id="stakeSeal" type="submit" aria-label="本人同意（應該）：蓋章確認"><span>本人同意<small>（應該）</small></span></button>
+      </div>
+    </form>
     <div class="row">
       <button id="share" class="btn paper" type="button">邀請朋友</button>
       <button id="copy" class="btn paper" type="button">複製連結</button>
@@ -117,6 +132,39 @@
     <button id="readyBtn" class="btn wine big" type="button" disabled aria-pressed="false">準備好了</button>
     <p class="waiting"><span id="waitText">還差一個人，把房號或連結傳給朋友</span><span class="dots" id="waitDots" aria-hidden="true"><i></i><i></i><i></i></span></p>
     <button id="cancelWait" class="btn ghost small" type="button">離開這桌</button>
+  </section>
+
+  <!-- ============ 逆命賭局牌桌：九墩、比大／比小、鎖牌、下注 ============ -->
+  <section id="lstable" class="screen" hidden>
+    <header class="lsbar">
+      <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1 · 單人上限 3</small></div>
+      <button id="lsMenuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
+    </header>
+    <div class="lsside opp" id="lsOpp">
+      <div class="lswho"><b id="lsOppName">對手</b><small id="lsOppTag"></small></div>
+      <div class="lschips"><b id="lsOppChips">15</b><small>枚</small></div>
+      <div class="lsmeta"><span id="lsOppCounts">剩 9 張：大 3・中 3・小 3</span><span id="lsOppSkills"></span></div>
+      <div class="lsstatus" id="lsOppStatus"></div>
+    </div>
+    <div class="lsdir" id="lsDir" aria-live="polite">
+      <div class="lsdirbig" id="lsDirBig">比大</div>
+      <small id="lsDirNote">下一墩：比小</small>
+    </div>
+    <div class="lspot" id="lsPot">
+      <div class="lscommit"><span>你已投入 <b id="lsMyCommit">0</b></span><span>對手已投入 <b id="lsOppCommit">0</b></span></div>
+      <div class="lspool" id="lsPool" hidden></div>
+      <p class="lsrisk" id="lsRisk"></p>
+      <div class="lsreveal" id="lsReveal" hidden></div>
+    </div>
+    <p class="lsturn" id="lsTurn" aria-live="polite"></p>
+    <div class="lsside me" id="lsMe">
+      <div class="lswho"><b id="lsMyName">你</b><small id="lsMyTag"></small></div>
+      <div class="lschips"><b id="lsMyChips">15</b><small>枚</small></div>
+      <div class="lsmeta"><span id="lsMyCounts"></span><span id="lsMySkills"></span></div>
+    </div>
+    <div class="lshand" id="lsHand" role="listbox" aria-label="你的手牌"></div>
+    <div class="lsactions" id="lsActions"></div>
+    <details class="lslog" id="lsLog"><summary>每墩紀錄</summary><ol id="lsLogList"></ol></details>
   </section>
 
   <!-- ============ 02～04 牌桌：搶牌／叫牌／出牌 ============ -->

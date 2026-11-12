@@ -9,9 +9,10 @@ import {
 import { GameEvent, Phase, TableState } from "../game/game";
 import { beats, isTrump } from "../game/rules";
 import { breakdown, contractText, declarerPreview, defenderPreview, madePoints, pointsPerUndertrick, PER_OVERTRICK, type HandResult } from "../game/scoring";
-import { CODE_LENGTH, Highlight, MODES, Mode, NAME_MAX, Notice, RoomView, SeatInfo, ServerMsg, checkName, isValidCode, nameLength, normalizeCode, normalizeName } from "../server/protocol";
+import { CODE_LENGTH, DEFAULT_STAKE, Highlight, MODES, Mode, NAME_MAX, Notice, RoomView, STAKE_MAX, SeatInfo, ServerMsg, checkName, checkStake, isValidCode, nameLength, normalizeCode, normalizeName } from "../server/protocol";
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
+import { lsEvent, lsHas, lsHoldUntil, lsInit, lsReset, lsView, lsResult } from "./lstable";
 import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
 import { sfx } from "./sound";
 import {
@@ -77,8 +78,10 @@ const paused = () => room?.status === "PAUSED";      // 朋友連線：有人斷
 const canPlayNow = () => !!st && (st.phase === Phase.Draw || st.phase === Phase.Play) && myTurn() && st.legal.length > 0 && !waiting && !paused();
 
 // 畫面切換：紙張滑入；牌桌從中心展開。重複進同一個畫面不重播
-function show(id: "home" | "online" | "wait" | "table") {
-  for (const s of ["home", "online", "wait", "table"]) $(s).hidden = s !== id;
+type ScreenId = "home" | "online" | "wait" | "table" | "lstable";
+const isTable = () => screen === "table" || screen === "lstable";      // 經典牌桌或逆命賭局牌桌
+function show(id: ScreenId) {
+  for (const s of ["home", "online", "wait", "table", "lstable"]) $(s).hidden = s !== id;
   watchPerf(id === "table");
   if (id !== "table") { resetAura(); closePops(); }
   if (screen === id) return;
@@ -296,6 +299,7 @@ function enterSolo(fresh: boolean) {
 // ---------------- 連線 ----------------
 
 function resetTable() {
+  lsReset();
   mySeat = -1; st = null; seats = []; started = false; room = null; lastEid = 0; selCard = selBid = -1; selLevel = 0; selStrain = -1;
   resultShownFor = -1; lastFaceUp = -1; auctionShown = 0; pulled = -1; hoverId = -1;
   inFlight.clear(); freshCards.clear();
@@ -332,7 +336,7 @@ function enter(code: string, name = myName()) {
       // 真的斷過、而且重新連上了，才說「回來啦」（對手還斷著的話，下面的同步會換成對手斷線的提示）
       if (dropped) banner("連上了！", 1600);
       dropped = false;
-    } else if (s === "closed" && (screen === "table" || screen === "wait")) {
+    } else if (s === "closed" && (isTable() || screen === "wait")) {
       banner(lastErr || "這個分頁的連線結束了，重新整理一下再進來。");
     }
   };
@@ -361,7 +365,7 @@ function onMsg(m: ServerMsg) {
       break;
     case "lobby":
       // 單機：兩個位子都坐好，直接開打
-      seats = m.seats.map(x => ({ ...x, ready: true, rematch: false, offlineSince: null }));
+      seats = m.seats.map(x => ({ ...x, ready: true, rematch: false, offlineSince: null, stake: "" }));
       started = m.started;
       renderNames(); renderPresence();
       break;
@@ -373,6 +377,7 @@ function onMsg(m: ServerMsg) {
       lastEid = m.eid;
       applyRoom(m.r);
       if (m.s && started) onState(m.s, true);
+      if (m.ls && started) onLS(m.ls);
       break;
     case "event":
       if (typeof m.eid === "number") { if (m.eid <= lastEid) break; lastEid = m.eid; }   // 重複收到的不再演一次
@@ -380,6 +385,13 @@ function onMsg(m: ServerMsg) {
       break;
     case "state":
       onState(m.s);
+      break;
+    case "lsState":
+      onLS(m.s);
+      break;
+    case "lsEvent":
+      if (typeof m.eid === "number") { if (m.eid <= lastEid) break; lastEid = m.eid; }   // 重複收到的不再處理
+      if (lsHas()) lsEvent(m.e);
       break;
     case "reject":
       onReject(m.code, m.msg);
@@ -420,6 +432,14 @@ function onMsg(m: ServerMsg) {
   }
 }
 
+// 逆命賭局：伺服器送來的牌桌（只有自己看得到的部分）
+function onLS(s: Parameters<typeof lsView>[0]) {
+  lsView(s);
+  if (started && room?.mode === "laststand" && screen !== "lstable") show("lstable");
+  renderPause();
+  renderMatchEnd();
+}
+
 // 伺服器拒絕了剛剛的指令：解鎖畫面、說原因（過期的不用講，伺服器會接著送最新狀態，畫面直接跳過去）
 function onReject(code: string, msg: string) {
   setWaiting(false);
@@ -449,7 +469,7 @@ function applyRoom(r: RoomView, notice?: Notice, who = -1) {
   skew = r.now - Date.now();
   room = r; seats = r.seats; started = nowStarted;
   if (!started) showWait(before);
-  else if (st && screen !== "table") show("table");
+  else if (r.mode === "laststand" ? lsHas() && screen !== "lstable" : !!st && screen !== "table") show(r.mode === "laststand" ? "lstable" : "table");
   renderNames(); renderPresence();
   if (notice === "started") banner(wasStarted ? "新的一場，開打！" : "兩邊都準備好了，開打！", 1800);
   else if (who >= 0 && who !== mySeat) roomNotice(notice, whoName || oppName(), prevResult);
@@ -494,7 +514,7 @@ const minutes = (ms: number) => ms >= 60_000 ? `${Math.round(ms / 60_000)} 分�
 
 function renderPause() {
   const r = room, opp = seats[1 - mySeat];
-  const on = !!r && r.status === "PAUSED" && screen === "table" && !!opp?.taken && opp.offlineSince !== null && seats[mySeat]?.offlineSince === null;
+  const on = !!r && r.status === "PAUSED" && isTable() && !!opp?.taken && opp.offlineSince !== null && seats[mySeat]?.offlineSince === null;
   if (!on) { $("pause").hidden = true; clearInterval(pauseTimer); pauseTimer = 0; return; }
   if (!pauseTimer) pauseTimer = window.setInterval(renderPause, 1000);
   const t = r!.timing, now = serverNow();
@@ -534,21 +554,34 @@ function currentPauseKey() {
 // 整場因為認輸或斷線逾時結束（照規則打到目標分數的，用原本的結算單）
 function renderMatchEnd() {
   const r = room;
-  const on = !!r && (r.status === "SETTLEMENT" || r.status === "REMATCH") && !!r.result && r.result.reason !== "target" && screen === "table";
+  const ls = r?.mode === "laststand";
+  // 逆命賭局：九墩打完、有人歸零也用這個面板（經典牌局照規則打完的用原本的結算單）
+  const on = !!r && (r.status === "SETTLEMENT" || r.status === "REMATCH") && !!r.result && (ls ? screen === "lstable" : r.result.reason !== "target" && screen === "table");
   if (!on) { $("matchEnd").hidden = true; return; }
+  if (ls && Date.now() < lsHoldUntil()) {                  // 最後一墩的結果先看一下
+    $("matchEnd").hidden = true;
+    window.setTimeout(renderMatchEnd, lsHoldUntil() - Date.now() + 30);
+    return;
+  }
   $("result").hidden = true;
-  const iWon = r!.result!.winner === mySeat, opp = oppName(), why = r!.result!.reason;
-  $("meTitle").textContent = iWon ? "這場算你贏" : `這場算${opp}贏`;
+  const winner = r!.result!.winner, iWon = winner === mySeat, opp = oppName(), why = r!.result!.reason;
+  $("meTitle").textContent = winner < 0 ? "平手" : iWon ? "這場算你贏" : `這場算${opp}贏`;
+  const fin = ls ? lsResult() : null;
   $("meText").textContent = why === "forfeit"
     ? (iWon ? `${opp}認輸了。` : `你認輸了，這場算${opp}贏。`)
-    : (iWon ? `${opp}斷線超過 ${minutes(r!.timing.forfeit)} 沒回來，照規則這場算你贏。` : `你斷線超過 ${minutes(r!.timing.forfeit)}，照規則這場算${opp}贏。`);
-  const w = r!.stats.wins;
-  $("meStats").textContent = `同桌戰績：你 ${w[mySeat]} 勝 · ${opp} ${w[1 - mySeat]} 勝（共 ${r!.stats.played} 場）`;
+    : why === "timeout"
+      ? (iWon ? `${opp}斷線超過 ${minutes(r!.timing.forfeit)} 沒回來，照規則這場算你贏。` : `你斷線超過 ${minutes(r!.timing.forfeit)}，照規則這場算${opp}贏。`)
+      : why === "elimination" && fin
+        ? `第 ${fin.trick} 墩，${winner === mySeat ? `${opp}的` : "你的"}籌碼歸零。`
+        : fin ? `九墩打完：你 ${fin.stacks[mySeat]} 枚、${opp} ${fin.stacks[1 - mySeat]} 枚。` : "";
+  const w = r!.stats.wins, d = r!.stats.draws;
+  const stakes = ls ? `賭上之物：你『${seats[mySeat]?.stake || DEFAULT_STAKE}』・${opp}『${seats[1 - mySeat]?.stake || DEFAULT_STAKE}』（僅供遊戲敘事）\n` : "";
+  $("meStats").textContent = `${stakes}同桌戰績：你 ${w[mySeat]} 勝 · ${opp} ${w[1 - mySeat]} 勝${d ? ` · 平 ${d}` : ""}（共 ${r!.stats.played} 場）`;
   const b = $<HTMLButtonElement>("meRematch");
   const me = seats[mySeat], other = seats[1 - mySeat];
   b.disabled = !other?.taken || meBusy;
   b.textContent = !other?.taken ? `${opp}已經離開了` : me?.rematch ? `等${opp}按…（點一下取消）` : other.rematch ? `${opp}想再來一場！按這裡開打` : "再來一場！";
-  $("meRecap").hidden = !r!.gid;
+  $("meRecap").hidden = !r!.gid || ls;
   if ($("matchEnd").hidden) { $("matchEnd").hidden = false; sfx.slide(); }
 }
 let meBusy = false;
@@ -646,6 +679,15 @@ function showWait(before: (boolean | undefined)[] = []) {
   ($("plateMe").querySelector("small") as HTMLElement).textContent = `${role(mySeat)}（你）`;
   ($("plateOpp").querySelector("small") as HTMLElement).textContent = role(1 - mySeat);
   plateTag($("plateMe"), me);
+  // 逆命賭局：名牌下面寫賭上之物（還沒簽就說還沒簽）
+  const lsMode = room.mode === "laststand";
+  for (const [id, s] of [["plateMeStake", me], ["plateOppStake", opp]] as const) {
+    const el = $(id);
+    el.hidden = !lsMode || !s?.taken;
+    el.textContent = s?.stake ? `賭上『${s.stake}』` : "契約還沒簽";
+    el.classList.toggle("unsigned", !s?.stake);
+  }
+  renderContract();
   const plate = $("plateOpp");
   $("plateOppName").textContent = opp?.taken ? opp.name : "還沒來…";
   plateTag(plate, opp);
@@ -656,13 +698,16 @@ function showWait(before: (boolean | undefined)[] = []) {
   } else if (!opp?.taken) plate.classList.remove("in");
   renderModes();
   const rb = $<HTMLButtonElement>("readyBtn");
-  rb.disabled = room.status !== "READY" || readyBusy || !!(opp && !opp.online);
+  const needSign = room.mode === "laststand" && !me?.stake;
+  rb.disabled = room.status !== "READY" || readyBusy || !!(opp && !opp.online) || needSign;
   rb.textContent = me?.ready ? "取消準備" : "準備好了";
   rb.classList.toggle("on", !!me?.ready);
   rb.setAttribute("aria-pressed", String(!!me?.ready));
   const on = (t: string, dots: boolean) => { $("waitText").textContent = t; $("waitDots").hidden = !dots; };
   if (!opp?.taken) on("還差一個人，把房號或連結傳給朋友", true);
   else if (!opp.online) on(`${opp.name}連線中斷，等他回來`, true);
+  else if (needSign) on("先在賭局契約書上蓋章，再按「準備好了」", false);
+  else if (room.mode === "laststand" && !opp.stake) on(`${opp.name}還在寫契約…`, true);
   else if (me?.ready && opp.ready) on("兩邊都準備好了，開打！", false);
   else if (me?.ready) on(`等${opp.name}按準備`, true);
   else if (opp.ready) on(`${opp.name}準備好了，換你按「準備好了」`, false);
@@ -726,6 +771,83 @@ $("renameBox").addEventListener("submit", ev => {
   });
   if (!sent) { renameBusy = false; $<HTMLButtonElement>("renameOk").disabled = false; }
 });
+
+// ---------------- 逆命賭局：賭局契約書 ----------------
+// 提示文字在兩句之間輪播（3～4 秒、淡入淡出）；點了輸入框、正在打字、已經有字就停；不碰玩家打的字
+// 系統設定「減少動態效果」或遊戲裡關掉動畫時不輪播
+const STAKE_PH = ["這場，你要賭上什麼？", "你要交出什麼？"];
+const stakeInput = $<HTMLInputElement>("stakeInput");
+const stakePh = $("stakePh");
+let phIdx = Math.random() < 0.5 ? 0 : 1, phTimer = 0, stakeBusy = false, stakeTouched = false;
+stakePh.textContent = STAKE_PH[phIdx];
+const reduceMotion = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches || !fx.motionOn(); } catch { return !fx.motionOn(); } };
+function phTick() {
+  clearTimeout(phTimer);
+  const idle = !stakeInput.value && document.activeElement !== stakeInput && !$("contract").hidden && screen === "wait" && !document.hidden;
+  if (!idle || reduceMotion()) return;
+  phTimer = window.setTimeout(() => {
+    if (stakeInput.value || document.activeElement === stakeInput) return;
+    stakePh.classList.add("fade");
+    phTimer = window.setTimeout(() => {
+      phIdx = (phIdx + 1) % STAKE_PH.length;
+      stakePh.textContent = STAKE_PH[phIdx];
+      stakePh.classList.remove("fade");
+      phTick();
+    }, 450);
+  }, 3000 + Math.random() * 1000);
+}
+function refreshStake() {
+  const raw = stakeInput.value, me = seats[mySeat];
+  stakePh.hidden = !!raw;
+  const chk = checkStake(raw);
+  const shown = chk.ok ? chk.stake : normalizeName(raw);
+  $("stakePreview").textContent = `本人自願於本場賭局中賭上『${shown}』。`;
+  const n = nameLength(normalizeName(raw));
+  $("stakeCount").textContent = `${n}/${STAKE_MAX}`;
+  $("stakeCount").classList.toggle("over", n > STAKE_MAX);
+  fieldErr(stakeInput, $("stakeErr"), chk.ok ? "" : chk.msg);
+  const signed = !!me?.stake && chk.ok && me.stake === chk.stake;
+  $("stakeSeal").classList.toggle("signed", signed);
+  const st = $("contractState");
+  st.textContent = signed ? "已蓋章 ✓" : me?.stake ? "改過了：要重新蓋章" : "尚未蓋章";
+  st.classList.toggle("done", signed);
+}
+function renderContract() {
+  const on = room?.mode === "laststand" && (room.status === "WAITING" || room.status === "READY");
+  $("contract").hidden = !on;
+  if (!on) { clearTimeout(phTimer); return; }
+  const me = seats[mySeat];
+  $("contractName").textContent = me?.name || "你";
+  // 重新整理後把簽過的內容帶回來（只在玩家還沒動過輸入框、而且是空的時候；預設值不帶，讓提示文字輪播）
+  if (!stakeTouched && !stakeInput.value && me?.stake && me.stake !== DEFAULT_STAKE) stakeInput.value = me.stake;
+  const locked = !!me?.ready;
+  stakeInput.readOnly = locked;
+  $<HTMLButtonElement>("stakeSeal").disabled = locked || stakeBusy;
+  refreshStake();
+  phTick();
+}
+stakeInput.addEventListener("input", () => { stakeTouched = true; refreshStake(); clearTimeout(phTimer); if (!stakeInput.value) phTick(); });
+stakeInput.addEventListener("focus", () => { clearTimeout(phTimer); stakePh.classList.remove("fade"); });
+stakeInput.addEventListener("blur", () => phTick());
+stakeInput.addEventListener("keydown", e => { if (e.key === "Enter" && composing(e)) e.preventDefault(); });   // 選字中的 Enter 不送出
+document.addEventListener("visibilitychange", () => { if (screen === "wait") phTick(); });
+$("contract").addEventListener("submit", ev => {
+  ev.preventDefault();
+  if (stakeBusy || !room) return;
+  const chk = checkStake(stakeInput.value);
+  if (!chk.ok) { fieldErr(stakeInput, $("stakeErr"), chk.msg); fx.deny(stakeInput); sfx.deny(); return; }
+  stakeBusy = true;
+  $<HTMLButtonElement>("stakeSeal").disabled = true;
+  const sent = act({ t: "stake", stake: stakeInput.value }, r => {
+    stakeBusy = false;
+    if (r.ok) { fx.stampIn($("stakeSeal")); fx.buzz(14); stakeInput.blur(); }
+    else fieldErr(stakeInput, $("stakeErr"), r.msg);
+    renderContract();
+  });
+  if (!sent) { stakeBusy = false; renderContract(); }
+});
+
+lsInit({ act, banner, oppName, openMenu: () => openMenu(), deny: () => sfx.deny() });
 
 $("modePick").addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".mode");
@@ -2621,7 +2743,7 @@ function openModal(id: string) {
 }
 function openMenu() {
   renderSettings($("settingsBox"));
-  const inTable = screen === "table" && !!conn;
+  const inTable = isTable() && !!conn;
   $("menuTitle").textContent = inTable ? "選單" : "設定";
   $("leaveBtn").hidden = !inTable;
   $("restartSolo").hidden = !(inTable && conn?.solo);

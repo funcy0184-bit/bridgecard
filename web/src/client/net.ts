@@ -42,7 +42,7 @@ export async function roomInfo(code: string): Promise<RoomInfo> {
 }
 
 export type ConnStatus = "connecting" | "open" | "reconnecting" | "closed";
-const GAME_CMDS = new Set(["play", "call", "next"]);
+const GAME_CMDS = new Set(["play", "call", "next", "ls"]);
 // 這些關閉代碼代表「不要再重連了」：被新分頁取代、自己離開、房間不在、坐滿、關了、暱稱不合格、版本不對、太頻繁
 const FINAL_CLOSE = new Set([4000, 4001, 4404, 4409, 4410, 4422, 4426, 4429]);
 
@@ -115,8 +115,8 @@ export class Connection {
 
   // 記住最新的狀態版本；指令的回覆交給等它的人
   private track(m: ServerMsg) {
-    if (m.t === "event" || m.t === "state" || m.t === "ack" || m.t === "reject") { if (typeof m.ver === "number") this.ver = m.ver; }
-    if ((m.t === "event" || m.t === "state") && m.gid) this.gid = m.gid;
+    if (m.t === "event" || m.t === "state" || m.t === "lsEvent" || m.t === "lsState" || m.t === "ack" || m.t === "reject") { if (typeof m.ver === "number") this.ver = m.ver; }
+    if ((m.t === "event" || m.t === "state" || m.t === "lsEvent" || m.t === "lsState") && m.gid) this.gid = m.gid;
     if (m.t === "resync" || m.t === "room") { this.ver = m.t === "resync" ? m.ver : m.r.ver; this.gid = m.r.gid; }
     if (m.t === "welcome") this.gid = m.gid;
     if ((m.t === "ack" || m.t === "reject") && m.cid) {
