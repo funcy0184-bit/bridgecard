@@ -134,10 +134,33 @@ export function renderSettings(box: HTMLElement) {
   }
   trow.append(tl, tg);
 
+  // 梭了啦轉播：正常／精簡（只播重要的）／關閉（規則提示、結算照常顯示）
+  const crow = document.createElement("div");
+  crow.className = "setting";
+  const cl = document.createElement("span");
+  cl.textContent = "梭了啦轉播";
+  const cg = document.createElement("div");
+  cg.className = "seg";
+  for (const [val, label] of [["full", "正常"], ["lite", "精簡"], ["off", "關閉"]] as const) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.dataset.cast = val;
+    b.setAttribute("aria-pressed", String(s.cast === val));
+    b.addEventListener("click", () => {
+      s.cast = val; fx.saveSettings();
+      for (const x of Array.from(cg.children)) x.setAttribute("aria-pressed", String(x === b));
+      sfx.select();
+    });
+    cg.appendChild(b);
+  }
+  crow.append(cl, cg);
+
   box.append(
     seg,
     qrow,
     trow,
+    crow,
     toggle("加快動畫", () => s.fast, v => { s.fast = v; }),
     toggle("畫面震動", () => s.shake, v => { s.shake = v; }, () => { if (s.shake) fx.shake(box, 5, 220); }),
     toggle("粒子特效", () => s.particles, v => { s.particles = v; }),

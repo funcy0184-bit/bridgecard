@@ -123,14 +123,14 @@ export class Director {
     return {
       id: `${b.id}:${t.id}`, beat: b.id, channel, program: t.program, priority: b.priority, level: b.data.level ?? 1,
       title: t.title ? fill(t.title, vars) : undefined, lines,
-      ttl: channel === "card" ? RHYTHM.cardTtl : important ? RHYTHM.importantTtl : RHYTHM.chatTtl, skippable: channel === "card",
+      ttl: channel === "card" ? Math.min(4200, Math.max(2400, 1200 + 650 * lines.length)) : important ? RHYTHM.importantTtl : RHYTHM.chatTtl, skippable: channel === "card",
     };
   }
 
   // ---------------- 開局：契約公證處 ----------------
   private contract(b: AnyBeat): Cue | null {
     const t = this.choose("match_start", LINES.filter(x => x.channel === "card"), b);
-    return t ? { ...this.cue(b, t, "card"), ttl: RHYTHM.cardTtl } : null;
+    return t ? this.cue(b, t, "card") : null;
   }
 
   // ---------------- 第四墩後：中場節目（先篩合格的類型，再抽；都不合格才播通用的專家分析） ----------------

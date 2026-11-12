@@ -13,6 +13,7 @@ import { CODE_LENGTH, DEFAULT_STAKE, Highlight, MODES, Mode, NAME_MAX, Notice, R
 import * as fx from "./fx";
 import { Connection, LAST_ROOM_KEY, createRoom, forgetRoom, roomInfo, savedToken, store } from "./net";
 import { lsEvent, lsHas, lsHoldUntil, lsInit, lsReset, lsView, lsResult } from "./lstable";
+import { mediaInit } from "./lsmedia";
 import { Command, Link, LocalTable, Reply, hasUnfinishedSolo } from "./solo";
 import { FIRST_NAMES, LocalLastStandTable, SPEED_NAMES, STRATEGY_NAMES, hasUnfinishedLsAi, type AiSpeed, type FirstPolicy } from "./laststand-solo";
 import { sfx } from "./sound";
@@ -535,7 +536,7 @@ function onMsg(m: ServerMsg) {
       lastEid = m.eid;
       applyRoom(m.r);
       if (m.s && started) onState(m.s, true);
-      if (m.ls && started) onLS(m.ls);
+      if (m.ls && started) onLS(m.ls, true);
       break;
     case "event":
       if (typeof m.eid === "number") { if (m.eid <= lastEid) break; lastEid = m.eid; }   // 重複收到的不再演一次
@@ -591,8 +592,8 @@ function onMsg(m: ServerMsg) {
 }
 
 // 梭了啦：伺服器送來的牌桌（只有自己看得到的部分）
-function onLS(s: Parameters<typeof lsView>[0]) {
-  lsView(s);
+function onLS(s: Parameters<typeof lsView>[0], resync = false) {
+  lsView(s, resync);
   renderLsAiTag();
   if (started && room?.mode === "laststand" && screen !== "lstable") show("lstable");
   renderPause();
@@ -1058,6 +1059,15 @@ $("contract").addEventListener("submit", ev => {
 });
 
 lsInit({ act, banner, oppName, openMenu: () => openMenu(), deny: () => sfx.deny() });
+// 梭了啦轉播（P2）：用雙方的暱稱、賭上之物、豪言演；同名時後面加（房主）／（訪客）分辨
+mediaInit({
+  gid: () => room?.gid ?? null,
+  cast: () => {
+    const nm = (i: number) => { const n = seats[i]?.name || roleOf(i); return sameNames() ? `${n}（${roleOf(i)}）` : n; };
+    return { names: [nm(0), nm(1)], stakes: [seats[0]?.stake ?? "", seats[1]?.stake ?? ""], vows: [seats[0]?.vow ?? "", seats[1]?.vow ?? ""] };
+  },
+  reduced: () => reduceMotion(),
+});
 
 $("modePick").addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".mode");

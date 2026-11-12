@@ -53,8 +53,8 @@ export const programEnabled = (id: ProgramId) => PROGRAMS.some(p => p.id === id 
 export const RHYTHM = {
   chatTtl: 2000,              // 一般彈幕約 2 秒淡出
   importantTtl: 3000,         // 重要事件（優先級 ≥ 80）稍微久一點
-  cardTtl: 3200,              // 節目小卡
-  intermissionTtl: 3600,      // 中場節目（可以略過）
+  cardTtl: 3200,              // 節目小卡（實際照行數：1.2 秒＋每行 0.65 秒，2.4～4.2 秒）
+  intermissionTtl: 3000,      // 中場節目（約 3 秒、可以略過、不擋操作）
   maxTicker: 2,               // 字幕區同時最多兩則
   maxQueue: 4,                // 排隊最多幾則（多的丟掉最不重要的）
   maxLinesPerStep: 3,         // 同一個動作引發的演出：字幕最多幾句（另外最多一張小卡），多的丟掉最不重要的

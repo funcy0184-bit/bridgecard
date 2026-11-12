@@ -6,6 +6,7 @@
 import type { Action, LSEvent, LSView, TrickRecord } from "../laststand/engine";
 import { CAT_LABEL, DIR_LABEL, TRICKS, catOf, flipDir } from "../laststand/rules";
 import * as fx from "./fx";
+import { mediaHold, mediaReset, mediaView } from "./lsmedia";
 import type { Command, Reply } from "./solo";
 
 export interface LSDeps {
@@ -32,11 +33,13 @@ export const lsResult = () => (v?.result ? { stacks: v.stacks, trick: v.result.t
 export const lsHoldUntil = () => holdUntil;
 export function lsReset() {
   v = null; sel = -1; busy = false; holdUntil = 0; raiseTo = 0;
+  mediaReset();
   for (const id of ["lsHand", "lsActions", "lsLogList", "lsReveal"]) $(id).replaceChildren();
 }
 
 export function lsInit(deps: LSDeps) {
-  D = deps;
+  // 規則提示條出現時，轉播字幕先讓位
+  D = { ...deps, banner: (text, ms) => { deps.banner(text, ms); mediaHold(ms ?? 2600); } };
   $("lsMenuBtn").addEventListener("click", () => D.openMenu());
   $("lsHand").addEventListener("click", ev => {
     const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".lscard");
@@ -76,8 +79,8 @@ function send(a: Action) {
   if (!sent) { busy = false; render(); }
 }
 
-// 伺服器送來的新牌桌
-export function lsView(view: LSView) {
+// 伺服器送來的新牌桌（resync＝斷線回來整份重送：轉播不補播舊新聞）
+export function lsView(view: LSView, resync = false) {
   v = view;
   busy = false;
   if (v.phase !== "lock" || v.myLock >= 0 || !v.hand.includes(sel)) sel = -1;
@@ -85,6 +88,7 @@ export function lsView(view: LSView) {
   if (L.raise) raiseTo = Math.max(L.raise[0], Math.min(L.raise[1], raiseTo || L.raise[0]));
   else raiseTo = 0;
   render();
+  mediaView(view, resync);
 }
 
 // 對手做了什麼：短短提示一下（輪到誰、多少錢都在畫面上）
@@ -115,6 +119,7 @@ function render() {
   if (!v) return;
   const me = v.seat, op = 1 - me, opp = D.oppName(), pool = v.pool[0] + v.pool[1];
   $("lsTrick").textContent = v.result ? "比賽結束" : `第 ${v.trick}／${TRICKS} 墩`;
+  $("lsBadge").textContent = (!$("lsTestTag").hidden ? "測試・" : "") + (v.result ? "終" : `${v.trick}/${TRICKS}`);
   $("lsStage").textContent = v.safeguard >= 0 ? `保命墩：每人只押 1 枚` : `底注 ${v.ante} · ${v.allInStage ? `可梭哈（每人最多 ${v.cap}）` : `單人上限 ${v.cap}`}`;
   $("lsOppName").textContent = opp;
   $("lsOppTag").textContent = role(op);

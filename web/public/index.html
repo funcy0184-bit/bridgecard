@@ -175,8 +175,11 @@
 
   <!-- ============ 梭了啦牌桌：九墩、比大／比小、鎖牌、下注 ============ -->
   <section id="lstable" class="screen" hidden>
-    <header class="lsbar">
+    <header class="lsbar" id="lsBar">
       <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1 · 單人上限 3</small><em class="lstest" id="lsTestTag" hidden>單人測試｜不計正式戰績</em></div>
+      <!-- 轉播字幕（P2）：蓋在標題列上、最多兩則；左邊留墩數小標 -->
+      <div class="lsticker" id="lsTicker" aria-live="off"></div>
+      <span class="lsbadge" id="lsBadge" aria-hidden="true">1/9</span>
       <button id="lsMenuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
     </header>
     <div class="lsside opp" id="lsOpp">
@@ -194,6 +197,11 @@
       <div class="lsreveal" id="lsReveal" hidden></div>
     </div>
     <details class="lslog" id="lsLog"><summary>每墩紀錄</summary><ol id="lsLogList"></ol></details>
+    <!-- 節目小卡（P2）：放在中間和底部固定區之間的空位，點一下略過；不擋任何按鈕 -->
+    <aside class="lscast" id="lsCast" hidden role="status" aria-live="polite">
+      <header><span class="prog" id="lsCastProg"></span><b id="lsCastTitle"></b><span class="skip">點一下略過</span></header>
+      <ol id="lsCastLines"></ol>
+    </aside>
     <!-- 自己的籌碼、輪到誰、手牌、輸贏試算、按鈕：固定在畫面底部（小手機上方內容捲動時也一定看得到、點得到） -->
     <div class="lsdock" id="lsDock">
       <div class="lsside me" id="lsMe">
