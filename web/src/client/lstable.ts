@@ -46,7 +46,8 @@ export function lsReset() {
 
 // ---------------- 固定的一組按鈕 ----------------
 // data-a 名稱不變（測試、無障礙都靠它）；raiseopen／cancel 是 P2.5 新增的「展開／收起加注金額列」
-const MAIN = ["flip", "noflip", "safe", "nosafe", "lock", "check", "raiseopen", "call", "fold", "insight"] as const;
+// 順序＝畫面上的順序：主按鈕在前（面對加注：接戰、棄牌、反加、讀心；沒人加注：過牌、加注）
+const MAIN = ["flip", "noflip", "safe", "nosafe", "lock", "call", "fold", "check", "raiseopen", "insight"] as const;
 const RAISE = ["cancel", "minus", "raise", "plus", "max"] as const;
 const BTN_CLASS: Record<string, string> = {
   flip: "btn wine", noflip: "btn paper", safe: "btn wine", nosafe: "btn paper", lock: "btn wine", check: "btn paper", raiseopen: "btn wine",
