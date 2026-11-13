@@ -1242,6 +1242,8 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .lsslot > .lsflipback { position: absolute; inset: 0; z-index: 2; backface-visibility: hidden; }
 /* 落桌的接觸陰影畫在牌桌裡、牌的下面 */
 .lsfelt { isolation: isolate; }
+/* P2.5-D：對手剩下的大中小是情報、不是每一步都要看：淡一點，點名牌看完整說明（? 面板） */
+#lstable .lspips { opacity: .72; }
 /* P2.5-C 籌碼：飛行中的籌碼；結算時桌上的籌碼堆先藏起來（正在飛走） */
 #fx > .lsflychip { position: fixed; z-index: 6; pointer-events: none; }
 #fx > .lsflychip.opp { background: radial-gradient(ellipse at 50% 35%, #C8505C, #7A2732 70%); box-shadow: inset 0 -2px 0 #4a141c, 0 1px 1px rgba(0,0,0,.5); }

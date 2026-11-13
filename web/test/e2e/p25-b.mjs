@@ -86,6 +86,7 @@ async function play(P, opt = {}) {
         continue;
       }
       await cards.nth(0).click();
+      (st.tips ??= []).push((await P.textContent("#lsRisk")).includes("拖到桌上"));   // P2.5-D 首次提示：第一次有、之後沒有
       await P.evaluate(() => { globalThis.__hbLSLand = null; });
       // 按下到開始動：同一個事件裡就要有飛行的牌（下一幀開始動）；第二次連點只會被擋掉
       const r = await P.evaluate(dbl => {
@@ -145,6 +146,7 @@ console.log("P2.5-B 卡牌手感（iPhone 13）");
   ok(o.tricks >= 3 && !o.bad.length, `每一墩依序 翻牌 → 判勝負 → 看結果 → 收牌（${o.tricks} 墩）${o.bad.length ? `：${o.bad.slice(0, 4).join("；")}` : ""}`);
   ok(st.dbl >= 1 && !st.dblBad, `連點蓋牌只演一次（${st.dbl} 次連點）`);
   ok(st.drag >= 1, `拖牌上桌蓋牌（${st.drag} 次）`);
+  ok(st.tips?.[0] === true && st.tips.slice(1).every(x => !x), `首次提示只出現一次（蓋牌提示：${(st.tips ?? []).map(x => (x ? "有" : "無")).join("")}）`);
   ok(st.rec.chips > 0, `籌碼有飛（下注推上桌、結算收走；取樣到 ${st.rec.chips} 次）`);
   ok(st.rec.moneyBad.length === 0, `沒在展示時，名牌上的餘額＝伺服器的餘額${st.rec.moneyBad.length ? `：${st.rec.moneyBad.slice(0, 3).join("；")}` : ""}`);
   ok(st.rec.preMoneyBad.length === 0, `翻牌、判勝負時餘額還是結算前的（籌碼收完才變）${st.rec.preMoneyBad.length ? `：${st.rec.preMoneyBad.slice(0, 3).join("；")}` : ""}`);

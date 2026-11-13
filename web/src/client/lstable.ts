@@ -425,6 +425,27 @@ function renderHand() {
   box.classList.toggle("wait", (s.phase === "lock" && s.myLock >= 0) || !!s.result);
 }
 
+// P2.5-D 首次提示：每種決定第一次遇到時，小字換成一句教學（看過就不再出現；存在這台手機上）
+const TIPS: Record<string, string> = {
+  lock: "點一張牌再按「蓋牌」，或直接把牌往上拖到桌上。蓋了就不能換。",
+  flip: "宣戰權：把這一墩的方向反過來（比大↔比小）。每場只能用一次。",
+  safe: "保命：這一墩雙方都只押 1 枚，輸了也只輸 1 枚。每場只能用一次。",
+  facing: "對手加注了：「接戰」補到一樣多再翻牌；「棄牌」只輸掉你已經押的。按鈕上的小字就是會補／會輸多少。",
+  bet: "「過牌」就直接翻牌比大小；想多贏一點就「加注」。完整試算按右邊的「?」。",
+};
+let tipsSeen: Set<string> | null = null;
+let tipShown = "";           // 這一個決定已經在顯示哪一則（同一個決定重畫不換字）
+let tipKey = "";
+function tip(k: string): string | null {
+  if (!tipsSeen) { try { tipsSeen = new Set(JSON.parse(localStorage.getItem("hb-ls-tips") ?? "[]")); } catch { tipsSeen = new Set(); } }
+  const key = `${v!.trick}:${v!.phase}:${v!.steps.length}`;
+  if (tipKey === key && tipShown === k) return TIPS[k];
+  if (tipsSeen.has(k)) return null;
+  tipsSeen.add(k); tipKey = key; tipShown = k;
+  try { localStorage.setItem("hb-ls-tips", JSON.stringify([...tipsSeen])); } catch { /* 無痕模式 */ }
+  return TIPS[k];
+}
+
 // ⑤ 一句問題＋一行小字
 function renderAsk(opp: string, pool: number) {
   const s = v!, me = s.seat, L = s.legal, o = esc(opp);
@@ -443,31 +464,36 @@ function renderAsk(opp: string, pool: number) {
     sm = "點牌桌直接下一墩";
   } else if (busy) q = "送出中…";
   else switch (s.phase) {
+    // P2.5-D：一句話只講「現在要你決定什麼」；小字只放做決定需要的數字；第一次遇到某個決定時，小字換成一次性的提示
     case "flip":
-      if (L.flip) { mineTurn = true; q = `你有宣戰權：這墩${DIR_LABEL[s.dir]}，要翻成${DIR_LABEL[flipDir(s.dir)]}嗎？`; sm = "翻轉只改這一墩，每場一次。"; }
-      else q = `${opp}在決定要不要翻轉方向…`;
+      if (L.flip) { mineTurn = true; q = `這墩${DIR_LABEL[s.dir]}。要翻成${DIR_LABEL[flipDir(s.dir)]}嗎？`; sm = tip("flip") ?? "你有宣戰權：翻了只改這一墩，每場一次。"; }
+      else q = `${opp}在想要不要翻方向…`;
       break;
     case "safeguard":
-      if (L.safeguard) { mineTurn = true; q = "要用保命嗎？"; sm = "這墩每人只押 1 枚、不能加注；每場一次。"; }
-      else q = `${opp}在決定要不要用保命…`;
+      if (L.safeguard) { mineTurn = true; q = "這墩要保命嗎？"; sm = tip("safe") ?? "用了這墩每人只押 1 枚、不能加注；每場一次。"; }
+      else q = `${opp}在想要不要保命…`;
       break;
     case "lock":
-      if (s.myLock < 0) { mineTurn = true; q = "選一張牌蓋到桌上"; sm = `${DIR_LABEL[s.dir]}：${s.dir === "high" ? "點數越大越好" : "點數越小越好"}。蓋了就不能換${s.locked[1 - me] ? `；${o}已經蓋好了` : ""}。`; }
-      else q = `等${opp}蓋牌…`;
+      if (s.myLock < 0) {
+        mineTurn = true;
+        q = "挑一張牌蓋到桌上";
+        sm = tip("lock") ?? `${DIR_LABEL[s.dir]}：${s.dir === "high" ? "點數越大越好" : "點數越小越好"}${s.locked[1 - me] ? `；${o}已經蓋好了` : ""}。`;
+      }
+      else q = `等${opp}出牌…`;
       break;
     case "bet":
-      if (s.toAct !== me) { q = `等${opp}回應…`; break; }
+      if (s.toAct !== me) { q = `等${opp}決定…`; break; }
       mineTurn = true;
       if (raiseOpen && L.raise) {
         const x = raiseTo, allIn = s.allInStage && x === L.raise[1];
-        q = allIn ? `梭哈：每人押到 ${x}` : `${L.call ? "反加" : "加注"}到 ${x}？`;
+        q = allIn ? `梭哈：每人押到 ${x}？` : `${L.call ? "反加" : "加"}到 ${x}？`;
         sm = `${o}接戰：翻牌贏 <b>+${x}</b>${poolTxt}、輸 <b>−${x}</b>；${o}棄牌：你 <b>+${theirs}</b>${poolTxt}`;
       } else if (theirs > mine) {
-        q = `${opp}${s.steps.filter(x => x.act === "raise").length >= 2 ? "反加" : "加注"}到 ${theirs}，你要跟嗎？`;
-        sm = `接戰：翻牌${DIR_LABEL[s.dir]}，贏 <b>+${theirs}</b>、輸 <b>−${theirs}</b>${poolTxt}`;
+        q = `${opp}${s.steps.filter(x => x.act === "raise").length >= 2 ? "反加" : "加"}到 ${theirs}，跟不跟？`;
+        sm = tip("facing") ?? `接戰：翻牌${DIR_LABEL[s.dir]}，贏 <b>+${theirs}</b>、輸 <b>−${theirs}</b>${poolTxt}`;
       } else {
-        q = s.steps.some(x => x.act === "check") ? `${opp}過牌。要加注嗎？` : "要加注嗎？";
-        sm = `現在每人押 ${mine}：翻牌贏 <b>+${theirs}</b>、輸 <b>−${mine}</b>${poolTxt}`;
+        q = s.steps.some(x => x.act === "check") ? `${opp}過牌了。你要加注嗎？` : "要加注嗎？";
+        sm = tip("bet") ?? `不加就直接翻牌：贏 <b>+${theirs}</b>、輸 <b>−${mine}</b>${poolTxt}`;
       }
       if (s.insight >= 0 && !raiseOpen) sm += `${sm ? "；" : ""}讀心：${o}蓋的是「${CAT_LABEL[s.insight]}」`;
       break;
