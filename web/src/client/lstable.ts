@@ -5,7 +5,7 @@
 // 隱藏資訊：對手的出牌位在翻牌前只畫牌背（手機上本來就收不到對手的牌）；我蓋的牌只有自己看得到小標；讀心結果只在自己畫面
 // 梭哈一律顯示「每人押到多少」（雙方較少的籌碼），不讓人以為雙方都推出全部
 import type { Action, LSEvent, LSView, TrickRecord } from "../laststand/engine";
-import { CAT_LABEL, DIR_LABEL, RANK_TEXT, SUITS, TRICKS, catOf, flipDir, rankOf, suitOf } from "../laststand/rules";
+import { CAT_LABEL, DIR_LABEL, RANK_TEXT, SUITS, TRICKS, allInStage, catOf, flipDir, rankOf, suitOf } from "../laststand/rules";
 import * as fx from "./fx";
 import { mediaHold, mediaReset, mediaView } from "./lsmedia";
 import type { Command, Reply } from "./solo";
@@ -24,6 +24,11 @@ let raiseTo = 0;              // 加注金額（每人總承諾）
 let raiseOpen = false;        // 加注金額列展開中
 let busy = false;             // 動作送出、等伺服器回覆
 let holdUntil = 0;            // 整場結束：最後一墩結果先看一下再跳結算
+// 一墩的生命週期（P2.5-A）：結算 → 展示結果（出牌位翻開那一墩的牌、方向用那一墩自己的）→ 清空出牌區 → 開始下一墩
+//   伺服器一結算就直接送「下一墩」的牌桌（方向已經換了），所以展示用的是剛存進紀錄的那一墩；
+//   重新整理、斷線回來不重播展示；點牌桌可以略過；P2.5-B 的翻牌、收牌動畫就演在這段時間裡
+const SHOW_MS = 1800;
+let showRec: TrickRecord | null = null, showUntil = 0, showTimer = 0;
 const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
@@ -35,6 +40,7 @@ export const lsResult = () => (v?.result ? { stacks: v.stacks, trick: v.result.t
 export const lsHoldUntil = () => holdUntil;
 export function lsReset() {
   v = null; sel = -1; busy = false; holdUntil = 0; raiseTo = 0; raiseOpen = false;
+  showRec = null; showUntil = 0; clearTimeout(showTimer);
   handNodes.clear();
   $("lsHand").replaceChildren();
   for (const id of ["lsOppSlot", "lsMySlot"]) { const e = $(id); e.replaceChildren(); delete e.dataset.key; e.className = "lsslot"; }
@@ -109,7 +115,9 @@ export function lsInit(deps: LSDeps) {
       a === "insight" ? { t: "insight" } : a === "raise" ? { t: "raise", to: raiseTo } : null;
     if (action) send(action);
   });
-  $("lsLast").addEventListener("click", () => openPanel("lsLogPanel"));
+  $("lsLast").addEventListener("click", ev => { ev.stopPropagation(); openPanel("lsLogPanel"); });
+  // 展示上一墩結果時，點牌桌直接開始下一墩
+  $("lsFelt").addEventListener("click", () => { if (showing()) { showUntil = 0; render(); } });
   $("lsHelpBtn").addEventListener("click", () => { if (v) $("lsHelpBody").innerHTML = helpHtml(D.oppName()); openPanel("lsHelpPanel"); });
   for (const id of ["lsLogPanel", "lsHelpPanel"]) {
     const m = $(id);
@@ -133,7 +141,16 @@ function send(a: Action) {
 // 伺服器送來的新牌桌（resync＝斷線回來整份重送：轉播不補播舊新聞）
 export function lsView(view: LSView, resync = false) {
   const prevKey = v ? `${v.trick}:${v.phase}:${v.steps.length}:${v.toAct}` : "";
+  const prevHist = v ? v.history.length : -1;
   v = view;
+  // 剛結算完一墩（紀錄多了一筆）：先展示結果；重新整理、斷線回來、換一場就不展示
+  if (resync || prevHist < 0 || view.history.length < prevHist) { showRec = null; showUntil = 0; }
+  else if (view.history.length > prevHist) {
+    showRec = view.history.at(-1)!;
+    showUntil = Date.now() + SHOW_MS;
+    clearTimeout(showTimer);
+    showTimer = window.setTimeout(() => { if (v) render(); }, SHOW_MS + 30);
+  }
   busy = false;
   if (v.phase !== "lock" || v.myLock >= 0 || !v.hand.includes(sel)) sel = -1;
   const L = v.legal;
@@ -162,7 +179,8 @@ export function lsEvent(e: LSEvent) {
 }
 
 // ---------------- 畫面 ----------------
-const role = (s: number) => (v && s === v.declarer ? "宣戰權" : "下注先手");
+// 攤牌停留期間（showing）整張桌子講的都是「剛結算的那一墩」：墩數、底注、身分都用那一墩的紀錄，下一墩的資訊等清桌後才出現
+const role = (s: number, r: TrickRecord | null = null) => (s === (r ? r.declarer : v?.declarer) ? "宣戰權" : "下注先手");
 const pipsHtml = (c: [number, number, number]) => `大<b>${c[2]}</b>中<b>${c[1]}</b>小<b>${c[0]}</b>`;
 function skills(el: HTMLElement, s: number) {
   const k = `${+v!.flipUsed[s]}${+v!.safeUsed[s]}${+v!.insightUsed[s]}`;
@@ -183,14 +201,16 @@ function render() {
   if (!v) return;
   const me = v.seat, op = 1 - me, opp = D.oppName(), pool = v.pool[0] + v.pool[1];
   // ① 頂列
-  $("lsTrick").textContent = v.result ? "比賽結束" : `第 ${v.trick}／${TRICKS} 墩`;
-  $("lsStage").textContent = v.result ? "" : v.safeguard >= 0 ? "保命墩・每人 1 枚" : `底注 ${v.ante}・${v.allInStage ? "可梭哈" : `上限 ${v.cap}`}`;
-  $("lsBadge").textContent = (!$("lsTestTag").hidden ? "測試・" : "") + (v.result ? "終" : `${v.trick}/${TRICKS}`);
+  const R = showing() ? showRec : null;
+  const trick = R ? R.trick : v.trick, ante = R ? R.ante : v.ante, cap = R ? R.cap : v.cap, safe = R ? R.safeguardBy >= 0 : v.safeguard >= 0;
+  $("lsTrick").textContent = v.result ? "比賽結束" : `第 ${trick}／${TRICKS} 墩`;
+  $("lsStage").textContent = v.result ? "" : safe ? "保命墩・每人 1 枚" : `底注 ${ante}・${allInStage(trick) ? "可梭哈" : `上限 ${cap}`}`;
+  $("lsBadge").textContent = (!$("lsTestTag").hidden ? "測試・" : "") + (v.result ? "終" : `${trick}/${TRICKS}`);
   // ② 對手名牌
   $("lsOppName").textContent = opp;
   $("lsOppSeal").textContent = [...opp][0] ?? "";
-  $("lsOppTag").textContent = role(op);
-  $("lsOppStatus").textContent = oppStatus();
+  $("lsOppTag").textContent = role(op, R);
+  $("lsOppStatus").textContent = R ? "" : oppStatus();
   $("lsOppChips").textContent = String(v.stacks[op]);
   const left = v.counts[op].reduce((a, b) => a + b, 0), inHand = left - (v.locked[op] ? 1 : 0);
   const backs = $("lsOppBacks");
@@ -201,7 +221,7 @@ function render() {
   // ③ 牌桌
   renderFelt(opp, pool);
   // 我的名牌
-  $("lsMyTag").textContent = role(me);
+  $("lsMyTag").textContent = role(me, R);
   $("lsMyChips").textContent = String(v.stacks[me]);
   skills($("lsMySkills"), me);
   // ④ 手牌 ⑤ 行動列
@@ -226,12 +246,13 @@ function oppStatus(): string {
 }
 
 // 上一墩要不要攤在桌上：新的一墩還沒有人蓋牌之前（或整場結束），兩個出牌位翻開上一墩的牌
+// 出牌位要不要攤開某一墩：整場結束＝最後一墩；剛結算完＝展示中的那一墩；其他時候出牌區是這一墩的（清空、蓋牌）
 function revealing(): TrickRecord | null {
-  const s = v!, r = s.history.at(-1);
-  if (!r) return null;
-  if (s.result) return r;
-  return !s.locked[0] && !s.locked[1] && s.phase !== "bet" ? r : null;
+  const s = v!;
+  if (s.result) return s.history.at(-1) ?? null;
+  return showing() ? showRec : null;
 }
+const showing = () => !!showRec && Date.now() < showUntil && !!v && !v.result;
 
 function renderFelt(opp: string, pool: number) {
   const s = v!, me = s.seat, op = 1 - me, r = revealing();
@@ -267,13 +288,16 @@ function renderFelt(opp: string, pool: number) {
   $("lsMyCommit").textContent = String(s.commit[me]);
   $("lsOppCommit").textContent = String(s.commit[op]);
   $("lsOppCommitWho").textContent = `${opp}押`;
-  // 方向
+  $("lsOppOwner").textContent = opp;
+  // 方向：攤開某一墩的時候，用那一墩自己的方向（不會把上一墩的牌配上這一墩的方向）
+  const dir = r ? r.dir : s.dir, flipped = r ? r.flippedBy >= 0 : s.flippedBy >= 0;
   const big = $("lsDirBig");
-  big.textContent = DIR_LABEL[s.dir];
-  big.classList.toggle("low", s.dir === "low");
-  big.classList.toggle("flipped", s.flippedBy >= 0);
-  $("lsDir").classList.toggle("canflip", s.legal.flip);
-  $("lsDirNote").textContent = s.result ? "" : s.nextDir ? `下一墩 ${DIR_LABEL[s.nextDir]}` : "最後一墩";
+  big.textContent = DIR_LABEL[dir];
+  big.classList.toggle("low", dir === "low");
+  big.classList.toggle("flipped", flipped);
+  $("lsDir").classList.toggle("canflip", !r && s.legal.flip);
+  $("lsDir").classList.toggle("past", !!r);
+  $("lsDirNote").textContent = r ? `第 ${r.trick} 墩` : s.nextDir ? `下一墩 ${DIR_LABEL[s.nextDir]}` : "最後一墩";
   // 疊池
   const pl = $("lsPool");
   pl.hidden = !pool;
@@ -282,7 +306,7 @@ function renderFelt(opp: string, pool: number) {
   const last = s.history.at(-1), lb = $("lsLast");
   lb.hidden = !last;
   if (last) {
-    const html = `${r ? `第 ${last.trick} 墩` : "上一墩"}：${shortResult(last, opp)}`;
+    const html = `${r ? `第 ${last.trick} 墩・${DIR_LABEL[last.dir]}` : "上一墩"}：${shortResult(last, opp)}`;
     if (lb.dataset.h !== html) { lb.innerHTML = html; lb.dataset.h = html; }
     lb.classList.toggle("hot", !!r);
     lb.setAttribute("aria-label", `${lb.textContent}。點一下看每墩紀錄`);
@@ -312,7 +336,7 @@ const handNodes = new Map<number, HTMLButtonElement>();
 function renderHand() {
   const s = v!, box = $("lsHand");
   const cards = s.hand.filter(id => id !== s.myLock);
-  const canPick = s.phase === "lock" && s.myLock < 0 && !busy && !s.result;
+  const canPick = s.phase === "lock" && s.myLock < 0 && !busy && !s.result && !showing();
   for (const [id, el] of handNodes) if (!cards.includes(id)) { el.remove(); handNodes.delete(id); }
   cards.forEach((id, i) => {
     let b = handNodes.get(id);
@@ -329,7 +353,8 @@ function renderHand() {
     b.disabled = !canPick;
     if (box.children[i] !== b) box.insertBefore(b, box.children[i] ?? null);
   });
-  box.classList.toggle("wait", s.phase === "lock" && s.myLock >= 0 && !s.result);
+  // 等對手蓋牌、或整場結束（剩下的牌不會再打）：手牌變暗
+  box.classList.toggle("wait", (s.phase === "lock" && s.myLock >= 0) || !!s.result);
 }
 
 // ⑤ 一句問題＋一行小字
@@ -341,6 +366,9 @@ function renderAsk(opp: string, pool: number) {
   if (s.result) {
     const w = s.result.winner;
     q = w < 0 ? `平手（各 ${s.stacks[me]} 枚）` : w === me ? `你贏了這場（${s.stacks[me]}：${s.stacks[1 - me]}）` : `${opp}贏了這場（${s.stacks[1 - me]}：${s.stacks[me]}）`;
+  } else if (showing() && showRec) {
+    q = `第 ${showRec.trick} 墩${DIR_LABEL[showRec.dir]}：${shortResult(showRec, opp).replace(/<[^>]+>/g, "")}`;
+    sm = "點牌桌直接下一墩";
   } else if (busy) q = "送出中…";
   else switch (s.phase) {
     case "flip":
@@ -385,7 +413,7 @@ function renderActions() {
   const s = v!, me = s.seat, L = s.legal;
   for (const a of [...MAIN, ...RAISE]) B[a].hidden = true;
   let mainOn = false, raiseOn = false;
-  if (!s.result && !busy) {
+  if (!s.result && !busy && !showing()) {
     if (L.flip) {
       show("flip", true, `翻成${DIR_LABEL[flipDir(s.dir)]}`); show("noflip", true, `照${DIR_LABEL[s.dir]}`); mainOn = true;
     } else if (L.safeguard) {

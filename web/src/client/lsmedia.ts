@@ -39,6 +39,8 @@ Object.assign(globalThis, { __hbCast: () => ({ gid, played: played.slice(), pres
 export function mediaInit(deps: MediaDeps) {
   M = deps;
   $("lsCast").addEventListener("click", () => { stage.skipCard(now()); tick(); });
+  // P2.5-A：小卡縮成標題列一行時，點那一行也能略過（跟點小卡一樣；一般字幕不能點）
+  $("lsTicker").addEventListener("click", () => { if ($("lsTicker").classList.contains("tap")) { stage.skipCard(now()); tick(); } });
   fx.onSettings(() => { if (fx.settings.cast === "off") clearScreen(); });
   // 底部固定區（輪到你時會多出按鈕）、賭盤（翻牌結果）、紀錄展開：空位變了就重新量；放不下就改成標題列一行
   const reflow = () => { if (cardShown || $("lsTicker").classList.contains("on")) tick(); };
@@ -153,6 +155,8 @@ function paintTicker(items: Showing[], cardInTicker: Showing | null, t: number) 
   const used = () => live().reduce((s, e) => s + e.offsetHeight, 0) + Math.max(0, live().length - 1);
   while (live().length > 1 && used() > box.clientHeight) live()[0].remove();
   box.classList.toggle("on", live().length > 0);
+  box.classList.toggle("tap", !!cardInTicker);
+  box.setAttribute("aria-label", cardInTicker ? "節目播放中，點一下略過" : "");
   box.style.setProperty("--tk-left", `${Math.ceil($("lsBadge").getBoundingClientRect().width) + 6}px`);
   $("lsBar").classList.toggle("airing", live().length > 0);
 }

@@ -11,8 +11,10 @@ const { chromium, devices } = require("playwright");
 const BASE = process.argv[2] ?? "http://127.0.0.1:8787", SHOTS = process.argv[3] ?? "test-results";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const errors = [];
-let fails = 0;
+let fails = 0, uncovered = 0;
 const ok = (c, m) => { console.log(c ? "  ✓" : "  ✗", m); if (!c) fails++; };
+// 沒有機會驗到的項目：明確記成「未覆蓋」，不算通過
+const notCovered = m => { console.log("  – 未覆蓋：", m); uncovered++; };
 const browser = await chromium.launch(process.env.HB_PROXY ? { proxy: { server: process.env.HB_PROXY } } : {});
 const text = (P, sel) => P.textContent(sel).then(t => (t ?? "").trim());
 const LS = P => P.evaluate(() => globalThis.__hbLS?.() ?? null);
@@ -105,15 +107,19 @@ console.log("AI 測試局：開場、位置、略過、重新整理、壓力、�
     if (await P.isVisible("#matchEnd:not([hidden])")) break;
     const r = await audit(P, `AI 第 ${steps} 步`);
     maxPress = Math.max(maxPress, Number(r.press));
-    // 點小卡略過：不會送出動作
-    if (!skipped && r.card) {
+    // 點節目略過：完整小卡點小卡；P2.5-A 起牌桌沒有空位，小卡縮成標題列一行 → 點那一行。都不會送出動作
+    const tapKey = await P.evaluate(() => { const t = document.getElementById("lsTicker"); return t.classList.contains("tap") ? t.querySelector(".tk:not(.out)")?.dataset.k ?? "" : ""; });
+    if (!skipped && (r.card || tapKey)) {
       const before = JSON.stringify((await LS(P)).steps) + (await LS(P)).phase;
-      await P.click("#lsCast", { position: { x: 30, y: 12 } });
+      if (r.card) await P.click("#lsCast", { position: { x: 30, y: 12 } });
+      else await P.click("#lsTicker");
       await sleep(450);
-      const hidden = await P.evaluate(() => { const e = document.getElementById("lsCast"); return e.hidden || e.classList.contains("out"); });
+      const hidden = r.card
+        ? await P.evaluate(() => { const e = document.getElementById("lsCast"); return e.hidden || e.classList.contains("out"); })
+        : await P.evaluate(id => { const t = document.getElementById("lsTicker"); const now = t.querySelector(".tk:not(.out)")?.dataset.k ?? ""; return !t.classList.contains("tap") || now.split("#")[0] !== id.split("#")[0]; }, tapKey);
       const after = JSON.stringify((await LS(P)).steps) + (await LS(P)).phase;
-      ok(hidden, "點一下節目小卡：馬上收起來（略過）");
-      ok(before === after || !(await myTurn(P)), "略過小卡不會替玩家送出任何動作");
+      ok(hidden, `點一下節目（${r.card ? "小卡" : "標題列一行"}）：馬上收起來（略過）`);
+      ok(before === after || !(await myTurn(P)), "略過節目不會替玩家送出任何動作");
       skipped = true;
     }
     // 第 3 墩、輪到自己：重新整理 → 不重播舊新聞
@@ -130,6 +136,7 @@ console.log("AI 測試局：開場、位置、略過、重新整理、壓力、�
     if (!(await act(P))) await sleep(150); else await sleep(650);
     steps++;
   }
+  if (!skipped) notCovered("點節目略過（這一場沒有剛好出現可以略過的節目）");
   ok(await P.isVisible("#matchEnd:not([hidden])"), `打完整場（${steps} 步）`);
   c = await CAST(P);
   const fin = await LS(P);
@@ -252,5 +259,5 @@ ok(issues.length === 0, `位置檢查全部通過（問題 ${issues.length} 個�
 if (issues.length) console.log("  ", issues.slice(0, 10).join("\n   "));
 ok(errors.length === 0, `沒有頁面錯誤${errors.length ? "：" + errors.slice(0, 5).join(" | ") : ""}`);
 await browser.close();
-console.log(fails ? `\n✗ ${fails} 項沒過` : "\n全部通過");
+console.log(fails ? `\n✗ ${fails} 項沒過` : uncovered ? `\n其他全部通過；${uncovered} 項未覆蓋（見上面「未覆蓋」）` : "\n全部通過");
 process.exit(fails ? 1 : 0);

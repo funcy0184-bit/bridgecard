@@ -192,12 +192,12 @@
     </div>
     <!-- 綠絨牌桌：對手的出牌位在上、我的在下（蓋著的牌、押的籌碼）；中間是本墩方向和疊池；最下面是上一墩結果 -->
     <div class="lsfelt" id="lsFelt">
-      <div class="lsrow opp"><div class="lsslot" id="lsOppSlot"></div><div class="lsbet" id="lsOppBet"><span class="lsstack" aria-hidden="true"></span><b id="lsOppCommit">0</b><small id="lsOppCommitWho">對手押</small></div></div>
+      <div class="lsrow opp"><small class="lsowner" id="lsOppOwner">對手</small><div class="lsslot" id="lsOppSlot"></div><div class="lsbet" id="lsOppBet"><span class="lsstack" aria-hidden="true"></span><b id="lsOppCommit">0</b><small id="lsOppCommitWho">對手押</small></div></div>
       <div class="lsmid" id="lsPot">
         <div class="lsdir" id="lsDir" aria-live="polite"><div class="lsdirbig" id="lsDirBig">比大</div><small id="lsDirNote">下一墩 比小</small></div>
         <div class="lspool" id="lsPool" hidden><span class="lsstack" aria-hidden="true"></span><small id="lsPoolText">疊池 0</small></div>
       </div>
-      <div class="lsrow me"><div class="lsslot" id="lsMySlot"></div><div class="lsbet" id="lsMyBet"><span class="lsstack" aria-hidden="true"></span><b id="lsMyCommit">0</b><small>你押</small></div></div>
+      <div class="lsrow me"><small class="lsowner">你</small><div class="lsslot" id="lsMySlot"></div><div class="lsbet" id="lsMyBet"><span class="lsstack" aria-hidden="true"></span><b id="lsMyCommit">0</b><small>你押</small></div></div>
       <button class="lslast" id="lsLast" type="button" hidden></button>
     </div>
     <!-- 我的名牌：角色、技能、籌碼 -->

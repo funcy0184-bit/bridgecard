@@ -111,6 +111,11 @@ for (const [name, w, h] of SIZES) {
       const sc = await p.evaluate(() => { const t = document.getElementById("lstable"); return [t.scrollHeight, t.clientHeight]; });
       if (sc[0] > sc[1] + 1) issues.push(`牌桌可以捲動（${sc[0]} / ${sc[1]}）`);
     }
+    // 還沒押的時候不能顯示 0
+    if (label.startsWith("牌桌")) {
+      const z = await p.evaluate(() => { const v = globalThis.__hbLS?.(); if (!v) return []; const me = v.seat; return [["lsMyBet", v.commit[me]], ["lsOppBet", v.commit[1 - me]]].filter(([id, n]) => !n && getComputedStyle(document.getElementById(id)).visibility !== "hidden").map(([id]) => `${id} 押 0 還顯示著`); });
+      issues.push(...z);
+    }
     results.push([label, issues]);
     if (SHOTS) await p.screenshot({ path: `${SHOTS}/lsl-${w}x${h}-${results.length}.png` });
   };
@@ -145,7 +150,9 @@ for (const [name, w, h] of SIZES) {
   await p.waitForSelector("#lstable:not([hidden])");
   await p.waitForTimeout(2600);                 // 開場的提示條自己收起來
   // 每個階段都要看得到：雙方籌碼、本墩方向、雙方已投入、輪到誰、自己的手牌和按鈕
-  const info = ["#lsOppChips", "#lsMyChips", "#lsDirBig", "#lsMyCommit", "#lsOppCommit", "#lsTurn", "#lsOppSlot", "#lsMySlot"];
+  // P2.5-A：雙方押注（#lsMyCommit／#lsOppCommit）只在有押的時候顯示（底注要等雙方蓋牌後才收）→ 只在下注的畫面要求看得到
+  const info = ["#lsOppChips", "#lsMyChips", "#lsDirBig", "#lsTurn", "#lsOppSlot", "#lsMySlot"];
+  const bets = ["#lsMyCommit", "#lsOppCommit"];
   const core = ["#lsTrick", "#lsMenuBtn", "#lsDirNote", "#lsOppCounts", ...info, "#lsHand", "#lsActions"];
   await check("牌桌：第 1 墩開局", core);
 
@@ -177,16 +184,16 @@ for (const [name, w, h] of SIZES) {
       await p.click('#lsActions [data-a="lock"]');
     }
     else if (await has("call")) {
-      await once(trick >= 7 ? "facing7" : "facing", trick >= 7 ? "牌桌：第 7–9 墩面對梭哈／加注" : "牌桌：面對加注（若接戰／若棄牌）", [...info, "#lsRisk", '#lsActions [data-a="call"]', '#lsActions [data-a="fold"]']);
+      await once(trick >= 7 ? "facing7" : "facing", trick >= 7 ? "牌桌：第 7–9 墩面對梭哈／加注" : "牌桌：面對加注（若接戰／若棄牌）", [...info, ...bets, "#lsRisk", '#lsActions [data-a="call"]', '#lsActions [data-a="fold"]']);
       await p.click('#lsActions [data-a="call"]');
     }
     else if (await has("raiseopen")) {
       // 加注：先展開金額列（−／加注到／＋／取消；第 7–9 墩多一顆梭哈），量完收起來再過牌
       const key = trick >= 7 ? "raise7" : "raise";
       if (!seen.has(key)) {
-        await once(key + "btns", trick >= 7 ? "牌桌：第 7–9 墩輪到你下注" : "牌桌：輪到你下注", [...info, '#lsActions [data-a="check"]', '#lsActions [data-a="raiseopen"]']);
+        await once(key + "btns", trick >= 7 ? "牌桌：第 7–9 墩輪到你下注" : "牌桌：輪到你下注", [...info, ...bets, '#lsActions [data-a="check"]', '#lsActions [data-a="raiseopen"]']);
         await p.click('#lsActions [data-a="raiseopen"]');
-        await once(key, trick >= 7 ? "牌桌：第 7–9 墩加注金額（可以梭哈）" : "牌桌：加注金額列", [...info, "#lsRisk", '#lsActions [data-a="raise"]', '#lsActions [data-a="minus"]', '#lsActions [data-a="plus"]', '#lsActions [data-a="cancel"]']);
+        await once(key, trick >= 7 ? "牌桌：第 7–9 墩加注金額（可以梭哈）" : "牌桌：加注金額列", [...info, ...bets, "#lsRisk", '#lsActions [data-a="raise"]', '#lsActions [data-a="minus"]', '#lsActions [data-a="plus"]', '#lsActions [data-a="cancel"]']);
         await p.click('#lsActions [data-a="cancel"]');
       }
       await p.click('#lsActions [data-a="check"]');

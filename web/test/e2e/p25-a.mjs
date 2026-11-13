@@ -36,27 +36,49 @@ const probe = () => {
   if (main > 4) issues.push(`一排有 ${main} 顆按鈕`);
   // 隱藏資訊與出牌位
   const me = v.seat, op = 1 - me, last = v.history.at(-1);
-  const revealing = !!last && (!!v.result || (!v.locked[0] && !v.locked[1] && v.phase !== "bet"));
+  // P2.5-A 生命週期：結算 → 展示（那一墩的牌＋那一墩的方向，#lsLast 變成 hot）→ 清空出牌區 → 下一墩；整場結束就一直攤著最後一墩
+  const revealing = !!last && (!!v.result || document.getElementById("lsLast").classList.contains("hot"));
   const oppFaces = [...document.querySelectorAll("#lsOppSlot .card:not(.back)")].map(e => Number(e.dataset.id));
   const oppCats = [...document.querySelectorAll("#lsOppSlot .lscat")].map(e => e.textContent);
-  const CAT = ["小", "中", "大"];
+  const myFaces = [...document.querySelectorAll("#lsMySlot .card:not(.back), #lsMySlot .lscat")];
+  const CAT = ["小", "中", "大"], DIR = { high: "比大", low: "比小" };
   if (!revealing) {
     if (oppFaces.length || oppCats.length) issues.push(`翻牌前對手出牌位出現牌面：${oppFaces.join(",")}${oppCats.join(",")}`);
+    if (myFaces.length) issues.push("展示結束了，我的出牌位還留著上一墩的牌（沒有清場）");
     if (v.locked[op] && !document.querySelector("#lsOppSlot .card.back")) issues.push("對手蓋了牌，出牌位沒有牌背");
-  } else if (last.cards) {
-    if (oppFaces[0] !== last.cards[op]) issues.push(`上一墩對手的牌攤錯：${oppFaces[0]} ≠ ${last.cards[op]}`);
-    const mine = Number(document.querySelector("#lsMySlot .card:not(.back)")?.dataset.id);
-    if (mine !== last.cards[me]) issues.push(`上一墩我的牌攤錯：${mine} ≠ ${last.cards[me]}`);
-  } else if (oppCats[0] !== CAT[last.cats[op]] || oppFaces.length) issues.push("棄牌墩：對手出牌位應該只有大中小");
+    if (document.getElementById("lsDirBig").textContent !== DIR[v.dir]) issues.push(`方向顯示 ${document.getElementById("lsDirBig").textContent} ≠ 這一墩 ${DIR[v.dir]}`);
+    if (!v.result && document.getElementById("lsTrick").textContent !== `第 ${v.trick}／9 墩`) issues.push(`頂列墩數 ${document.getElementById("lsTrick").textContent} ≠ 這一墩 ${v.trick}`);
+  } else {
+    // 展示中：頂列墩數、身分標也是那一墩的；對手名牌不出現下一墩的動作（想翻轉嗎…）
+    if (!v.result && document.getElementById("lsTrick").textContent !== `第 ${last.trick}／9 墩`) issues.push(`攤開第 ${last.trick} 墩，頂列卻寫 ${document.getElementById("lsTrick").textContent}`);
+    if (!v.result && document.getElementById("lsOppStatus").textContent) issues.push(`攤牌停留中，對手名牌卻出現下一墩的動作「${document.getElementById("lsOppStatus").textContent}」`);
+    if (!v.result && document.getElementById("lsMyTag").textContent !== (last.declarer === me ? "宣戰權" : "下注先手")) issues.push("攤牌停留中，我的身分標不是那一墩的");
+    // 展示中：方向、牌、贏家框都是「那一墩」的，而且贏家符合比大小
+    if (document.getElementById("lsDirBig").textContent !== DIR[last.dir]) issues.push(`攤開第 ${last.trick} 墩，方向卻顯示 ${document.getElementById("lsDirBig").textContent}（那一墩是 ${DIR[last.dir]}）`);
+    if (!document.getElementById("lsLast").textContent.includes(`第 ${last.trick} 墩`)) issues.push("結果標籤不是展示中的那一墩");
+    const winSlot = document.querySelector("#lsMySlot.win") ? me : document.querySelector("#lsOppSlot.win") ? op : -1;
+    if (winSlot !== last.winner) issues.push(`金框在 ${winSlot}，那一墩贏家是 ${last.winner}`);
+    if (last.cards) {
+      if (oppFaces[0] !== last.cards[op]) issues.push(`上一墩對手的牌攤錯：${oppFaces[0]} ≠ ${last.cards[op]}`);
+      const mine = Number(document.querySelector("#lsMySlot .card:not(.back)")?.dataset.id);
+      if (mine !== last.cards[me]) issues.push(`上一墩我的牌攤錯：${mine} ≠ ${last.cards[me]}`);
+      const a = last.cards[0] % 13, b = last.cards[1] % 13;
+      const w = a === b ? -1 : (last.dir === "high" ? a > b : a < b) ? 0 : 1;
+      if (w !== last.winner) issues.push(`第 ${last.trick} 墩贏家跟比大小不符（${DIR[last.dir]}）`);
+    } else if (oppCats[0] !== CAT[last.cats[op]] || oppFaces.length) issues.push("棄牌墩：對手出牌位應該只有大中小");
+  }
   if (!revealing && v.myLock >= 0) {
     if (document.querySelector(`#lsHand .lscard[data-id="${v.myLock}"]`)) issues.push("蓋了的牌還在手牌裡");
     const SUITS = ["♣", "♦", "♥", "♠"], RT = { 11: "J", 12: "Q", 13: "K", 14: "A" }, r = v.myLock % 13 + 2;
     const want = `${RT[r] ?? r}${SUITS[Math.floor(v.myLock / 13)]}`;
     if (!document.querySelector("#lsMySlot .card.back") || document.querySelector("#lsMySlot .lspeek")?.textContent !== want) issues.push(`我的出牌位應該是牌背＋「${want}」`);
   }
+  // 押注是 0 的時候不顯示（不要一堆 0）
+  for (const [id, n] of [["lsMyBet", v.commit[me]], ["lsOppBet", v.commit[op]]]) if (!n && getComputedStyle(document.getElementById(id)).visibility !== "hidden") issues.push(`${id} 押 0 還顯示著`);
+  if (v.result && !document.getElementById("lsHand").classList.contains("wait")) issues.push("整場結束，剩下的手牌沒有變暗");
   const handN = document.querySelectorAll("#lsHand .lscard").length, wantN = v.hand.length - (v.myLock >= 0 ? 1 : 0);
   if (handN !== wantN) issues.push(`手牌張數 ${handN} ≠ ${wantN}`);
-  return { issues, phase: v.phase, trick: v.trick, revealing, hist: v.history.length };
+  return { issues, phase: v.phase, trick: v.trick, revealing, hist: v.history.length, showing: revealing && !v.result };
 };
 
 async function startAi(P) {
@@ -77,7 +99,7 @@ async function startAi(P) {
 let seedv = 0.41;
 const rnd = () => (seedv = (seedv * 9301 + 0.4927) % 1);
 const allIssues = [];
-const seen = { reveal: 0, revealFold: 0, lockMoved: 0, raiseRow: 0, allIn: 0, cancel: 0, flipBtns: 0, safeBtns: 0, wait: 0 };
+const seen = { cleared: 0, reveal: 0, revealFold: 0, lockMoved: 0, raiseRow: 0, allIn: 0, cancel: 0, flipBtns: 0, safeBtns: 0, wait: 0 };
 
 for (const [name, w, h, full] of SIZES) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
@@ -113,6 +135,7 @@ for (const [name, w, h, full] of SIZES) {
     const r = await P.evaluate(probe);
     for (const x of r.issues) allIssues.push(`${name} 第 ${r.trick} 墩 ${r.phase}：${x}`);
     if (r.revealing && r.hist >= 1) { seen.reveal++; if (await P.locator("#lsOppSlot .lscat").count()) seen.revealFold++; }
+    if (!r.revealing && r.hist >= 1 && r.phase !== "bet") seen.cleared++;
     const has = a => P.isVisible(`#lsActions [data-a="${a}"]:not([disabled])`);
     if (await has("noflip")) { seen.flipBtns++; await P.click(`#lsActions [data-a="${rnd() < 0.25 ? "flip" : "noflip"}"]`); }
     else if (await has("nosafe")) { seen.safeBtns++; await P.click(`#lsActions [data-a="${rnd() < 0.15 ? "safe" : "nosafe"}"]`); }
@@ -161,7 +184,8 @@ for (const [name, w, h, full] of SIZES) {
   await ctx.close();
 }
 ok(seen.lockMoved >= 5, `蓋牌：那張牌離開手牌、變成我出牌位的牌背（${seen.lockMoved} 次）`);
-ok(seen.reveal > 0, `上一墩攤在桌上：雙方的牌（翻牌）或大中小（棄牌）都對（${seen.reveal} 次，其中棄牌 ${seen.revealFold} 次）`);
+ok(seen.reveal > 0, `結算後展示那一墩：牌、方向、金框、結果標籤都是那一墩的，贏家符合比大小（${seen.reveal} 次，其中棄牌 ${seen.revealFold} 次）`);
+ok(seen.cleared > 0, `展示結束後出牌區清空、方向換成這一墩（${seen.cleared} 次）`);
 ok(seen.raiseRow > 0 && seen.cancel > 0, `加注金額列：展開 ${seen.raiseRow} 次、取消 ${seen.cancel} 次、梭哈按鈕 ${seen.allIn} 次`);
 ok(seen.flipBtns > 0 && seen.safeBtns > 0, `宣戰權（${seen.flipBtns}）、保命（${seen.safeBtns}）都出現過`);
 await browser.close();
