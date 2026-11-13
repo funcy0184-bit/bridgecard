@@ -7,7 +7,7 @@
 import type { Action, LSEvent, LSView, TrickRecord } from "../laststand/engine";
 import { CAT_LABEL, DIR_LABEL, RANK_TEXT, SUITS, TRICKS, allInStage, catOf, flipDir, rankOf, suitOf } from "../laststand/rules";
 import * as fx from "./fx";
-import { domAnims } from "./lsanim";
+import { domAnims, insightScan } from "./lsanim";
 import { mediaHold, mediaReset, mediaView } from "./lsmedia";
 import { TableStage } from "./lsstage";
 import { sfx } from "./sound";
@@ -91,7 +91,40 @@ export function lsInit(deps: LSDeps) {
   D = { ...deps, banner: (text, ms) => { deps.banner(text, ms); mediaHold(ms ?? 2600); } };
   buildButtons();
   $("lsMenuBtn").addEventListener("click", () => D.openMenu());
-  $("lsHand").addEventListener("click", ev => {
+  // B2：按住手牌往上拖到牌桌放開＝蓋這張（拖的時候牌跟著手指）；沒拖過門檻就彈回去、當成一般的點選
+  const hand = $("lsHand");
+  let drag: { b: HTMLButtonElement; id: number; x: number; y: number; pid: number; moved: boolean } | null = null, swallow = false;
+  hand.addEventListener("pointerdown", ev => {
+    const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".lscard");
+    if (!b || b.disabled || !v || busy || !v.legal.lock.length) return;
+    drag = { b, id: Number(b.dataset.id), x: ev.clientX, y: ev.clientY, pid: ev.pointerId, moved: false };
+  });
+  hand.addEventListener("pointermove", ev => {
+    if (!drag || ev.pointerId !== drag.pid) return;
+    const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+    if (!drag.moved && dy > -10) return;
+    if (!drag.moved) { drag.moved = true; try { drag.b.setPointerCapture(drag.pid); } catch { /* 沒關係 */ } drag.b.classList.add("drag"); if (sel !== drag.id) { sel = drag.id; sfx.lift(); render(); } }
+    drag.b.style.translate = `${dx}px ${Math.min(0, dy)}px`;
+    drag.b.classList.toggle("armed", ev.clientY < $("lsFelt").getBoundingClientRect().bottom + 6);
+  });
+  const endDrag = (ev: PointerEvent, cancel: boolean) => {
+    if (!drag || ev.pointerId !== drag.pid) return;
+    const d = drag; drag = null;
+    if (!d.moved) return;
+    swallow = true; setTimeout(() => { swallow = false; }, 0);
+    const armed = !cancel && d.b.classList.contains("armed");
+    d.b.classList.remove("drag", "armed");
+    if (armed && v && !busy && v.legal.lock.includes(d.id)) {
+      // 從手指放開的位置直接飛上桌（演出導演量的是這張牌現在的位置）
+      stage.myLock(d.id);
+      d.b.style.translate = "";
+      send({ t: "lock", card: d.id });
+    } else d.b.style.translate = "";
+  };
+  hand.addEventListener("pointerup", ev => endDrag(ev, false));
+  hand.addEventListener("pointercancel", ev => endDrag(ev, true));
+  hand.addEventListener("click", ev => {
+    if (swallow) { ev.preventDefault(); return; }
     const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".lscard");
     if (!b || b.disabled || !v) return;
     const id = Number(b.dataset.id);
@@ -176,6 +209,7 @@ export function lsEvent(e: LSEvent) {
   const who = (s: number) => (s === me ? "你" : opp);
   switch (e.type) {
     case "Locked": if (e.seat !== me) stage.oppLock(); break;
+    case "InsightResult": if (e.seat === me) requestAnimationFrame(() => insightScan()); break;
     case "Flip": if (e.seat !== me) D.banner(`${opp}翻轉了方向：這一墩改成${DIR_LABEL[e.dir!]}`, 2400); break;
     case "Safeguard": D.banner(`${who(e.seat)}宣告保命：這一墩每人只押 1 枚、不能加注`, 2600); break;
     case "Insight": if (e.seat !== me) D.banner(`${opp}用了讀心（只看得到你蓋的是大、中還是小）`, 2600); break;

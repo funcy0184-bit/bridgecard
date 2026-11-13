@@ -1230,6 +1230,11 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .lscard { transition: translate .28s var(--spring, cubic-bezier(.2,1.35,.4,1)), scale .28s var(--spring, cubic-bezier(.2,1.35,.4,1)); }
 .lscard.sel { translate: 0 -14px; scale: 1.04; }
 .lscard.away { visibility: hidden; }                 /* 正在飛向桌面的那張 */
+/* 拖牌上桌：跟著手指、不要彈簧延遲；拖到牌桌上方（可以放開）時亮金邊 */
+.lscard.drag { transition: none; z-index: 3; scale: 1.08; touch-action: none; }
+.lscard.drag .card { box-shadow: 0 14px 22px rgba(0,0,0,.55); }
+.lscard.armed .card { box-shadow: 0 0 0 3px var(--gold-pale), 0 14px 22px rgba(0,0,0,.55); }
+.lshand { touch-action: pan-x; }
 /* 出牌位：牌還在飛（快照的牌背先放好但藏著），看起來跟空位一樣 */
 .lsslot.incoming > * { visibility: hidden; }
 .lsslot.incoming { background: rgba(0,0,0,.2); box-shadow: inset 0 0 0 1.5px rgba(226,184,96,.3); }
@@ -1237,6 +1242,9 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .lsslot > .lsflipback { position: absolute; inset: 0; z-index: 2; backface-visibility: hidden; }
 /* 落桌的接觸陰影畫在牌桌裡、牌的下面 */
 .lsfelt { isolation: isolate; }
+/* 讀心的掃描光 */
+.lsslot > .lsscan { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; border-radius: 7px;
+  background: linear-gradient(180deg, transparent 30%, rgba(243,212,136,.7) 50%, transparent 70%); mix-blend-mode: screen; }
 @media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard { transition: none; } }
 
 /* ================= P1.5：首頁選玩法、梭了啦！這局賭什麼？的選單、換玩法轉場 ================= */

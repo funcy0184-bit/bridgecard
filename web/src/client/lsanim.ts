@@ -103,6 +103,9 @@ export function domAnims(r: AnimRefs): StageAnims {
       if (mine !== c) return;
       contact(c, $("lsFelt"), 1.1);
       await settle(c);
+      // 驗收用：落桌那一刻複製品和出牌位的位置（誤差要很小，交接才不會跳一下）
+      const cb = c.getBoundingClientRect(), sb = slot.getBoundingClientRect();
+      (globalThis as Record<string, unknown>).__hbLSLand = { dx: Math.abs(cb.left + cb.width / 2 - sb.left - sb.width / 2), dy: Math.abs(cb.top + cb.height / 2 - sb.top - sb.height / 2), dw: Math.abs(cb.width - sb.width) };
     },
     myRest() { drop(mine); mine = null; },
     async myBack(id) {
@@ -133,6 +136,8 @@ export function domAnims(r: AnimRefs): StageAnims {
       const from = src.getBoundingClientRect(), to = slot.getBoundingClientRect();
       if (!from.width || !to.width) { slot.classList.remove("incoming"); return; }
       const c = clone(fx.backEl());
+      const ob = $("lsOpp").getBoundingClientRect();
+      (globalThis as Record<string, unknown>).__hbLSOppFrom = { inNameplate: from.top >= ob.top - 1 && from.bottom <= ob.bottom + 1 && from.left >= ob.left - 1 && from.right <= ob.right + 1 };
       sfx.slap(0.8, flightMs(260, 0.8) / 1000);
       await slamFly(c, from, to, { dur: 260, weight: 0.8, lift: 16 });
       contact(c, $("lsFelt"), 0.7);
@@ -154,6 +159,9 @@ export function domAnims(r: AnimRefs): StageAnims {
       if (lv === "off") return;
       const me = r.seat(), my = $("lsMySlot"), opp = $("lsOppSlot");
       const win = rec.winner === me ? my : rec.winner === 1 - me ? opp : null;
+      // 大墩（梭哈、或一墩輸贏 6 枚以上）：加一圈光環、低沉的一聲
+      const big = rec.allIn >= 0 || rec.transfer + rec.poolTaken >= 6;
+      if (win && big && lv === "full") { fx.shockAt(win, { size: 150 }); sfx.boom(0.55); }
       if (win) {
         sfx.land(rec.winner === me ? 0.9 : 0.6);
         if (lv === "full") await done(anim(win, [{ scale: "1.04" }, { scale: "1.13" }, { scale: "1" }, { scale: "1.04" }], { duration: fx.ms(280), easing: "ease-out" }));
@@ -203,4 +211,16 @@ export function domAnims(r: AnimRefs): StageAnims {
       for (const id of ["lsOppSlot", "lsMySlot"]) document.getElementById(id)?.querySelector(".lsflipback")?.remove();
     },
   };
+}
+
+// B2：讀心（只有自己看得到）：一道光掃過對手蓋著的牌
+export function insightScan() {
+  const slot = document.getElementById("lsOppSlot");
+  if (!slot || motionLevel() !== "full") return;
+  const bar = document.createElement("i");
+  bar.className = "lsscan";
+  slot.appendChild(bar);
+  sfx.lift();
+  anim(bar, [{ transform: "translateY(-110%)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { transform: "translateY(110%)", opacity: 0 }],
+    { duration: fx.ms(520), easing: "ease-in-out" }).finished.then(() => bar.remove(), () => bar.remove());
 }
