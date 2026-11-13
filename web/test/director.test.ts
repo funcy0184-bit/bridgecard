@@ -6,7 +6,7 @@ import { analyze, publicOf } from "../src/laststand/director/analyze";
 import { Director, type Cast } from "../src/laststand/director/director";
 import type { Beat, Cue } from "../src/laststand/director/types";
 
-// 牌：花色 × 13 +（點數 − 2）；♠=0 ♥=1
+// 牌：花色 × 13 +（點數 − 2）；S()＝花色 0（♣）、H()＝花色 1（♦）；比大小不看花色
 const S = (rank: number) => rank - 2, H = (rank: number) => 13 + rank - 2;
 const HAND0 = [S(14), S(13), S(12), S(10), S(9), S(8), S(6), S(5), S(4)];
 const HAND1 = [H(14), H(13), H(11), H(10), H(9), H(7), H(6), H(3), H(2)];

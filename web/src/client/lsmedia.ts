@@ -43,7 +43,7 @@ export function mediaInit(deps: MediaDeps) {
   // 底部固定區（輪到你時會多出按鈕）、賭盤（翻牌結果）、紀錄展開：空位變了就重新量；放不下就改成標題列一行
   const reflow = () => { if (cardShown || $("lsTicker").classList.contains("on")) tick(); };
   window.addEventListener("resize", reflow);
-  if (typeof ResizeObserver !== "undefined") { const ro = new ResizeObserver(reflow); for (const id of ["lsDock", "lsPot", "lsLog", "lsOpp"]) ro.observe($(id)); }
+  if (typeof ResizeObserver !== "undefined") { const ro = new ResizeObserver(reflow); for (const id of ["lsDock", "lsFelt", "lsOpp"]) { const e = document.getElementById(id); if (e) ro.observe(e); } }
 }
 
 export function mediaReset() {
@@ -163,12 +163,14 @@ const shownLines = (s: Showing, t: number) => Math.min(s.cue.lines.length, 1 + M
 const nextLineAt = (s: Showing) => (shownLines(s, now()) >= s.cue.lines.length ? Infinity : s.start + shownLines(s, now()) * lineStep(s));
 
 // 小卡的位置：對手那一格、方向、賭盤、紀錄的下面，到底部固定區的上面；放不下回傳 false
+// P2.5-A：牌桌占滿中間，沒有空位放小卡 → 一律用「標題列一行」的精簡模式；
+//   P2.5-E 會在牌桌裡指定一個 #lsCastZone（重大事件才進桌面），有它才放完整小卡
 function zone() {
-  const dock = $("lsDock").getBoundingClientRect();
-  const top = Math.max(...["lsOpp", "lsDir", "lsPot", "lsLog"].map(id => $(id).getBoundingClientRect().bottom)) + 6;
-  return { top, bottom: dock.top - 2 };
+  const z = document.getElementById("lsCastZone")!.getBoundingClientRect();
+  return { top: z.top, bottom: z.bottom };
 }
 function placeCard(s?: Showing): boolean {
+  if (!document.getElementById("lsCastZone")) return false;
   const el = $("lsCast"), z = zone();
   const h = z.bottom - z.top;
   if (h < 64) return false;

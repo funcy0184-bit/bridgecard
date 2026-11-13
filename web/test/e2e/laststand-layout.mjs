@@ -105,7 +105,13 @@ for (const [name, w, h] of SIZES) {
   const results = [];
   const check = async (label, keys = [], scroll = false) => {
     await p.waitForTimeout(350);
-    results.push([label, await p.evaluate(probe, [keys, scroll])]);
+    const issues = await p.evaluate(probe, [keys, scroll]);
+    // P2.5-A：牌桌整個畫面不准捲動
+    if (label.startsWith("牌桌")) {
+      const sc = await p.evaluate(() => { const t = document.getElementById("lstable"); return [t.scrollHeight, t.clientHeight]; });
+      if (sc[0] > sc[1] + 1) issues.push(`牌桌可以捲動（${sc[0]} / ${sc[1]}）`);
+    }
+    results.push([label, issues]);
     if (SHOTS) await p.screenshot({ path: `${SHOTS}/lsl-${w}x${h}-${results.length}.png` });
   };
 
@@ -139,7 +145,7 @@ for (const [name, w, h] of SIZES) {
   await p.waitForSelector("#lstable:not([hidden])");
   await p.waitForTimeout(2600);                 // 開場的提示條自己收起來
   // 每個階段都要看得到：雙方籌碼、本墩方向、雙方已投入、輪到誰、自己的手牌和按鈕
-  const info = ["#lsOppChips", "#lsMyChips", "#lsDirBig", "#lsMyCommit", "#lsOppCommit", "#lsTurn"];
+  const info = ["#lsOppChips", "#lsMyChips", "#lsDirBig", "#lsMyCommit", "#lsOppCommit", "#lsTurn", "#lsOppSlot", "#lsMySlot"];
   const core = ["#lsTrick", "#lsMenuBtn", "#lsDirNote", "#lsOppCounts", ...info, "#lsHand", "#lsActions"];
   await check("牌桌：第 1 墩開局", core);
 
@@ -174,12 +180,19 @@ for (const [name, w, h] of SIZES) {
       await once(trick >= 7 ? "facing7" : "facing", trick >= 7 ? "牌桌：第 7–9 墩面對梭哈／加注" : "牌桌：面對加注（若接戰／若棄牌）", [...info, "#lsRisk", '#lsActions [data-a="call"]', '#lsActions [data-a="fold"]']);
       await p.click('#lsActions [data-a="call"]');
     }
-    else if (await has("raise")) {
-      await once(trick >= 7 ? "raise7" : "raise", trick >= 7 ? "牌桌：第 7–9 墩可以梭哈" : "牌桌：輪到你下注（加注面板）", [...info, "#lsRisk", '#lsActions [data-a="raise"]', '#lsActions [data-a="minus"]', '#lsActions [data-a="plus"]', '#lsActions [data-a="check"]']);
+    else if (await has("raiseopen")) {
+      // 加注：先展開金額列（−／加注到／＋／取消；第 7–9 墩多一顆梭哈），量完收起來再過牌
+      const key = trick >= 7 ? "raise7" : "raise";
+      if (!seen.has(key)) {
+        await once(key + "btns", trick >= 7 ? "牌桌：第 7–9 墩輪到你下注" : "牌桌：輪到你下注", [...info, '#lsActions [data-a="check"]', '#lsActions [data-a="raiseopen"]']);
+        await p.click('#lsActions [data-a="raiseopen"]');
+        await once(key, trick >= 7 ? "牌桌：第 7–9 墩加注金額（可以梭哈）" : "牌桌：加注金額列", [...info, "#lsRisk", '#lsActions [data-a="raise"]', '#lsActions [data-a="minus"]', '#lsActions [data-a="plus"]', '#lsActions [data-a="cancel"]']);
+        await p.click('#lsActions [data-a="cancel"]');
+      }
       await p.click('#lsActions [data-a="check"]');
     }
     else if (await has("check")) await p.click('#lsActions [data-a="check"]');
-    else if (trick >= 2 && !seen.has("reveal") && await p.isVisible("#lsReveal")) await once("reveal", "牌桌：上一墩開牌", ["#lsReveal", ...info, "#lsHand"]);
+    else if (trick >= 2 && !seen.has("reveal") && await p.isVisible("#lsLast.hot")) await once("reveal", "牌桌：上一墩攤在桌上", ["#lsLast", ...info, "#lsHand"]);
     await sleep(120);
   }
   if (!await p.locator("#matchEnd:not([hidden])").isVisible()) fail(`${name}：150 秒內沒打完一場`);
@@ -189,10 +202,12 @@ for (const [name, w, h] of SIZES) {
   await p.waitForSelector("#matchEnd", { state: "hidden", timeout: 6000 }).catch(() => {});
   await p.waitForTimeout(2600);
   if (await p.isVisible("#lstable:not([hidden])")) {
-    await p.locator("#lsLog summary").scrollIntoViewIfNeeded(); await p.click("#lsLog summary");
-    await p.locator("#lsLog").scrollIntoViewIfNeeded();
-    await check("每墩紀錄（展開、捲到它）", ["#lsLog summary"]);
-    await p.evaluate(() => scrollTo(0, 0));
+    // P2.5-A：每墩紀錄、完整試算都是面板（不推動牌桌）
+    await p.evaluate(() => { document.getElementById("lsLast").hidden = false; });   // 新的一場還沒有上一墩：直接打開面板看版面
+    await p.click("#lsLast"); await check("每墩紀錄（面板）", ["#lsLogPanel .sheet", "#lsLogPanel [data-close]"]);
+    await p.click("#lsLogPanel [data-close]");
+    await p.click("#lsHelpBtn"); await check("完整試算（? 面板）", ["#lsHelpPanel .sheet", "#lsHelpPanel [data-close]"]);
+    await p.click("#lsHelpPanel [data-close]");
     await p.click("#lsMenuBtn"); await check("牌桌選單", ["#menu .sheet"]);
   } else results.push(["再來一場", ["再來一場之後沒有回到梭了啦牌桌"]]);
   if (errors.length) results.push(["頁面錯誤", errors.slice(0, 3)]);

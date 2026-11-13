@@ -82,7 +82,7 @@ async function act(P) {
   }
   if (await has("insight") && rnd() < 0.3) { await P.click('#lsActions [data-a="insight"]'); return true; }
   if (await has("call")) { await P.click(`#lsActions [data-a="${rnd() < 0.2 ? "fold" : "call"}"]`); return true; }
-  if (await has("raise") && rnd() < 0.55) { await P.click('#lsActions [data-a="raise"]'); return true; }
+  if (await has("raiseopen") && rnd() < 0.55) { await P.click('#lsActions [data-a="raiseopen"]'); await P.click('#lsActions [data-a="raise"]'); return true; }
   if (await has("check")) { await P.click('#lsActions [data-a="check"]'); return true; }
   return false;
 }

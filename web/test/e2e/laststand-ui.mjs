@@ -78,9 +78,9 @@ await H.p.click("#readyBtn"); await sleep(300); await G.p.click("#readyBtn");
 await Promise.all([H.p.waitForSelector("#lstable:not([hidden])", { timeout: 8000 }), G.p.waitForSelector("#lstable:not([hidden])", { timeout: 8000 })]);
 await sleep(400);
 const v0 = await LS(H.p);
-ok(["比大", "比小"].includes(await text(H.p, "#lsDirBig")) && (await text(H.p, "#lsDirNote")).startsWith("下一墩："), `方向：本墩「${await text(H.p, "#lsDirBig")}」、${await text(H.p, "#lsDirNote")}`);
-ok((await text(H.p, "#lsMyChips")) === "15" && (await text(H.p, "#lsOppChips")) === "15" && (await text(H.p, "#lsOppCounts")) === "剩 9 張：大 3・中 3・小 3", "雙方 15 枚、對手剩 9 張：大 3・中 3・小 3");
-ok((await text(H.p, "#lsStage")).includes("底注 1") && (await text(H.p, "#lsRisk")).includes("每人最多押到 3"), `底注與單人上限：「${await text(H.p, "#lsStage")}」`);
+ok(["比大", "比小"].includes(await text(H.p, "#lsDirBig")) && (await text(H.p, "#lsDirNote")).startsWith("下一墩"), `方向：本墩「${await text(H.p, "#lsDirBig")}」、${await text(H.p, "#lsDirNote")}`);
+ok((await text(H.p, "#lsMyChips")) === "15" && (await text(H.p, "#lsOppChips")) === "15" && (await text(H.p, "#lsOppCounts")) === "大3中3小3" && (await H.p.locator("#lsOppBacks .card").count()) === 9, "雙方 15 枚、對手手上 9 張牌背、大3 中3 小3");
+ok((await text(H.p, "#lsStage")).includes("底注 1") && (await text(H.p, "#lsStage")).includes("上限 3"), `底注與單人上限：「${await text(H.p, "#lsStage")}」`);
 ok((await H.p.locator("#lsHand .lscard").count()) === 9, "手上 9 張（只有自己的）");
 await shot(H.p, "table-start");
 
@@ -102,15 +102,17 @@ async function step(P, who) {
     }
     if (v.phase === "bet" && v.toAct === v.seat) {
       if (await has("call")) {
-        seen.riskFacing += (await text(P, "#lsRisk")).includes("若接戰") && (await text(P, "#lsRisk")).includes("若棄牌") ? 1 : 0;
-        if (who === "G" && await has("raise") && coin() < 0.25) { await P.click('#lsActions [data-a="raise"]'); seen.reraiseUi++; return "acted"; }
+        // P2.5-A：面對加注 → 一行「接戰：贏＋N、輸−N」＋棄牌按鈕上寫「輸 N」
+        seen.riskFacing += (await text(P, "#lsRisk")).includes("接戰") && (await text(P, '#lsActions [data-a="fold"]')).includes("輸") ? 1 : 0;
+        if (who === "G" && await has("raiseopen") && coin() < 0.25) { await P.click('#lsActions [data-a="raiseopen"]'); await P.click('#lsActions [data-a="raise"]'); seen.reraiseUi++; return "acted"; }
         if (coin() < 0.18) { await P.click('#lsActions [data-a="fold"]'); seen.fold++; } else { await P.click('#lsActions [data-a="call"]'); seen.call++; }
         return "acted";
       }
-      if (await has("raise") && (who === "H" ? coin() < 0.6 : coin() < 0.2)) {
+      if (await has("raiseopen") && (who === "H" ? coin() < 0.6 : coin() < 0.2)) {
+        await P.click('#lsActions [data-a="raiseopen"]');                 // P2.5-A：先展開金額列
         if (v.allInStage && await has("max")) { await P.click('#lsActions [data-a="max"]'); await sleep(100); }
         const label = await text(P, '#lsActions [data-a="raise"]');
-        if (label.startsWith("梭哈：每人押")) seen.allInLabel++;
+        if (label.startsWith("梭哈每人押")) seen.allInLabel++;
         await P.click('#lsActions [data-a="raise"]'); seen.raise++;
         return "acted";
       }
@@ -155,7 +157,7 @@ const res = (await LS(H.p)).result;
 ok(true, `第一場打完：${res.reason === "elimination" ? `第 ${res.trick} 墩有人歸零` : "九墩打完"}；結算面板「${await text(H.p, "#meTitle")}」— ${await text(H.p, "#meText")}`);
 ok((await text(H.p, "#meStats")).includes("賭上之物：你『阿嬤的藍白拖』") && (await text(G.p, "#meStats")).includes("你『我最後的尊嚴』"), "結算面板列出雙方賭上之物（僅供遊戲敘事）");
 await shot(H.p, "match-end");
-ok(seen.lock >= 2 && seen.raise > 0 && seen.call + seen.fold > 0 && seen.riskFacing > 0, `操作都點過：鎖牌 ${seen.lock}、加注 ${seen.raise}、反加 ${seen.reraiseUi}、接戰 ${seen.call}、棄牌 ${seen.fold}、過牌 ${seen.check}；面對加注時都有顯示「若接戰／若棄牌」`);
+ok(seen.lock >= 2 && seen.raise > 0 && seen.call + seen.fold > 0 && seen.riskFacing > 0, `操作都點過：鎖牌 ${seen.lock}、加注 ${seen.raise}、反加 ${seen.reraiseUi}、接戰 ${seen.call}、棄牌 ${seen.fold}、過牌 ${seen.check}；面對加注時都有顯示接戰的輸贏、棄牌按鈕寫輸幾枚`);
 const hist = (await LS(H.p)).history;
 ok(hist.every(t => t.outcome !== "fold" || t.cards === null), "棄牌墩在畫面資料裡只有分類，沒有牌面");
 
@@ -170,7 +172,7 @@ ok(v1.declarer !== firstDecl && v1.stacks.join() === "15,15", `再來一場：�
 await shot(G.p, "rematch");
 // 第二場打到出現梭哈畫面為止（看「每人押 X」的說明）
 await playMatch("第二場");
-ok(seen.allInLabel > 0 || (await LS(H.p)).history.every(t => t.trick < 7 || t.cap <= t.ante), `梭哈按鈕寫「梭哈：每人押 X」（出現 ${seen.allInLabel} 次）`);
+ok(seen.allInLabel > 0 || (await LS(H.p)).history.every(t => t.trick < 7 || t.cap <= t.ante), `梭哈按鈕寫「梭哈／每人押 X」（出現 ${seen.allInLabel} 次）`);
 
 await browser.close();
 if (errors.length) { console.log(errors.join("\n")); fails++; }

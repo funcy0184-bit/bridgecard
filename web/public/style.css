@@ -1041,101 +1041,135 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 .seal.signed { background: radial-gradient(circle at 35% 30%, #9E3A47, #6A1E29 60%, #4A141C); opacity: .92; }
 .seal:disabled { opacity: .5; cursor: default; }
 
-/* ================= 梭了啦：牌桌 ================= */
-#lstable { gap: 6px; overflow-y: auto; padding-top: calc(env(safe-area-inset-top) + 8px); padding-bottom: 0; }
-.lsbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.lstrick { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; min-width: 0; }
-.lstrick b { font: 600 17px var(--display); letter-spacing: .12em; color: var(--gold-pale); }
-.lstrick small { font-size: 12.5px; color: var(--muted); }
-.lsside { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "who chips" "meta chips"; gap: 1px 10px; padding: 7px 12px; border-radius: 10px;
-  background: rgba(251,244,228,.07); box-shadow: inset 0 0 0 1px rgba(226,184,96,.35); }
-/* 自己那一列在底部固定區裡：不加框，只是一條 */
-.lsside.me { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; padding: 0 2px; background: none; box-shadow: none; }
-.lsside.me .lsmeta { flex: 1 1 auto; }
-.lsside.me .lschips { order: 3; margin-left: auto; }
-.lsside.me .lschips b { font-size: 22px; }
-.lswho { grid-area: who; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
-.lswho b { font: 500 17px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lswho small { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.lschips { grid-area: chips; align-self: center; display: flex; align-items: baseline; gap: 3px; }
-.lschips b { font: 700 25px/1 var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
-.lschips small { font-size: 12px; color: var(--muted); }
-.lsmeta { grid-area: meta; display: flex; gap: 2px 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--on-wood); }
-.lsmeta span:last-child { color: var(--muted); }
-/* 對手現在的狀態（已鎖牌／加注到幾）：跟名字同一行的小標籤 */
-.lsstatus { font-size: 12.5px; color: var(--paper-hi); padding: 0 7px; border-radius: 9px; background: rgba(122,39,50,.75); white-space: nowrap; }
+/* ================= 梭了啦：牌桌（P2.5-A：五區、不捲動） =================
+   ① 頂列 ② 對手名牌 ③ 綠絨牌桌（彈性）④ 我的名牌＋手牌 ⑤ 行動列；高度不夠先縮牌桌和牌，不縮字、不捲動 */
+#lstable { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto auto; gap: 6px; overflow: hidden;
+  padding: calc(env(safe-area-inset-top) + 8px) max(12px, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 10px) max(12px, env(safe-area-inset-right)); }
+/* ① 頂列 */
+.lsbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lstrick { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
+.lstrick b { font: 600 16px var(--display); letter-spacing: .1em; color: var(--gold-pale); white-space: nowrap; }
+.lstrick small { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* ② 對手名牌 */
+.lsside.opp { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "seal who bank" "seal meta bank"; align-items: center; gap: 2px 10px;
+  padding: 6px 10px; border-radius: 10px; background: rgba(251,244,228,.06); box-shadow: inset 0 0 0 1px rgba(226,184,96,.32); }
+.lsseal { grid-area: seal; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 700 17px var(--display); color: #F7E9CC;
+  background: radial-gradient(circle at 35% 30%, #9E3A47, #6A1E29 60%, #4A141C); box-shadow: 0 0 0 2px rgba(226,184,96,.5); }
+.lswho { grid-area: who; display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+.lswho b { font: 500 16px var(--display); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lswho small { font-size: 11.5px; color: var(--muted); }
+.lsstatus { font-size: 12px; color: var(--paper-hi); padding: 0 7px; border-radius: 9px; background: rgba(122,39,50,.85); white-space: nowrap; }
 .lsstatus:empty { display: none; }
-.lsdir { text-align: center; padding: 0; }
-.lsdirbig { font: 700 36px/1.08 var(--display); letter-spacing: .3em; padding-left: .3em; color: var(--paper-hi); text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.lsbank { grid-area: bank; display: flex; align-items: center; gap: 6px; }
+.lsbank b { font: 700 24px/1 var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
+.lschipico { width: 24px; height: 8px; margin-top: 10px; border-radius: 50%; background: radial-gradient(ellipse at 50% 35%, #E9C979, #B98A3E 70%);
+  box-shadow: inset 0 -2px 0 #7a5a25, 0 -4px 0 #C9A055, 0 -5px 0 #7a5a25, 0 -8px 0 #D8B566; }
+.lsmeta { grid-area: meta; display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.lsbacks { display: flex; } .lsbacks .card { --cw: 12px; margin-left: -8px; box-shadow: 0 1px 2px rgba(0,0,0,.5); } .lsbacks .card:first-child { margin-left: 0; }
+.lspips b { color: var(--on-wood); font-weight: 500; margin: 0 4px 0 1px; }
+.lsskills { display: inline-flex; gap: 3px; }
+.lsskills i { font-style: normal; font-size: 10.5px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); background: var(--gold-pale); }
+.lsskills i.used { background: rgba(255,255,255,.12); color: rgba(241,227,196,.35); text-decoration: line-through; }
+/* ③ 綠絨牌桌 */
+.lsfelt { position: relative; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; padding: 8px 12px 6px; border-radius: 18px;
+  background: radial-gradient(90% 75% at 50% 45%, var(--felt) 0%, var(--felt-dark) 70%, var(--felt-deep) 100%);
+  box-shadow: inset 0 0 0 2px rgba(185,138,62,.6), inset 0 0 0 6px var(--felt-dark), inset 0 0 0 7px rgba(185,138,62,.3), 0 6px 16px rgba(0,0,0,.4); }
+.lsrow { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 0; }
+.lsslot { --cw: var(--slot, clamp(42px, 13vw, 58px)); position: relative; flex: none; width: var(--cw); height: calc(var(--cw) * 1.42); border-radius: 7px; display: grid; place-items: center; }
+.lsslot.empty { box-shadow: inset 0 0 0 1.5px rgba(226,184,96,.4); background: rgba(0,0,0,.12); }
+.lsslot.empty.ask { box-shadow: inset 0 0 0 2px var(--gold-pale), 0 0 12px rgba(243,212,136,.3); }
+.lsslot .lbl { font-size: 10.5px; line-height: 1.3; color: rgba(243,212,136,.8); text-align: center; padding: 0 3px; }
+.lsslot.win { border-radius: 8px; box-shadow: 0 0 0 2px var(--gold-pale), 0 0 14px rgba(243,212,136,.5); }
+.lsslot.lose .card, .lsslot.lose .lscat { filter: brightness(.8) saturate(.8); }
+.lspeek, .lsinsight { position: absolute; z-index: 1; font: 700 11px/1.4 var(--display); padding: 0 5px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.5); white-space: nowrap; }
+.lspeek { right: -8px; bottom: -7px; color: var(--ink); background: var(--paper-hi); }
+.lspeek.red { color: var(--red); }
+.lsinsight { left: 50%; top: -9px; translate: -50% 0; color: #F7E9CC; background: var(--wine); }
+.lscat { width: 100%; height: 100%; display: grid; place-items: center; border-radius: 6px; font: 700 18px var(--display); color: var(--ink);
+  background: repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 4px, var(--paper) 4px, var(--paper) 8px); box-shadow: inset 0 0 0 1px rgba(0,0,0,.3), 0 2px 5px rgba(0,0,0,.45); }
+.lsbet { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 56px; }
+.lsbet b { font: 700 16px/1.1 var(--display); color: var(--gold-pale); font-variant-numeric: tabular-nums; }
+.lsbet small { font-size: 11px; color: rgba(241,227,196,.8); white-space: nowrap; max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; }
+.lsbet.zero { opacity: .35; }
+.lsstack { position: relative; width: 26px; height: 30px; }
+.lschip { position: absolute; left: 0; width: 26px; height: 9px; border-radius: 50%; background: radial-gradient(ellipse at 50% 35%, #E9C979, #B98A3E 70%); box-shadow: inset 0 -2px 0 #7a5a25, 0 1px 1px rgba(0,0,0,.5); }
+.lsrow.opp .lschip { background: radial-gradient(ellipse at 50% 35%, #C8505C, #7A2732 70%); box-shadow: inset 0 -2px 0 #4a141c, 0 1px 1px rgba(0,0,0,.5); }
+.lsmid { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 4px 0; }
+.lsdir { display: flex; flex-direction: column; align-items: center; padding: 3px 14px 4px; border-radius: 12px; text-align: center;
+  background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.32)); box-shadow: inset 0 0 0 1px rgba(226,184,96,.55); }
+.lsdir.canflip { box-shadow: inset 0 0 0 2px var(--gold-pale), 0 0 12px rgba(243,212,136,.35); }
+.lsdirbig { font: 700 28px/1.1 var(--display); letter-spacing: .3em; padding-left: .3em; color: var(--paper-hi); text-shadow: 0 2px 0 rgba(0,0,0,.4); white-space: nowrap; }
 .lsdirbig.low { color: #CFE3F2; }
-.lsdirbig.flipped::after { content: "（翻轉）"; font-size: 13px; letter-spacing: 0; color: var(--gold-pale); vertical-align: middle; }
-.lsdir small { font-size: 13px; color: var(--muted); }
-.lspot { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 10px; color: var(--paper-hi);
-  background: radial-gradient(90% 90% at 50% 40%, var(--felt) 0%, var(--felt-dark) 75%, var(--felt-deep) 100%); box-shadow: inset 0 0 0 2px rgba(185,138,62,.55); }
-.lscommit { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
-.lscommit span { min-width: 0; white-space: nowrap; }
-.lscommit i { font-style: normal; display: inline-block; max-width: 6em; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
-.lscommit b { font: 700 20px var(--display); color: var(--gold-pale); margin-left: 2px; font-variant-numeric: tabular-nums; }
-.lspool { font-size: 13px; line-height: 1.35; color: var(--gold-pale); text-align: center; padding: 3px 8px; border-radius: 10px; background: rgba(0,0,0,.25); }
-.lspool small { display: block; font-size: 11.5px; color: var(--muted); }
-/* 輸贏試算：放在按鈕正上方 */
-.lsrisk { margin: 0; font-size: 13px; line-height: 1.45; color: #E8F0E8; padding: 5px 10px; border-radius: 8px; background: rgba(28,58,44,.72); box-shadow: inset 0 0 0 1px rgba(185,138,62,.45); }
-.lsrisk:empty { display: none; }
-.lsrisk b { color: var(--gold-pale); }
-.lsrisk .allin { display: block; margin-top: 2px; color: #FFD7A8; font-weight: 700; }
-.lsreveal { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: rgba(0,0,0,.28); --cw: 30px; }
-.lsreveal figure { flex: none; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--muted); max-width: 4.5em; }
-.lsreveal figcaption { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lsreveal .cat { width: var(--cw); height: calc(var(--cw) * 1.42); display: grid; place-items: center; border-radius: 4px; font: 700 16px var(--display);
-  color: var(--ink); background: repeating-linear-gradient(45deg, var(--paper-2), var(--paper-2) 4px, var(--paper) 4px, var(--paper) 8px); box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); }
-.lsreveal p { margin: 0; flex: 1; min-width: 0; font-size: 13px; line-height: 1.4; }
-.lsreveal p b { color: var(--gold-pale); }
-.lsturn { margin: 0; text-align: center; font: 500 15px/1.35 var(--display); color: var(--gold-pale); min-height: 1.35em; }
-.lsturn.mine { color: #FFE7B0; text-shadow: 0 0 10px rgba(243,212,136,.4); }
-/* 手牌永遠一排：牌寬照張數和螢幕寬算（9 張在 320 寬也放得下），張數少了牌會變大 */
-.lshand { display: flex; justify-content: center; flex-wrap: nowrap; gap: 4px; padding: 8px 0 0;
-  --cw: clamp(27px, calc((min(100vw, 520px) - 40px - (var(--n, 9) - 1) * 4px) / var(--n, 9)), 46px); }
-.lscard { position: relative; border: 0; padding: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; border-radius: 6px; }
-.lscard small { font-size: 11px; line-height: 1.2; color: var(--muted); }
-.lscard.sel .card { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--gold-pale), 0 6px 10px rgba(0,0,0,.4); }
-.lscard.locked .card { box-shadow: 0 0 0 3px var(--wine-hi); }
-.lscard.locked small { color: #FFC9C9; font-weight: 700; }
+.lsdirbig.flipped::after { content: "翻"; display: inline-block; margin-left: -.15em; vertical-align: top; font-size: 11px; letter-spacing: 0; padding: 0 4px; border-radius: 6px; color: var(--ink); background: var(--gold-pale); text-shadow: none; }
+.lsdir small { font-size: 10.5px; color: rgba(241,227,196,.72); white-space: nowrap; }
+.lspool { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.lspool small { font-size: 10.5px; color: rgba(241,227,196,.8); white-space: nowrap; }
+.lslast { justify-self: center; margin-top: 2px; border: 0; cursor: pointer; font-size: 11.5px; line-height: 1.5; color: rgba(241,227,196,.88); padding: 1px 10px; border-radius: 9px; background: rgba(0,0,0,.28); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lslast b { font-weight: 600; } .lslast .win { color: var(--good); } .lslast .lose { color: var(--bad); }
+.lslast.hot { font-size: 13px; color: var(--paper-hi); background: rgba(0,0,0,.45); box-shadow: inset 0 0 0 1px rgba(226,184,96,.6); }
+/* 我的名牌 */
+.lsside.me { display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.lsside.me > b { font: 500 15px var(--display); color: var(--on-wood); }
+.lsside.me .lsbank { margin-left: auto; } .lsside.me .lsbank b { font-size: 20px; }
+/* ④ 手牌：扇形重疊；選到的升起；鎖了的牌已經在桌上 */
+.lshand { --hw: clamp(44px, 14.5vw, 62px); display: flex; justify-content: center; align-items: flex-end; height: calc(var(--hw) * 1.42 + 12px); padding-top: 12px; }
+.lscard { position: relative; flex: none; border: 0; padding: 0; background: none; border-radius: 6px; cursor: pointer; margin-left: calc(var(--hw) * -0.38); transition: translate .16s ease-out; }
+.lscard:first-child { margin-left: 0; }
+.lscard .card { --cw: var(--hw); box-shadow: -2px 2px 5px rgba(0,0,0,.45); }
+.lscard.sel { translate: 0 -12px; z-index: 1; }
+.lscard.sel .card { box-shadow: 0 0 0 2px var(--gold-pale), 0 8px 14px rgba(0,0,0,.5); }
 .lscard:disabled { cursor: default; }
-.lscard:disabled:not(.locked) .card { filter: saturate(.7) brightness(.85); }
-.lsactions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.lsactions .btn { flex: 1 1 40%; min-width: 0; padding: 10px 10px; font-size: 15px; }
-.lsactions .btn.wide { flex-basis: 100%; }
-/* 過牌和加注同一排（放不下才換行） */
-.lsactions .btn[data-a="check"] { flex: 0 1 auto; padding-inline: 16px; }
-.lsactions .note { flex-basis: 100%; margin: 0; text-align: center; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
-.lsraise { flex: 1 1 196px; min-width: 0; display: flex; align-items: center; gap: 6px; }
-.lsraise .step { flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; font: 700 22px var(--display); color: var(--ink); background: var(--paper); cursor: pointer; }
+.lshand.wait .lscard .card { filter: saturate(.8) brightness(.84); }
+/* ⑤ 行動列：一句問題＋一行小字＋按鈕（主按鈕酒紅） */
+.lsdock { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 7px; min-height: 103px; }   /* 一句話＋一排按鈕的高度先留好：換階段時牌桌不跳 */
+.lsask { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 6px 8px 6px 11px; border-radius: 10px; }
+.lsask > div { flex: 1; min-width: 0; }
+.lsask.mine { box-shadow: inset 4px 0 0 var(--wine); }
+.lsturn { margin: 0; font: 600 15px/1.35 var(--display); color: var(--ink); }
+.lsrisk { margin: 1px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-soft); }
+.lsrisk:empty { display: none; }
+.lsrisk b { color: var(--wine); }
+.lsq { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 0; cursor: pointer; font: 700 14px var(--display); color: var(--ink); background: var(--paper-2); box-shadow: inset 0 0 0 1px rgba(185,138,62,.7); }
+.lsactions { display: flex; flex-direction: column; gap: 7px; }
+.lsbtns, .lsraise { display: flex; gap: 8px; }
+.lsbtns .btn, .lsraise .btn { flex: 1 1 0; min-width: 0; min-height: 46px; padding: 8px 6px; font-size: 15px; line-height: 1.2; letter-spacing: .04em; }
+.lsbtns .btn small, .lsraise .btn small { display: block; font-size: 11.5px; font-weight: 500; letter-spacing: 0; opacity: .85; }
+.lsbtns .btn.eye { flex: 0 0 58px; font-size: 13.5px; }
+.lsraise .step { flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; font: 700 22px var(--display); color: var(--ink); background: var(--paper); }
 .lsraise .step:disabled { opacity: .4; }
-.lsraise .btn { flex: 1; min-width: 0; padding-inline: 6px; }
+.lsraise .btn.cancel, .lsraise .btn.max { flex: 0 0 auto; padding: 8px 10px; font-size: 14px; }
 .lsraise .btn.allin { background: linear-gradient(180deg, #B24453, var(--wine-dark)); }
-.lslog { font-size: 13px; color: var(--on-wood); }
-.lslog summary { cursor: pointer; color: var(--muted); text-align: center; padding: 4px; }
-.lslog ol { margin: 4px 0 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
-.lslog li b { color: var(--gold-pale); font-weight: 500; }
-#wait.lsfull > .row { display: none; }
-@media (max-height: 700px) { .lsdirbig { font-size: 32px; } }
-/* 底部固定區：輪到誰＋手牌＋按鈕 */
-.lsdock { position: sticky; bottom: 0; z-index: 2; margin: auto -18px 0; padding: 8px 18px calc(env(safe-area-inset-bottom) + 12px);
-  display: flex; flex-direction: column; gap: 6px; background: linear-gradient(to top, var(--wood-3) calc(100% - 10px), rgba(30,18,11,0)); }
-@media (max-height: 640px) {
-  #lstable { gap: 5px; }
-  .lsdirbig { font-size: 30px; }
-  .lsdir small { font-size: 12px; }
-  .lsside { padding: 5px 10px; }
-  .lspot { padding: 6px 10px; }
-  .lsrisk, .lsreveal p { font-size: 12.5px; line-height: 1.38; }
-  #lsMyCounts { display: none; }            /* 自己的大中小：手牌下面已經標了 */
-  .lshand { --cw: clamp(27px, calc((min(100vw, 520px) - 72px) / 9), 38px); }   /* 矮螢幕：牌不因為張數變少而長高 */
-  .lsrisk { padding: 4px 9px; }
-  .lsactions .note.tip { display: none; }   /* 規則小提示收起來（輪到誰那一行已經講了）；下注試算照樣顯示 */
-  .lsactions .btn { padding: 9px 8px; }
+/* 面板：每墩紀錄、完整試算 */
+.lslog { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.lslog li b { color: var(--wine); font-weight: 600; }
+.lslog li small { color: var(--ink-soft); }
+.lslog:empty::before { content: "還沒有打完的墩。"; color: var(--ink-soft); }
+.lshelp { display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.6; color: var(--ink); }
+.lshelp p { margin: 0; } .lshelp b { color: var(--wine); } .lshelp .allin { display: block; margin-top: 2px; color: var(--wine-dark); font-weight: 700; }
+.lshelp ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); }
+/* 矮螢幕：牌桌、出牌位、手牌一起縮（不縮字） */
+@media (max-height: 700px) { .lsdirbig { font-size: 25px; } .lsfelt { padding-top: 6px; } }
+@media (max-height: 620px) {
+  #lstable { gap: 5px; padding-top: calc(env(safe-area-inset-top) + 6px); }
+  .lsside.opp { padding: 4px 8px; } .lsseal { width: 32px; height: 32px; font-size: 15px; }
+  .lsslot { --slot: 40px; } .lsstack { height: 24px; }
+  .lsdirbig { font-size: 22px; }
+  .lshand { --hw: 43px; padding-top: 10px; height: calc(var(--hw) * 1.42 + 10px); }
+  .lsask { min-height: 46px; padding-block: 4px; }
+  .lsdock { min-height: 97px; }
+  .lsbtns .btn, .lsraise .btn { min-height: 44px; padding-block: 6px; }
+  .lsraise .step { width: 44px; height: 44px; }
 }
-@media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard.sel .card { transform: none; } }
+/* 橫拿（很矮）：收掉次要資訊；牌桌改成左右並排（我的出牌位｜方向｜對手的出牌位），不會擠成一團 */
+@media (max-height: 470px) {
+  .lsmeta, .lsrisk, .lsdir small, .lsbet small { display: none; }
+  .lsfelt { grid-template-columns: 1fr auto 1fr; grid-template-rows: minmax(0, 1fr) auto; column-gap: 10px; padding: 6px 10px 4px; }
+  .lsrow.me { grid-column: 1; grid-row: 1; } .lsmid { grid-column: 2; grid-row: 1; } .lsrow.opp { grid-column: 3; grid-row: 1; }
+  .lslast { grid-column: 1 / -1; grid-row: 2; }
+  .lsslot { --slot: 32px; } .lshand { --hw: 34px; padding-top: 8px; height: calc(var(--hw) * 1.42 + 8px); }
+  .lsside.me { min-height: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard { transition: none; } }
 
 /* ================= P1.5：首頁選玩法、梭了啦！這局賭什麼？的選單、換玩法轉場 ================= */
 :root { --shuo-1: #8E2B38; --shuo-2: #5A1620; --shuo-3: #2A070C; --shuo-gold: #E6BC62; --shuo-gold-dk: #8A6424; --shuo-cream: #F7E3BA; }
@@ -1238,9 +1272,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   animation-name: bannerDrop; }     /* 從上面落下來（從下面滑上來會在進場那一下蓋到對手那一格） */
 @keyframes bannerDrop { from { transform: translateY(-14px); opacity: 0; } }
 /* 安全區域（瀏海、圓角、橫拿）：左右也讓開 */
-#lstable, #shuo, #wait { padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
-.lsdock { margin-left: calc(-1 * max(18px, env(safe-area-inset-left))); margin-right: calc(-1 * max(18px, env(safe-area-inset-right)));
-  padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+#shuo, #wait { padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
 
 /* 測試站：上方中間一個小標（正式站不會出現） */
 html[data-stage="staging"] body::after { content: "測試站"; position: fixed; z-index: 90; top: env(safe-area-inset-top); left: 50%; translate: -50% 0; pointer-events: none;
@@ -1275,7 +1307,7 @@ html[data-stage="staging"] body::after { content: "測試站"; position: fixed; 
 
 /* ================= 梭了啦 P2：全桌都在看你笑話（轉播字幕、節目小卡、下注壓力） ================= */
 /* 字幕條：蓋在標題列（第幾墩／底注）上，右邊讓出選單鈕；最多兩行；左邊留一個墩數小標 */
-.lsbar { position: relative; min-height: 44px; }
+.lsbar { position: relative; min-height: 40px; }
 .lstrick { transition: opacity .22s; }
 .lsbar.airing .lstrick { opacity: 0; }
 .lsbadge { position: absolute; left: 0; top: 50%; margin-top: -11px; height: 22px; padding: 0 7px; border-radius: 11px; display: flex; align-items: center;

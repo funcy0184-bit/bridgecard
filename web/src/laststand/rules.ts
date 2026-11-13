@@ -16,7 +16,8 @@ export const HIGH_DIRS = 5;            // 9 墩裡有 5 墩比大、4 墩比小
 // 卡片：id 0..51 = 花色 × 13 + (點數 − 2)；點數 A=14、K=13……2=2
 export const rankOf = (id: number) => (id % 13) + 2;
 export const suitOf = (id: number) => Math.floor(id / 13);
-export const SUITS = ["♠", "♥", "♦", "♣"];
+// 花色符號順序跟牌面圖（game/cards 的 SUIT_SYMBOL）一致：文字寫的花色＝畫面上畫的花色（梭了啦比大小不看花色）
+export const SUITS = ["♣", "♦", "♥", "♠"];
 export const RANK_TEXT: Record<number, string> = { 11: "J", 12: "Q", 13: "K", 14: "A" };
 export const cardText = (id: number) => `${SUITS[suitOf(id)]}${RANK_TEXT[rankOf(id)] ?? rankOf(id)}`;
 

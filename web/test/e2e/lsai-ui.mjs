@@ -44,7 +44,7 @@ async function act(P) {
   }
   if (await has("insight") && rnd() < 0.5) { await P.click('#lsActions [data-a="insight"]'); seen.insight++; return true; }
   if (await has("call")) { if (rnd() < 0.2) { await P.click('#lsActions [data-a="fold"]'); seen.fold++; } else { await P.click('#lsActions [data-a="call"]'); seen.call++; } return true; }
-  if (await has("raise") && rnd() < 0.4) { await P.click('#lsActions [data-a="raise"]'); seen.raise++; return true; }
+  if (await has("raiseopen") && rnd() < 0.4) { await P.click('#lsActions [data-a="raiseopen"]'); await P.click('#lsActions [data-a="raise"]'); seen.raise++; return true; }
   if (await has("check")) { await P.click('#lsActions [data-a="check"]'); seen.check++; return true; }
   return false;
 }

@@ -175,45 +175,44 @@
 
   <!-- ============ 梭了啦牌桌：九墩、比大／比小、鎖牌、下注 ============ -->
   <section id="lstable" class="screen" hidden>
+    <!-- P2.5-A：五區牌桌（頂列、對手名牌、綠絨牌桌、我的名牌＋手牌、行動列），整個畫面不捲動 -->
     <header class="lsbar" id="lsBar">
-      <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1 · 單人上限 3</small><em class="lstest" id="lsTestTag" hidden>單人測試｜不計正式戰績</em></div>
+      <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1・上限 3</small><em class="lstest" id="lsTestTag" hidden>單人測試｜不計正式戰績</em></div>
       <!-- 轉播字幕（P2）：蓋在標題列上、最多兩則；左邊留墩數小標 -->
       <div class="lsticker" id="lsTicker" aria-live="off"></div>
       <span class="lsbadge" id="lsBadge" aria-hidden="true">1/9</span>
       <button id="lsMenuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
     </header>
+    <!-- 對手名牌：印章頭像、名字、角色、狀態；籌碼；手上牌背、剩下的大中小、技能 -->
     <div class="lsside opp" id="lsOpp">
+      <span class="lsseal" id="lsOppSeal" aria-hidden="true"></span>
       <div class="lswho"><b id="lsOppName">對手</b><small id="lsOppTag"></small><span class="lsstatus" id="lsOppStatus"></span></div>
-      <div class="lschips"><b id="lsOppChips">15</b><small>枚</small></div>
-      <div class="lsmeta"><span id="lsOppCounts">剩 9 張：大 3・中 3・小 3</span><span id="lsOppSkills"></span></div>
+      <div class="lsbank"><span class="lschipico" aria-hidden="true"></span><b id="lsOppChips">15</b></div>
+      <div class="lsmeta"><span class="lsbacks" id="lsOppBacks" aria-hidden="true"></span><span class="lspips" id="lsOppCounts"></span><span class="lsskills" id="lsOppSkills"></span></div>
     </div>
-    <div class="lsdir" id="lsDir" aria-live="polite">
-      <div class="lsdirbig" id="lsDirBig">比大</div>
-      <small id="lsDirNote">下一墩：比小</small>
+    <!-- 綠絨牌桌：對手的出牌位在上、我的在下（蓋著的牌、押的籌碼）；中間是本墩方向和疊池；最下面是上一墩結果 -->
+    <div class="lsfelt" id="lsFelt">
+      <div class="lsrow opp"><div class="lsslot" id="lsOppSlot"></div><div class="lsbet" id="lsOppBet"><span class="lsstack" aria-hidden="true"></span><b id="lsOppCommit">0</b><small id="lsOppCommitWho">對手押</small></div></div>
+      <div class="lsmid" id="lsPot">
+        <div class="lsdir" id="lsDir" aria-live="polite"><div class="lsdirbig" id="lsDirBig">比大</div><small id="lsDirNote">下一墩 比小</small></div>
+        <div class="lspool" id="lsPool" hidden><span class="lsstack" aria-hidden="true"></span><small id="lsPoolText">疊池 0</small></div>
+      </div>
+      <div class="lsrow me"><div class="lsslot" id="lsMySlot"></div><div class="lsbet" id="lsMyBet"><span class="lsstack" aria-hidden="true"></span><b id="lsMyCommit">0</b><small>你押</small></div></div>
+      <button class="lslast" id="lsLast" type="button" hidden></button>
     </div>
-    <div class="lspot" id="lsPot">
-      <div class="lscommit"><span>你已投入 <b id="lsMyCommit">0</b></span><span><i id="lsOppCommitWho">對手</i>已投入 <b id="lsOppCommit">0</b></span></div>
-      <div class="lspool" id="lsPool" hidden></div>
-      <div class="lsreveal" id="lsReveal" hidden></div>
+    <!-- 我的名牌：角色、技能、籌碼 -->
+    <div class="lsside me" id="lsMe"><b id="lsMyName">你</b><small id="lsMyTag"></small><span class="lsskills" id="lsMySkills"></span><span class="lsbank"><span class="lschipico" aria-hidden="true"></span><b id="lsMyChips">15</b></span></div>
+    <div class="lshand" id="lsHand" role="listbox" aria-label="你的手牌"></div>
+    <!-- 行動列：一句問題＋一行小字（完整試算點 ?）；按鈕固定一組，依階段顯示 -->
+    <div class="lsdock" id="lsDock">
+      <div class="lsask paper" id="lsAsk"><div><p class="lsturn" id="lsTurn" aria-live="polite"></p><p class="lsrisk" id="lsRisk"></p></div><button class="lsq" id="lsHelpBtn" type="button" aria-label="完整試算和規則">?</button></div>
+      <div class="lsactions" id="lsActions"></div>
     </div>
-    <details class="lslog" id="lsLog"><summary>每墩紀錄</summary><ol id="lsLogList"></ol></details>
     <!-- 節目小卡（P2）：放在中間和底部固定區之間的空位，點一下略過；不擋任何按鈕 -->
     <aside class="lscast" id="lsCast" hidden role="status" aria-live="polite">
       <header><span class="prog" id="lsCastProg"></span><b id="lsCastTitle"></b><span class="skip">點一下略過</span></header>
       <ol id="lsCastLines"></ol>
     </aside>
-    <!-- 自己的籌碼、輪到誰、手牌、輸贏試算、按鈕：固定在畫面底部（小手機上方內容捲動時也一定看得到、點得到） -->
-    <div class="lsdock" id="lsDock">
-      <div class="lsside me" id="lsMe">
-        <div class="lswho"><b id="lsMyName">你</b><small id="lsMyTag"></small></div>
-        <div class="lschips"><b id="lsMyChips">15</b><small>枚</small></div>
-        <div class="lsmeta"><span id="lsMyCounts"></span><span id="lsMySkills"></span></div>
-      </div>
-      <p class="lsturn" id="lsTurn" aria-live="polite"></p>
-      <div class="lshand" id="lsHand" role="listbox" aria-label="你的手牌"></div>
-      <p class="lsrisk" id="lsRisk"></p>
-      <div class="lsactions" id="lsActions"></div>
-    </div>
   </section>
 
   <!-- ============ 02～04 牌桌：搶牌／叫牌／出牌 ============ -->
@@ -384,6 +383,22 @@
         <button class="btn ghost" id="pauseLeave" type="button">先離開（牌局保留）</button>
       </div>
       <button class="btn ghost small" id="pauseHide" type="button">先收起來</button>
+    </div>
+  </div>
+
+  <!-- 梭了啦 P2.5：每墩紀錄、完整試算與規則（從牌桌打開，不推動牌桌版面） -->
+  <div id="lsLogPanel" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="lsLogTitle">
+      <h3 id="lsLogTitle">每墩紀錄</h3>
+      <ol class="lslog" id="lsLogList"></ol>
+      <button class="btn paper close" data-close type="button">關閉</button>
+    </div>
+  </div>
+  <div id="lsHelpPanel" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="lsHelpTitle">
+      <h3 id="lsHelpTitle">這一墩怎麼算</h3>
+      <div class="lshelp" id="lsHelpBody"></div>
+      <button class="btn paper close" data-close type="button">知道了</button>
     </div>
   </div>
 
