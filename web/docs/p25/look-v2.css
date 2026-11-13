@@ -1,5 +1,7 @@
-/* P2.5-A 視覺建議（只是建議稿：截圖時用 Playwright 注入，產品裡沒有載入）
-   目標：卡牌是主角、方向清楚但不搶戲、出牌位三種狀態一眼分得出來、桌面不放非必要的字 */
+/* P2.5 look-v2 最終稿（建議稿：截圖時用 Playwright 注入，產品裡還沒有載入；你確認後才搬進 style.css）
+   目標：卡牌是主角、方向清楚但不搶戲、出牌位三種狀態一眼分得出來、桌面不放非必要的字
+   跟第一版建議稿的差別：贏／輸標籤改成蓋在牌面上的小章（不再壓到方向小標或結果那行字）；要決定翻不翻時方向小標放大；拿掉牌背下面的「已蓋」；
+   桌上的牌加一層貼桌的影子；橫拿的出牌位也放大 */
 
 /* 1. 方向：從大徽章改成桌面中線上的一個小標（像牌桌上印的字） */
 #lstable[data-look="v2"] .lsmid { position: relative; gap: 10px; padding: 2px 0; }
@@ -8,8 +10,10 @@
 #lstable[data-look="v2"] .lsdir { position: relative; flex-direction: row; align-items: baseline; gap: 6px; padding: 2px 11px 3px; border-radius: 999px;
   background: var(--felt-dark); box-shadow: inset 0 0 0 1px rgba(226,184,96,.55); }
 #lstable[data-look="v2"] .lsdirbig { font-size: 17px; letter-spacing: .14em; padding-left: .14em; text-shadow: none; }
-#lstable[data-look="v2"] .lsdir small { font-size: 10.5px; }
-#lstable[data-look="v2"] .lsdir.canflip { box-shadow: inset 0 0 0 2px var(--gold-pale), 0 0 10px rgba(243,212,136,.4); }
+#lstable[data-look="v2"] .lsdir small { font-size: 11px; }
+#lstable[data-look="v2"] .lsdir.canflip { box-shadow: inset 0 0 0 2px var(--gold-pale), 0 0 10px rgba(243,212,136,.45); }
+/* 要決定翻不翻的時候，方向是主角：小標放大一號 */
+#lstable[data-look="v2"] .lsdir.canflip .lsdirbig { font-size: 21px; }
 #lstable[data-look="v2"] .lspool { position: relative; flex-direction: row; align-items: center; gap: 4px; padding: 1px 9px 1px 5px; border-radius: 999px; background: var(--felt-dark); box-shadow: inset 0 0 0 1px rgba(226,184,96,.35); }
 #lstable[data-look="v2"] .lspool .lsstack { height: 18px; width: 22px; }
 #lstable[data-look="v2"] .lspool .lschip { width: 22px; height: 8px; }
@@ -18,20 +22,26 @@
 #lstable[data-look="v2"] .lsslot { --slot: clamp(54px, 17vw, 74px); }
 @media (max-height: 700px) { #lstable[data-look="v2"] .lsslot { --slot: clamp(52px, 15.5vw, 64px); } }
 @media (max-height: 620px) { #lstable[data-look="v2"] .lsslot { --slot: 52px; } }
+@media (max-height: 470px) { #lstable[data-look="v2"] .lsslot { --slot: 40px; } }
+#lstable[data-look="v2"] .lsrow { gap: 14px; }
 
-/* 3. 出牌位三種狀態：等對手（暗虛線＋「等待」）／蓋著（牌背＋「已蓋」）／攤牌（正面＋「贏／輸」） */
+/* 3. 出牌位三種狀態：等待（暗虛線＋字）／已出牌（牌背貼在桌上）／翻開（正面＋贏金框、輸變暗＋小標） */
 #lstable[data-look="v2"] .lsslot.empty { background: rgba(0,0,0,.2); box-shadow: inset 0 0 0 1.5px rgba(226,184,96,.3); }
-#lstable[data-look="v2"] .lsslot.empty .lbl { color: rgba(241,227,196,.55); }
+#lstable[data-look="v2"] .lsslot.empty .lbl { color: rgba(241,227,196,.6); font-size: 11px; }
 #lstable[data-look="v2"] .lsslot.empty.ask { background: rgba(243,212,136,.1); box-shadow: inset 0 0 0 2px var(--gold-pale), 0 0 18px rgba(243,212,136,.4); }
 #lstable[data-look="v2"] .lsslot.empty.ask .lbl { color: var(--gold-pale); font-weight: 600; }
-#lstable[data-look="v2"] .lsslot:has(> .card.back)::after,
-#lstable[data-look="v2"] .lsslot.win::after, #lstable[data-look="v2"] .lsslot.lose::after {
-  position: absolute; left: 50%; bottom: -17px; translate: -50% 0; font: 600 11px/1.4 var(--display); padding: 0 7px; border-radius: 8px; white-space: nowrap; }
-#lstable[data-look="v2"] .lsslot:has(> .card.back)::after { content: "已蓋"; color: var(--gold-pale); background: rgba(0,0,0,.35); }
+#lstable[data-look="v2"] .lsslot > .card { box-shadow: 0 4px 7px rgba(0,0,0,.45), 0 1px 1px rgba(0,0,0,.45); }
 #lstable[data-look="v2"] .lsslot.win { box-shadow: 0 0 0 3px var(--gold-pale), 0 0 18px rgba(243,212,136,.6); scale: 1.04; }
+#lstable[data-look="v2"] .lsslot.win::after, #lstable[data-look="v2"] .lsslot.lose::after {
+  position: absolute; z-index: 2; left: 50%; translate: -50% 0; font: 700 11px/1.45 var(--display); padding: 0 8px; border-radius: 8px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
 #lstable[data-look="v2"] .lsslot.win::after { content: "贏"; color: var(--ink); background: var(--gold-pale); }
-#lstable[data-look="v2"] .lsslot.lose::after { content: "輸"; color: rgba(241,227,196,.8); background: rgba(0,0,0,.4); }
-#lstable[data-look="v2"] .lsrow { gap: 14px; }
+#lstable[data-look="v2"] .lsslot.lose::after { content: "輸"; color: rgba(241,227,196,.9); background: rgba(0,0,0,.55); }
+/* 標籤像蓋在牌上的章：放在牌面裡、離方向小標遠的那一側（對手的在上、我的在下），牌面中間這兩處是空白，不蓋到點數；
+   也不會超出出牌位，所以不會壓到方向小標或下面那行結果 */
+#lstable[data-look="v2"] #lsOppSlot::after { top: 4px; }
+#lstable[data-look="v2"] #lsMySlot::after { bottom: 4px; }
+/* 橫拿的牌太小（40px），章會蓋到點數：只留金框和變暗，結果看下面那行字 */
+@media (max-height: 470px) { #lstable[data-look="v2"] .lsslot.win::after, #lstable[data-look="v2"] .lsslot.lose::after { display: none; } }
 
 /* 4. 押注：只留籌碼堆＋數字（誰押的看位置就知道） */
 #lstable[data-look="v2"] .lsbet small { display: none; }
