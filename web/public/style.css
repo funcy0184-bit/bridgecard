@@ -1473,3 +1473,15 @@ html[data-stage="staging"] body::after { content: "測試站"; position: fixed; 
 .rpbody blockquote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--gold); background: rgba(185,138,62,.12); }
 .rpbody blockquote p { font-size: 13.5px; }
 .rpbody section[data-k="closing"] p { font-weight: 600; text-align: center; color: var(--wine-dark); }
+
+/* ================= P2.5-E：轉播降噪 ================= */
+/* 重大事件的節目小卡：牌桌中央那一塊（只在空檔用） */
+.lscastzone { position: absolute; left: 6%; right: 6%; top: 14%; bottom: 14%; pointer-events: none; }
+/* 頂列字幕：輪到你做決定時變淡、不搶眼 */
+.lsticker.dim { opacity: .5; }
+.lsticker.dim.hush { opacity: 0; }
+/* 彈幕收合鈕（在字幕和選單之間） */
+.lsbar.airing .lsticker { right: 78px; }
+.lstkfold { position: absolute; right: 48px; top: 50%; translate: 0 -50%; min-width: 26px; height: 26px; padding: 0 5px; border: 1px solid rgba(226,184,96,.5); border-radius: 13px;
+  background: rgba(0,0,0,.25); color: var(--gold-pale); font: 600 12px/1 var(--display); cursor: pointer; z-index: 2; }
+.lstkfold[hidden] { display: none; }

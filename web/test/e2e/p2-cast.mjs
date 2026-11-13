@@ -50,12 +50,17 @@ async function startAi(P, stake = "宵夜錢", vow = "這局我閉著眼睛都�
 // 量位置：字幕只在標題列、最多兩則、不蓋選單鈕；小卡不蓋對手、方向、賭盤、底部固定區
 const inter = (a, b) => a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
 const issues = [];
+let zoneSeen = 0;            // P2.5-E：重大事件進牌桌中央的次數
 async function audit(P, tag) {
   const r = await P.evaluate(() => {
     const R = id => { const e = document.getElementById(id); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width && b.height ? { left: b.left, right: b.right, top: b.top, bottom: b.bottom } : null; };
     const tk = document.getElementById("lsTicker"), on = tk.classList.contains("on") && !tk.classList.contains("hush");
     const card = document.getElementById("lsCast"), cardOn = !card.hidden && !card.classList.contains("out") && getComputedStyle(card).opacity > 0.5;
-    return { ticker: on ? R("lsTicker") : null, bar: R("lsBar"), card: cardOn ? R("lsCast") : null, opp: R("lsOpp"), pot: R("lsPot"), dir: R("lsDir"), dock: R("lsDock"), menu: R("lsMenuBtn"),
+    // P2.5-E：小卡進牌桌中央時，當下要是「空檔」（沒有在等我做決定、沒有可按的按鈕）
+    const v = globalThis.__hbLS?.(), L = v?.legal;
+    const myDecision = !!v && !v.result && (L.flip || L.safeguard || L.lock.length > 0 || (v.phase === "bet" && v.toAct === v.seat));
+    const buttons = document.querySelectorAll("#lsActions button:not([hidden]):not([disabled])").length;
+    return { myDecision, buttons, ticker: on ? R("lsTicker") : null, bar: R("lsBar"), card: cardOn ? R("lsCast") : null, opp: R("lsOpp"), pot: R("lsPot"), dir: R("lsDir"), dock: R("lsDock"), menu: R("lsMenuBtn"),
       items: tk.querySelectorAll(".tk:not(.out)").length,
       clipped: [...tk.querySelectorAll(".tk:not(.out) span, .tk:not(.out) i")].filter(e => { const a = e.getBoundingClientRect(), b = tk.getBoundingClientRect(); return a.height > 2 && (a.bottom > b.bottom + 2 || a.top < b.top - 2); }).map(e => e.textContent.slice(0, 10)),
       press: document.getElementById("lstable").dataset.press, scrollW: document.documentElement.scrollWidth, W: document.documentElement.clientWidth };
@@ -66,7 +71,12 @@ async function audit(P, tag) {
     if (r.items > 2) issues.push(`${tag} 字幕超過兩則`);
     if (r.clipped.length) issues.push(`${tag} 字幕被框切掉：${r.clipped.join("、")}`);
   }
-  if (r.card) for (const k of ["opp", "pot", "dir", "dock"]) if (inter(r.card, r[k])) issues.push(`${tag} 小卡蓋到 ${k}`);
+  // P2.5-E：小卡永遠不能蓋到對手名牌、底部行動區、標題列；蓋到牌桌中央（方向、賭盤）只允許在空檔（沒有在等我做決定、沒有可按的按鈕）
+  if (r.card) {
+    for (const k of ["opp", "dock", "bar"]) if (inter(r.card, r[k])) issues.push(`${tag} 小卡蓋到 ${k}`);
+    if ((inter(r.card, r.pot) || inter(r.card, r.dir)) && (r.myDecision || r.buttons)) issues.push(`${tag} 輪到我做決定時小卡還在牌桌中央`);
+    if (inter(r.card, r.pot) || inter(r.card, r.dir)) zoneSeen++;
+  }
   if (r.scrollW > r.W + 1) issues.push(`${tag} 可以橫向捲動`);
   return r;
 }
@@ -256,6 +266,7 @@ console.log("朋友連線：雙方開場都有契約公證、打完戰報一模�
 }
 
 ok(issues.length === 0, `位置檢查全部通過（問題 ${issues.length} 個）`);
+if (zoneSeen) ok(true, `重大事件進牌桌中央，都在空檔（看到 ${zoneSeen} 次）`); else notCovered("重大事件進牌桌中央（這次的對局沒有在空檔遇到重大事件）");
 if (issues.length) console.log("  ", issues.slice(0, 10).join("\n   "));
 ok(errors.length === 0, `沒有頁面錯誤${errors.length ? "：" + errors.slice(0, 5).join(" | ") : ""}`);
 await browser.close();

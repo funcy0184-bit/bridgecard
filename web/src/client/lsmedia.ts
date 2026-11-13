@@ -35,6 +35,8 @@ const PROGRAM_LABEL = Object.fromEntries(PROGRAMS.map(p => [p.id, p.label]));
 // 驗收用：最近演過什麼（不含任何隱藏資訊；都是畫面上本來就會出現的字）
 const played: { id: string; channel: string; title?: string; text: string; at: number; mode: string; pr: number }[] = [];
 Object.assign(globalThis, { __hbCast: () => ({ gid, played: played.slice(), press: $("lstable").dataset.press ?? "1", pending: stage.pending }) });
+// 驗收用：塞一則演出進排程（測試「重大事件只在空檔進牌桌中央」；正式對局不會呼叫）
+Object.assign(globalThis, { __hbCastPush: (c: Cue) => { stage.push([c], now()); tick(); } });
 
 export function mediaInit(deps: MediaDeps) {
   M = deps;
@@ -45,8 +47,22 @@ export function mediaInit(deps: MediaDeps) {
   // 底部固定區（輪到你時會多出按鈕）、賭盤（翻牌結果）、紀錄展開：空位變了就重新量；放不下就改成標題列一行
   const reflow = () => { if (cardShown || $("lsTicker").classList.contains("on")) tick(); };
   window.addEventListener("resize", reflow);
+  $("lsTkFold").addEventListener("click", () => {
+    fx.settings.cast = fx.settings.cast === "full" ? "lite" : "full";
+    fx.saveSettings();
+    tick();
+  });
   if (typeof ResizeObserver !== "undefined") { const ro = new ResizeObserver(reflow); for (const id of ["lsDock", "lsFelt", "lsOpp"]) { const e = document.getElementById(id); if (e) ro.observe(e); } }
 }
+
+// P2.5-E：轉播降噪
+//   · 「空檔」由牌桌告訴我們：沒有人在等你做決定、牌桌也沒有在演（mediaQuiet 給判斷）
+//   · 重大事件（優先級 ≥ 80、中場）只在空檔才進牌桌中央（#lsCastZone）；其他一律縮在頂列一行；輪到你時馬上退回頂列
+//   · 輪到你做決定時，頂列字幕變淡；彈幕可以收（收＝只播重要的）
+let quiet: () => boolean = () => false;
+export function mediaQuiet(fn: () => boolean) { quiet = fn; }
+export function mediaPoke() { if (!document.getElementById("lstable")?.hidden) { tick(); $("lsTicker").classList.toggle("dim", !quiet()); } }
+const major = (s: Showing) => s.cue.priority >= 80 || s.cue.id === "4:intermission";
 
 export function mediaReset() {
   director = null; gid = null; lastHist = 0; lastTrick = 0; holdUntil = 0; lastView = null;
@@ -159,6 +175,10 @@ function paintTicker(items: Showing[], cardInTicker: Showing | null, t: number) 
   box.setAttribute("aria-label", cardInTicker ? "節目播放中，點一下略過" : "");
   box.style.setProperty("--tk-left", `${Math.ceil($("lsBadge").getBoundingClientRect().width) + 6}px`);
   $("lsBar").classList.toggle("airing", live().length > 0);
+  const fold = $("lsTkFold");
+  fold.hidden = !(live().length > 0) || fx.settings.cast === "off";
+  fold.textContent = fx.settings.cast === "full" ? "收" : "開";
+  fold.setAttribute("aria-label", fx.settings.cast === "full" ? "收起彈幕：只播重要的" : "打開彈幕：全部播");
 }
 
 // 小卡一行一行出來：照小卡的時間平均分（至少 0.5 秒、最多 1.1 秒一行），最後一行停久一點
@@ -174,7 +194,7 @@ function zone() {
   return { top: z.top, bottom: z.bottom };
 }
 function placeCard(s?: Showing): boolean {
-  if (!document.getElementById("lsCastZone")) return false;
+  if (!document.getElementById("lsCastZone") || !s || !major(s) || !quiet()) return false;
   const el = $("lsCast"), z = zone();
   const h = z.bottom - z.top;
   if (h < 64) return false;

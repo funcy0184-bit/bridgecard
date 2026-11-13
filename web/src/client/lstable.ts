@@ -8,7 +8,7 @@ import type { Action, LSEvent, LSView, TrickRecord } from "../laststand/engine";
 import { CAT_LABEL, DIR_LABEL, RANK_TEXT, SUITS, TRICKS, allInStage, catOf, flipDir, rankOf, suitOf } from "../laststand/rules";
 import * as fx from "./fx";
 import { betChips, domAnims, insightScan } from "./lsanim";
-import { mediaHold, mediaReset, mediaView } from "./lsmedia";
+import { mediaHold, mediaPoke, mediaQuiet, mediaReset, mediaView } from "./lsmedia";
 import { TableStage } from "./lsstage";
 import { sfx } from "./sound";
 import type { Command, Reply } from "./solo";
@@ -90,6 +90,8 @@ export function lsInit(deps: LSDeps) {
   // 規則提示條出現時，轉播字幕先讓位
   D = { ...deps, banner: (text, ms) => { deps.banner(text, ms); mediaHold(ms ?? 2600); } };
   buildButtons();
+  // P2.5-E：轉播的「空檔」＝沒有在等你做決定、牌桌沒有在演、比賽還沒結束
+  mediaQuiet(() => !!v && !v.result && stage.idle() && !myTurn());
   $("lsMenuBtn").addEventListener("click", () => D.openMenu());
   // B2：按住手牌往上拖到牌桌放開＝蓋這張（拖的時候牌跟著手指）；沒拖過門檻就彈回去、當成一般的點選
   const hand = $("lsHand");
@@ -288,6 +290,12 @@ function render() {
   renderAsk(opp, pool);
   renderActions();
   renderLog(opp);
+  mediaPoke();
+}
+// 現在有沒有在等我做決定
+function myTurn(): boolean {
+  const s = v!, L = s.legal;
+  return !busy && !showing() && (L.flip || L.safeguard || L.lock.length > 0 || (s.phase === "bet" && s.toAct === s.seat));
 }
 
 function oppStatus(): string {

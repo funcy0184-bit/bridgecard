@@ -180,6 +180,8 @@
       <div class="lstrick"><b id="lsTrick">第 1／9 墩</b><small id="lsStage">底注 1・上限 3</small><em class="lstest" id="lsTestTag" hidden>單人測試｜不計正式戰績</em></div>
       <!-- 轉播字幕（P2）：蓋在標題列上、最多兩則；左邊留墩數小標 -->
       <div class="lsticker" id="lsTicker" aria-live="off"></div>
+      <!-- P2.5-E：彈幕收合（收＝只播重要的；開＝全部播） -->
+      <button class="lstkfold" id="lsTkFold" type="button" hidden>收</button>
       <span class="lsbadge" id="lsBadge" aria-hidden="true">1/9</span>
       <button id="lsMenuBtn" class="icon brass" type="button" aria-label="選單"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18" cy="12" r="1.9"/></svg></button>
     </header>
@@ -192,6 +194,8 @@
     </div>
     <!-- 綠絨牌桌：對手的出牌位在上、我的在下（蓋著的牌、押的籌碼）；中間是本墩方向和疊池；最下面是上一墩結果 -->
     <div class="lsfelt" id="lsFelt">
+      <!-- P2.5-E：重大事件的節目小卡放在牌桌中央（只在沒有人要做決定的空檔） -->
+      <div class="lscastzone" id="lsCastZone" aria-hidden="true"></div>
       <div class="lsrow opp"><small class="lsowner" id="lsOppOwner">對手</small><div class="lsslot" id="lsOppSlot"></div><div class="lsbet" id="lsOppBet"><span class="lsstack" aria-hidden="true"></span><b id="lsOppCommit">0</b><small id="lsOppCommitWho">對手押</small></div></div>
       <div class="lsmid" id="lsPot">
         <div class="lsdir" id="lsDir" aria-live="polite"><div class="lsdirbig" id="lsDirBig">比大</div><small id="lsDirNote">下一墩 比小</small></div>
