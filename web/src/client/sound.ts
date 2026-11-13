@@ -334,6 +334,23 @@ export const sfx = {
     hiss({ at: 0.1, dur: 0.7, vol: 0.05, type: "highpass", freq: 7000 });
   },
   // 對方達成合約：友善、輕輕的一聲（不羞辱）
+  // P2.5-C 籌碼：陶土籌碼互碰的「喀」聲；n 枚就連著幾聲（最多 6），at＝幾秒後（跟飛行同一個時鐘）
+  chip(n = 1, at = 0) {
+    if (!ok("chip", 40)) return;
+    const k = Math.max(1, Math.min(6, n));
+    for (let i = 0; i < k; i++) {
+      const t = at + i * 0.045 + Math.random() * 0.012;
+      hiss({ at: t, dur: 0.018, vol: 0.16, freq: 4200 + Math.random() * 900, q: 4 });
+      tone({ at: t, freq: 1900 + Math.random() * 500, dur: 0.03, vol: 0.05, type: "triangle", drop: 0.8 });
+    }
+  },
+  // 收籌碼：一把籌碼滑過絨布再疊起來
+  chipsIn(n = 3, at = 0) {
+    if (!ok("chipsIn", 120)) return;
+    hiss({ at, dur: 0.16, vol: 0.07, type: "lowpass", freq: 1400 });
+    const k = Math.max(2, Math.min(7, n));
+    for (let i = 0; i < k; i++) { const t = at + 0.12 + i * 0.035; hiss({ at: t, dur: 0.016, vol: 0.13, freq: 3800 + Math.random() * 900, q: 4 }); tone({ at: t, freq: 1700 + Math.random() * 400, dur: 0.028, vol: 0.045, type: "triangle", drop: 0.8 }); }
+  },
   soft() { if (ok("soft", 200)) { bell(0, 659, 0.05, 0.5); bell(0.12, 523, 0.04, 0.6); } },
   // 釋放前吸一口氣：短短的上揚氣音
   inhale() { if (ok("inhale", 200)) hiss({ dur: 0.16, vol: 0.07, freq: 900, sweepTo: 4200, q: 0.5 }); },

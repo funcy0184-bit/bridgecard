@@ -7,7 +7,7 @@
 import type { Action, LSEvent, LSView, TrickRecord } from "../laststand/engine";
 import { CAT_LABEL, DIR_LABEL, RANK_TEXT, SUITS, TRICKS, allInStage, catOf, flipDir, rankOf, suitOf } from "../laststand/rules";
 import * as fx from "./fx";
-import { domAnims, insightScan } from "./lsanim";
+import { betChips, domAnims, insightScan } from "./lsanim";
 import { mediaHold, mediaReset, mediaView } from "./lsmedia";
 import { TableStage } from "./lsstage";
 import { sfx } from "./sound";
@@ -209,6 +209,13 @@ export function lsEvent(e: LSEvent) {
   const who = (s: number) => (s === me ? "你" : opp);
   switch (e.type) {
     case "Locked": if (e.seat !== me) stage.oppLock(); break;
+    // P2.5-C：籌碼推上桌（快照先擺好數字，下一幀籌碼從餘額飛到押注位）
+    case "Ante": requestAnimationFrame(() => { betChips(true, e.amount ?? 0); betChips(false, e.amount ?? 0); }); break;
+    case "Raise": case "Call": {
+      const add = (e.to ?? 0) - (v.commit[e.seat] ?? 0);
+      requestAnimationFrame(() => betChips(e.seat === me, add));
+      break;
+    }
     case "InsightResult": if (e.seat === me) requestAnimationFrame(() => insightScan()); break;
     case "Flip": if (e.seat !== me) D.banner(`${opp}翻轉了方向：這一墩改成${DIR_LABEL[e.dir!]}`, 2400); break;
     case "Safeguard": D.banner(`${who(e.seat)}宣告保命：這一墩每人只押 1 枚、不能加注`, 2600); break;
@@ -239,9 +246,19 @@ function stack(el: Element, n: number) {
   el.replaceChildren(...Array.from({ length: want }, (_, i) => { const c = document.createElement("i"); c.className = "lschip"; c.style.bottom = `${i * 3}px`; return c; }));
 }
 
+// P2.5-C：桌上看到的錢。一墩剛結算、籌碼還沒收完之前，顯示結算前的樣子（從那一墩的紀錄算回來：
+//   下注時籌碼已經從餘額扣到桌上，所以結算前的餘額＝開局餘額−本墩承諾；疊池在一墩之中不會變）
+function money(): { stacks: [number, number]; commit: [number, number]; pool: number } {
+  const s = v!, R = stage.presenting();
+  if (R && !stage.paid()) return { stacks: [R.startStacks[0] - R.commit[0], R.startStacks[1] - R.commit[1]], commit: R.commit, pool: R.poolBefore[0] + R.poolBefore[1] };
+  return { stacks: s.stacks, commit: s.commit, pool: s.pool[0] + s.pool[1] };
+}
+
 function render() {
   if (!v) return;
-  const me = v.seat, op = 1 - me, opp = D.oppName(), pool = v.pool[0] + v.pool[1];
+  const M = money();
+  if (stage.paid()) $("lsFelt").classList.remove("paying");     // 籌碼收完了：押注位、疊池照結算後的顯示
+  const me = v.seat, op = 1 - me, opp = D.oppName(), pool = M.pool;
   // ① 頂列
   const R = showing() ? stage.presenting() : null;
   const trick = R ? R.trick : v.trick, ante = R ? R.ante : v.ante, cap = R ? R.cap : v.cap, safe = R ? R.safeguardBy >= 0 : v.safeguard >= 0;
@@ -253,7 +270,7 @@ function render() {
   $("lsOppSeal").textContent = [...opp][0] ?? "";
   $("lsOppTag").textContent = role(op, R);
   $("lsOppStatus").textContent = R ? "" : oppStatus();
-  $("lsOppChips").textContent = String(v.stacks[op]);
+  $("lsOppChips").textContent = String(M.stacks[op]);
   const left = v.counts[op].reduce((a, b) => a + b, 0), inHand = left - (v.locked[op] ? 1 : 0);
   const backs = $("lsOppBacks");
   if (backs.childElementCount !== inHand) backs.replaceChildren(...Array.from({ length: inHand }, () => fx.backEl()));
@@ -264,7 +281,7 @@ function render() {
   renderFelt(opp, pool);
   // 我的名牌
   $("lsMyTag").textContent = role(me, R);
-  $("lsMyChips").textContent = String(v.stacks[me]);
+  $("lsMyChips").textContent = String(M.stacks[me]);
   skills($("lsMySkills"), me);
   // ④ 手牌 ⑤ 行動列
   renderHand();
@@ -331,12 +348,12 @@ function renderFelt(opp: string, pool: number) {
   }
   // 押的籌碼（本墩承諾）
   for (const [seat, bet] of [[me, "lsMyBet"], [op, "lsOppBet"]] as const) {
-    const n = s.commit[seat], el = $(bet);
+    const n = money().commit[seat], el = $(bet);
     stack(el.querySelector(".lsstack")!, n);
     el.classList.toggle("zero", !n);
   }
-  $("lsMyCommit").textContent = String(s.commit[me]);
-  $("lsOppCommit").textContent = String(s.commit[op]);
+  $("lsMyCommit").textContent = String(money().commit[me]);
+  $("lsOppCommit").textContent = String(money().commit[op]);
   $("lsOppCommitWho").textContent = `${opp}押`;
   $("lsOppOwner").textContent = opp;
   // 方向：攤開某一墩的時候，用那一墩自己的方向（不會把上一墩的牌配上這一墩的方向）

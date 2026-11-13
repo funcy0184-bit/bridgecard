@@ -68,7 +68,68 @@ function flipIn(slot: HTMLElement, delay: number, lv: MotionLevel, mine: boolean
   return Promise.all([done(a1), done(a2)]).then(() => { cover.remove(); });
 }
 
-export function domAnims(r: AnimRefs): StageAnims {
+// ---------------- P2.5-C 籌碼 ----------------
+// 一枚籌碼的複製品（金色＝我、紅色＝對手、疊池用金色）
+function chipEl(opp: boolean) { const c = document.createElement("i"); c.className = `lschip lsflychip${opp ? " opp" : ""}`; return c; }
+const rectOf = (el: Element | null) => el?.getBoundingClientRect();
+const visible = (b: DOMRect | undefined): b is DOMRect => !!b && b.width > 0 && b.height > 0;
+/** n 枚籌碼從 from 飛到 to（最多畫 5 枚，錯開一點）；落下那一刻喀喀聲 */
+export function chipFly(from: Element | null, to: Element | null, n: number, opp: boolean, o: { delay?: number; dur?: number; sound?: "chip" | "in" } = {}): Promise<void> {
+  const fb = rectOf(from), tb = rectOf(to);
+  if (n <= 0 || motionLevel() !== "full" || !visible(fb) || !visible(tb)) return Promise.resolve();
+  const k = Math.min(5, n), dur = fx.ms(o.dur ?? 300), gap = fx.ms(45), d0 = o.delay ?? 0;
+  const fx0 = fb.left + fb.width / 2, fy0 = fb.top + fb.height / 2, tx = tb.left + tb.width / 2, ty = tb.top + tb.height / 2;
+  if (o.sound === "in") sfx.chipsIn(n, (d0 + dur * 0.7) / 1000); else sfx.chip(k, (d0 + dur) / 1000);
+  const ps: Promise<void>[] = [];
+  for (let i = 0; i < k; i++) {
+    const c = chipEl(opp);
+    Object.assign(c.style, { left: `${fx0 - 13}px`, top: `${fy0 - 4.5 - i * 2}px` });
+    document.getElementById("fx")!.appendChild(c);
+    clones.add(c);
+    const dx = tx - fx0 + (Math.random() * 6 - 3), dy = ty - fy0 - i * 3;
+    const a = anim(c, [
+      { transform: "translate(0,0) scale(1)", opacity: 0.0 },
+      { opacity: 1, offset: 0.08 },
+      { transform: `translate(${dx * 0.5}px,${dy * 0.5 - 22}px) scale(1.12)`, offset: 0.5 },
+      { transform: `translate(${dx}px,${dy}px) scale(1)`, opacity: 1 },
+    ], { duration: dur, delay: d0 + i * gap, easing: "cubic-bezier(.3,.1,.6,1)", fill: "both" });
+    ps.push(done(a).then(() => drop(c)));
+  }
+  return Promise.all(ps).then(() => { if (to) anim(to, [{ scale: "1" }, { scale: "1.15" }, { scale: "1" }], { duration: fx.ms(180), easing: "ease-out" }); });
+}
+const bankOf = (mine: boolean) => document.querySelector(mine ? "#lsMe .lschipico" : "#lsOpp .lschipico");
+const betOf = (mine: boolean) => document.querySelector(mine ? "#lsMyBet .lsstack" : "#lsOppBet .lsstack");
+/** 下注（底注、加注、接戰）：籌碼從那個人的餘額推到他的押注位 */
+export function betChips(mine: boolean, n: number) { void chipFly(bankOf(mine), betOf(mine), n, !mine); }
+
+/** 結算：桌上的押注（＋疊池）收到贏家；同點推進中間的疊池；退款從疊池退回兩邊 */
+async function payOut(rec: TrickRecord, me: number) {
+  const felt = $("lsFelt");
+  felt.classList.add("paying");
+  try {
+    const pool = $("lsPool"), poolStack = pool.querySelector(".lsstack"), poolBefore = rec.poolBefore[0] + rec.poolBefore[1];
+    const myBet = betOf(true), oppBet = betOf(false);
+    const [cm, co] = [rec.commit[me], rec.commit[1 - me]];
+    if (rec.winner >= 0) {
+      const to = bankOf(rec.winner === me);
+      await Promise.all([
+        chipFly(myBet, to, cm, false, { sound: "in" }),
+        chipFly(oppBet, to, co, true, { delay: 40 }),
+        poolBefore ? chipFly(poolStack, to, poolBefore, false, { delay: 90 }) : Promise.resolve(),
+      ]);
+    } else {
+      const to = !pool.hidden ? poolStack : $("lsDir");
+      await Promise.all([chipFly(myBet, to, cm, false, { sound: "in" }), chipFly(oppBet, to, co, true, { delay: 40 })]);
+    }
+    if (rec.refund) {
+      const src = !pool.hidden ? poolStack : $("lsDir");
+      await Promise.all([chipFly(src, bankOf(true), rec.refund.amounts[me], false, { sound: "in" }), chipFly(src, bankOf(false), rec.refund.amounts[1 - me], true, { delay: 60 })]);
+    }
+  } catch { felt.classList.remove("paying"); }
+  // 成功的話不在這裡拿掉 paying：等導演進入「看結果」重畫（押注歸零）時由 lstable 拿掉，中間不會閃一下
+}
+
+export function domAnims(r: AnimRefs): StageAnims & { verdictCards?(rec: TrickRecord, lv: MotionLevel): Promise<void> } {
   let mine: HTMLElement | null = null;      // 我的蓋牌飛行中的複製品
   return {
     instant: () => motionLevel() === "off",
@@ -157,6 +218,11 @@ export function domAnims(r: AnimRefs): StageAnims {
     async verdict(rec) {
       const lv = motionLevel();
       if (lv === "off") return;
+      // 籌碼跟著勝負一起動（判勝負的演出和收錢同時開始，等兩邊都演完才進「看結果」）
+      const paid = lv === "full" ? payOut(rec, r.seat()) : Promise.resolve();
+      await Promise.all([paid, this.verdictCards!(rec, lv)]);
+    },
+    async verdictCards(rec: TrickRecord, lv: MotionLevel) {
       const me = r.seat(), my = $("lsMySlot"), opp = $("lsOppSlot");
       const win = rec.winner === me ? my : rec.winner === 1 - me ? opp : null;
       // 大墩（梭哈、或一墩輸贏 6 枚以上）：加一圈光環、低沉的一聲

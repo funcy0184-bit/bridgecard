@@ -64,6 +64,8 @@ export class TableStage {
   phase(): StagePhase { return this.ph; }
   /** 勝負已經揭曉（可以畫金框、寫結果） */
   verdictShown(): boolean { return this.ph === "verdict" || this.ph === "hold"; }
+  /** P2.5-C：錢算進去了沒（判勝負那段籌碼還在飛：顯示結算前的餘額、押注、疊池；看結果起才是結算後的） */
+  paid(): boolean { return !this.rec || this.ph === "hold" || this.ph === "collect"; }
   isIncoming(side: "me" | "opp"): boolean { return this.incoming[side]; }
   /** 正在飛（或停在出牌位等確認）的那張我的牌；手牌裡先藏起來 */
   flyingId(): number { return this.mine ? this.mine.id : -1; }
@@ -204,6 +206,7 @@ export class TableStage {
     if (final) { this.rec = null; this.ph = "idle"; this.a.render(); return; }
     // ③ 看結果：從翻牌開始算 SHOW_MS（點牌桌、背景分頁就不等）
     this.ph = "hold";
+    this.a.render();                             // 錢算進去了：餘額、疊池換成結算後的
     const left = SHOW_MS - (this.a.now() - start);
     if (left > 0 && !this.skipped && !this.a.away()) await new Promise<void>(res => { this.wake = res; this.timer = this.a.setTimer(() => { this.timer = null; this.wake = null; res(); }, left); });
     if (ep !== this.epoch) return;

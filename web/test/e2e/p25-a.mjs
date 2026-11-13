@@ -82,7 +82,13 @@ const probe = () => {
     if (!document.querySelector("#lsMySlot .card.back") || document.querySelector("#lsMySlot .lspeek")?.textContent !== want) issues.push(`我的出牌位應該是牌背＋「${want}」`);
   }
   // 押注是 0 的時候不顯示（不要一堆 0）
-  for (const [id, n] of [["lsMyBet", v.commit[me]], ["lsOppBet", v.commit[op]]]) if (!n && getComputedStyle(document.getElementById(id)).visibility !== "hidden") issues.push(`${id} 押 0 還顯示著`);
+  // P2.5-C：一墩剛結算、籌碼還沒收完（翻牌、判勝負）時，押注位顯示的是那一墩押的錢；其他時候是伺服器的本墩承諾
+  const stg = globalThis.__hbLSStage?.(), presR = stg && ["pre", "reveal", "verdict"].includes(stg.phase) ? v.history.find(h => h.trick === stg.trick) : null;
+  const shown = presR ? presR.commit : v.commit;
+  for (const [id, n] of [["lsMyBet", shown[me]], ["lsOppBet", shown[op]]]) {
+    if (!n && getComputedStyle(document.getElementById(id)).visibility !== "hidden") issues.push(`${id} 押 0 還顯示著`);
+    if (n && !document.getElementById("lsFelt").classList.contains("paying") && document.getElementById(id).querySelector("b").textContent !== String(n)) issues.push(`${id} 顯示 ${document.getElementById(id).querySelector("b").textContent}，應該是 ${n}`);
+  }
   if (v.result && !document.getElementById("lsHand").classList.contains("wait")) issues.push("整場結束，剩下的手牌沒有變暗");
   const handN = document.querySelectorAll("#lsHand .lscard").length, wantN = v.hand.length - (v.myLock >= 0 ? 1 : 0);
   if (handN !== wantN) issues.push(`手牌張數 ${handN} ≠ ${wantN}`);

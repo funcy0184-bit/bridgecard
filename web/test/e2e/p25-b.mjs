@@ -29,7 +29,7 @@ async function open(reduce) {
   // 頁面裡的記錄器：每 30ms 記一次演出階段、檢查隱藏資訊、記錄出現過的飛行牌
   await P.evaluate(() => {
     const g = globalThis;
-    g.__rec = { phases: [], leaks: [], clones: 0, hiddenDuringFly: 0, flySamples: 0 };
+    g.__rec = { phases: [], leaks: [], clones: 0, hiddenDuringFly: 0, flySamples: 0, chips: 0, moneyBad: [], preMoneyBad: [] };
     let last = "";
     setInterval(() => {
       const v = g.__hbLS?.(), s = g.__hbLSStage?.();
@@ -38,6 +38,14 @@ async function open(reduce) {
       if (s.phase !== "idle" && key !== last) g.__rec.phases.push([s.trick, s.phase]);
       last = key;
       if (document.querySelector("#fx .lsfly")) g.__rec.clones++;
+      if (document.querySelector("#fx .lsflychip")) g.__rec.chips++;
+      // P2.5-C 錢：沒在展示時，名牌上的餘額＝伺服器的餘額；展示途中籌碼還沒收完時＝結算前（開局餘額−本墩承諾）
+      const me = v.seat, mine = Number(document.getElementById("lsMyChips").textContent), theirs = Number(document.getElementById("lsOppChips").textContent);
+      if (s.phase === "idle" && !s.trick && (mine !== v.stacks[me] || theirs !== v.stacks[1 - me])) g.__rec.moneyBad.push(`${mine}/${theirs} ≠ ${v.stacks[me]}/${v.stacks[1 - me]}`);
+      if ((s.phase === "reveal" || s.phase === "verdict") && !v.result) {
+        const R = v.history.find(h => h.trick === s.trick);
+        if (R && (mine !== R.startStacks[me] - R.commit[me] || theirs !== R.startStacks[1 - me] - R.commit[1 - me])) g.__rec.preMoneyBad.push(`第 ${s.trick} 墩 ${mine}/${theirs}`);
+      }
       // 隱藏資訊：不是展示中、也沒結束，整頁（含特效層）不能有手上沒有的牌面（對手的牌）
       if (!s.trick && !v.result) {
         const faces = [...document.querySelectorAll(".card:not(.back)")].filter(e => e.closest("#lstable, #fx") && !e.closest("#lsLogPanel")).map(e => Number(e.dataset.id)).filter(id => !Number.isNaN(id) && !v.hand.includes(id));
@@ -137,6 +145,9 @@ console.log("P2.5-B 卡牌手感（iPhone 13）");
   ok(o.tricks >= 3 && !o.bad.length, `每一墩依序 翻牌 → 判勝負 → 看結果 → 收牌（${o.tricks} 墩）${o.bad.length ? `：${o.bad.slice(0, 4).join("；")}` : ""}`);
   ok(st.dbl >= 1 && !st.dblBad, `連點蓋牌只演一次（${st.dbl} 次連點）`);
   ok(st.drag >= 1, `拖牌上桌蓋牌（${st.drag} 次）`);
+  ok(st.rec.chips > 0, `籌碼有飛（下注推上桌、結算收走；取樣到 ${st.rec.chips} 次）`);
+  ok(st.rec.moneyBad.length === 0, `沒在展示時，名牌上的餘額＝伺服器的餘額${st.rec.moneyBad.length ? `：${st.rec.moneyBad.slice(0, 3).join("；")}` : ""}`);
+  ok(st.rec.preMoneyBad.length === 0, `翻牌、判勝負時餘額還是結算前的（籌碼收完才變）${st.rec.preMoneyBad.length ? `：${st.rec.preMoneyBad.slice(0, 3).join("；")}` : ""}`);
   ok(errors.length === 0, `沒有頁面錯誤${errors.length ? `：${errors[0]}` : ""}`);
 
   // 重新整理（等同斷線回來拿整份快照）：在牌飛到一半的時候重整
