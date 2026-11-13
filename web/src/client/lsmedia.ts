@@ -166,6 +166,8 @@ function paintTicker(items: Showing[], cardInTicker: Showing | null, t: number) 
     el.append(tag, tx);
     box.appendChild(el);
   }
+  // P2.5-E：「播出中」會讓出位置給收合鈕（字幕變窄）：先標好再量，不然量的是比較寬的版面，變窄後第二則會被切到
+  $("lsBar").classList.toggle("airing", want.length > 0);
   // 放不下（用實際高度算；置中排版超出上面時 scrollHeight 量不到）：最舊的直接收掉，不切半句
   const live = () => (Array.from(box.children) as HTMLElement[]).filter(e => !e.classList.contains("out"));
   const used = () => live().reduce((s, e) => s + e.offsetHeight, 0) + Math.max(0, live().length - 1);
