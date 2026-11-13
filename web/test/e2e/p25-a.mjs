@@ -15,7 +15,7 @@ const browser = await chromium.launch(process.env.HB_PROXY ? { proxy: { server: 
 const SIZES = [
   ["iPhone 13", 390, 664, true], ["iPhone SE（第一代）", 320, 568], ["iPhone SE 2／8", 375, 553], ["LINE 內建瀏覽器（約）", 390, 600],
   ["Pixel 7", 412, 839], ["iPhone Pro Max", 430, 739], ["橫拿（約）", 740, 390],
-];
+].filter(x => !process.env.ONLY || process.env.ONLY.split(",").includes(x[0]));   // L1 冒煙：ONLY="iPhone 13" 只跑代表尺寸
 
 // 在頁面裡量：回傳這一步的問題
 const probe = () => {
