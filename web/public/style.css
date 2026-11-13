@@ -1225,6 +1225,18 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 #lstable .lsskills i { width: 20px; height: 20px; font-size: 11.5px; }
 #lstable .lstest { font-size: 0; }
 #lstable .lstest::before { content: "單人測試"; font-size: 11px; }
+/* ================= P2.5-B：卡牌手感 ================= */
+/* 選牌升起：彈簧曲線（會微微超過再回來）；上一張落回 */
+.lscard { transition: translate .28s var(--spring, cubic-bezier(.2,1.35,.4,1)), scale .28s var(--spring, cubic-bezier(.2,1.35,.4,1)); }
+.lscard.sel { translate: 0 -14px; scale: 1.04; }
+.lscard.away { visibility: hidden; }                 /* 正在飛向桌面的那張 */
+/* 出牌位：牌還在飛（快照的牌背先放好但藏著），看起來跟空位一樣 */
+.lsslot.incoming > * { visibility: hidden; }
+.lsslot.incoming { background: rgba(0,0,0,.2); box-shadow: inset 0 0 0 1.5px rgba(226,184,96,.3); }
+/* 翻牌時蓋在牌面上、轉過去的那張牌背 */
+.lsslot > .lsflipback { position: absolute; inset: 0; z-index: 2; backface-visibility: hidden; }
+/* 落桌的接觸陰影畫在牌桌裡、牌的下面 */
+.lsfelt { isolation: isolate; }
 @media (prefers-reduced-motion: reduce) { .cph { transition: none; } .lscard { transition: none; } }
 
 /* ================= P1.5：首頁選玩法、梭了啦！這局賭什麼？的選單、換玩法轉場 ================= */

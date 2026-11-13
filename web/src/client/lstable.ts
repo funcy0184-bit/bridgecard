@@ -7,7 +7,10 @@
 import type { Action, LSEvent, LSView, TrickRecord } from "../laststand/engine";
 import { CAT_LABEL, DIR_LABEL, RANK_TEXT, SUITS, TRICKS, allInStage, catOf, flipDir, rankOf, suitOf } from "../laststand/rules";
 import * as fx from "./fx";
+import { domAnims } from "./lsanim";
 import { mediaHold, mediaReset, mediaView } from "./lsmedia";
+import { TableStage } from "./lsstage";
+import { sfx } from "./sound";
 import type { Command, Reply } from "./solo";
 
 export interface LSDeps {
@@ -24,23 +27,23 @@ let raiseTo = 0;              // 加注金額（每人總承諾）
 let raiseOpen = false;        // 加注金額列展開中
 let busy = false;             // 動作送出、等伺服器回覆
 let holdUntil = 0;            // 整場結束：最後一墩結果先看一下再跳結算
-// 一墩的生命週期（P2.5-A）：結算 → 展示結果（出牌位翻開那一墩的牌、方向用那一墩自己的）→ 清空出牌區 → 開始下一墩
-//   伺服器一結算就直接送「下一墩」的牌桌（方向已經換了），所以展示用的是剛存進紀錄的那一墩；
-//   重新整理、斷線回來不重播展示；點牌桌可以略過；P2.5-B 的翻牌、收牌動畫就演在這段時間裡
-const SHOW_MS = 1800;
-let showRec: TrickRecord | null = null, showUntil = 0, showTimer = 0;
+// 一墩的生命週期：結算 → 翻牌 → 判勝負 → 看結果 → 收牌 → 清桌 → 下一墩
+//   P2.5-A 定下流程（展示用剛存進紀錄的那一墩，因為伺服器一結算就送「下一墩」的牌桌）；
+//   P2.5-B 起由牌桌演出導演（lsstage）決定什麼時候換畫面：只有一條佇列、一個取消鍵，沒有另外的展示計時器；
+//   重新整理、斷線回來不重播；點牌桌可以略過
+const stage = new TableStage(domAnims({ render: () => render(), seat: () => v?.seat ?? 0, handNode: id => handNodes.get(id) }));
 const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
 export const lsHas = () => !!v;
 // 驗收用：看自己這一邊的梭了啦牌桌（伺服器給的、只有自己看得到的部分）
-Object.assign(globalThis, { __hbLS: () => v });
+Object.assign(globalThis, { __hbLS: () => v, __hbLSStage: () => stage.info(), __hbLSIdle: () => stage.idle() });
 // 整場結束時的籌碼與墩數（結算面板用）
 export const lsResult = () => (v?.result ? { stacks: v.stacks, trick: v.result.trick } : null);
 export const lsHoldUntil = () => holdUntil;
 export function lsReset() {
   v = null; sel = -1; busy = false; holdUntil = 0; raiseTo = 0; raiseOpen = false;
-  showRec = null; showUntil = 0; clearTimeout(showTimer);
+  stage.cancelAll();
   handNodes.clear();
   $("lsHand").replaceChildren();
   for (const id of ["lsOppSlot", "lsMySlot"]) { const e = $(id); e.replaceChildren(); delete e.dataset.key; e.className = "lsslot"; }
@@ -91,7 +94,9 @@ export function lsInit(deps: LSDeps) {
   $("lsHand").addEventListener("click", ev => {
     const b = (ev.target as HTMLElement).closest<HTMLButtonElement>(".lscard");
     if (!b || b.disabled || !v) return;
-    sel = Number(b.dataset.id);
+    const id = Number(b.dataset.id);
+    if (id !== sel) sfx.lift();
+    sel = id;
     render();
   });
   $("lsActions").addEventListener("click", ev => {
@@ -113,11 +118,14 @@ export function lsInit(deps: LSDeps) {
       a === "lock" ? (sel >= 0 ? { t: "lock", card: sel } : null) :
       a === "check" ? { t: "check" } : a === "call" ? { t: "call" } : a === "fold" ? { t: "fold" } :
       a === "insight" ? { t: "insight" } : a === "raise" ? { t: "raise", to: raiseTo } : null;
-    if (action) send(action);
+    if (!action) return;
+    // 蓋牌：按下那一幀就開始飛（伺服器確認前停在出牌位；被拒絕就飛回手牌）
+    if (action.t === "lock") stage.myLock(action.card);
+    send(action);
   });
   $("lsLast").addEventListener("click", ev => { ev.stopPropagation(); openPanel("lsLogPanel"); });
   // 展示上一墩結果時，點牌桌直接開始下一墩
-  $("lsFelt").addEventListener("click", () => { if (showing()) { showUntil = 0; render(); } });
+  $("lsFelt").addEventListener("click", () => { if (showing()) stage.skip(); });
   $("lsHelpBtn").addEventListener("click", () => { if (v) $("lsHelpBody").innerHTML = helpHtml(D.oppName()); openPanel("lsHelpPanel"); });
   for (const id of ["lsLogPanel", "lsHelpPanel"]) {
     const m = $(id);
@@ -132,10 +140,11 @@ function send(a: Action) {
   render();
   const sent = D.act({ t: "ls", a }, r => {
     busy = false;
+    if (!r.ok && a.t === "lock") stage.myLockFailed();
     if (!r.ok && r.code !== "STALE") { D.banner(r.msg, 2600); D.deny(); }
     render();
   });
-  if (!sent) { busy = false; render(); }
+  if (!sent) { busy = false; if (a.t === "lock") stage.myLockFailed(); render(); }
 }
 
 // 伺服器送來的新牌桌（resync＝斷線回來整份重送：轉播不補播舊新聞）
@@ -144,13 +153,11 @@ export function lsView(view: LSView, resync = false) {
   const prevHist = v ? v.history.length : -1;
   v = view;
   // 剛結算完一墩（紀錄多了一筆）：先展示結果；重新整理、斷線回來、換一場就不展示
-  if (resync || prevHist < 0 || view.history.length < prevHist) { showRec = null; showUntil = 0; }
-  else if (view.history.length > prevHist) {
-    showRec = view.history.at(-1)!;
-    showUntil = Date.now() + SHOW_MS;
-    clearTimeout(showTimer);
-    showTimer = window.setTimeout(() => { if (v) render(); }, SHOW_MS + 30);
-  }
+  if (resync || prevHist < 0 || view.history.length < prevHist) stage.cancelAll();
+  else if (view.history.length > prevHist) stage.trickEnd(view.history.at(-1)!, !!view.result);
+  // 我的蓋牌確認：快照裡鎖的就是這張，或這張已經不在手上（保命墩不用下注，蓋完馬上結算，快照直接是下一墩）
+  const fid = stage.flyingId();
+  if (fid >= 0 && (view.myLock === fid || !view.hand.includes(fid))) stage.myLockConfirmed(fid);
   busy = false;
   if (v.phase !== "lock" || v.myLock >= 0 || !v.hand.includes(sel)) sel = -1;
   const L = v.legal;
@@ -168,6 +175,7 @@ export function lsEvent(e: LSEvent) {
   const me = v.seat, opp = D.oppName();
   const who = (s: number) => (s === me ? "你" : opp);
   switch (e.type) {
+    case "Locked": if (e.seat !== me) stage.oppLock(); break;
     case "Flip": if (e.seat !== me) D.banner(`${opp}翻轉了方向：這一墩改成${DIR_LABEL[e.dir!]}`, 2400); break;
     case "Safeguard": D.banner(`${who(e.seat)}宣告保命：這一墩每人只押 1 枚、不能加注`, 2600); break;
     case "Insight": if (e.seat !== me) D.banner(`${opp}用了讀心（只看得到你蓋的是大、中還是小）`, 2600); break;
@@ -201,7 +209,7 @@ function render() {
   if (!v) return;
   const me = v.seat, op = 1 - me, opp = D.oppName(), pool = v.pool[0] + v.pool[1];
   // ① 頂列
-  const R = showing() ? showRec : null;
+  const R = showing() ? stage.presenting() : null;
   const trick = R ? R.trick : v.trick, ante = R ? R.ante : v.ante, cap = R ? R.cap : v.cap, safe = R ? R.safeguardBy >= 0 : v.safeguard >= 0;
   $("lsTrick").textContent = v.result ? "比賽結束" : `第 ${trick}／${TRICKS} 墩`;
   $("lsStage").textContent = v.result ? "" : safe ? "保命墩・每人 1 枚" : `底注 ${ante}・${allInStage(trick) ? "可梭哈" : `上限 ${cap}`}`;
@@ -250,16 +258,23 @@ function oppStatus(): string {
 function revealing(): TrickRecord | null {
   const s = v!;
   if (s.result) return s.history.at(-1) ?? null;
-  return showing() ? showRec : null;
+  return showing() ? stage.presenting() : null;
 }
-const showing = () => !!showRec && Date.now() < showUntil && !!v && !v.result;
+// 正在展示剛結算的那一墩（整場結束不算：最後一墩一直留在桌上）
+const showing = () => !!stage.presenting() && !!v && !v.result;
+// 勝負揭曉了沒（翻牌那一下還不能先亮金框、先寫結果）
+const verdictOn = () => !stage.presenting() || stage.verdictShown();
 
 function renderFelt(opp: string, pool: number) {
   const s = v!, me = s.seat, op = 1 - me, r = revealing();
   // 出牌位
-  const mySlot = $("lsMySlot"), oppSlot = $("lsOppSlot");
-  if (r) {
-    const won = r.winner === me, lost = r.winner === op;
+  const mySlot = $("lsMySlot"), oppSlot = $("lsOppSlot"), ph = stage.phase();
+  // 一墩剛結算、翻牌還沒開演（前面還有演出在排）：出牌位維持原樣，不讓下一墩的空位先閃出來
+  if (ph === "pre") { /* 不動出牌位 */ }
+  else if (r) {
+    // 翻牌那一下、收牌途中不畫金框／變暗；勝負揭曉後才畫
+    const vc = verdictOn() && ph !== "collect";
+    const won = vc && r.winner === me, lost = vc && r.winner === op;
     if (r.cards) {
       setSlot(mySlot, `face:${r.cards[me]}`, () => [fx.cardEl(r.cards![me])], won ? "win" : lost ? "lose" : "");
       setSlot(oppSlot, `face:${r.cards[op]}`, () => [fx.cardEl(r.cards![op])], lost ? "win" : won ? "lose" : "");
@@ -270,12 +285,13 @@ function renderFelt(opp: string, pool: number) {
     }
   } else {
     // 我的：蓋了 → 牌背＋只有自己看得到的小標；該我蓋 → 虛線框亮起
-    if (s.myLock >= 0) setSlot(mySlot, `back:${s.myLock}`, () => [fx.backEl(), peek(s.myLock)]);
+    // 飛行中（incoming）：快照的牌背先放好但藏著，牌飛到了才現身
+    if (s.myLock >= 0) setSlot(mySlot, `back:${s.myLock}`, () => [fx.backEl(), peek(s.myLock)], stage.isIncoming("me") ? "incoming" : "");
     else if (s.phase === "lock") setSlot(mySlot, "empty:ask", () => [lbl("蓋牌區")], "empty ask");
     else setSlot(mySlot, "empty", () => [], "empty");
     // 對手的：翻牌前只畫牌背；讀心看到的分類只在自己畫面
     const ins = s.insight >= 0 ? s.insight : -1;
-    if (s.locked[op]) setSlot(oppSlot, `back:${ins}`, () => [fx.backEl(), ...(ins >= 0 ? [insightTag(ins)] : [])]);
+    if (s.locked[op]) setSlot(oppSlot, `back:${ins}`, () => [fx.backEl(), ...(ins >= 0 ? [insightTag(ins)] : [])], stage.isIncoming("opp") ? "incoming" : "");
     else if (s.phase === "lock") setSlot(oppSlot, "empty:wait", () => [lbl("選牌中")], "empty");
     else setSlot(oppSlot, "empty", () => [], "empty");
   }
@@ -306,7 +322,7 @@ function renderFelt(opp: string, pool: number) {
   const last = s.history.at(-1), lb = $("lsLast");
   lb.hidden = !last;
   if (last) {
-    const html = `${r ? `第 ${last.trick} 墩・${DIR_LABEL[last.dir]}` : "上一墩"}：${shortResult(last, opp)}`;
+    const html = r && !verdictOn() ? `第 ${r.trick} 墩・${DIR_LABEL[r.dir]}：翻牌…` : `${r ? `第 ${last.trick} 墩・${DIR_LABEL[last.dir]}` : "上一墩"}：${shortResult(last, opp)}`;
     if (lb.dataset.h !== html) { lb.innerHTML = html; lb.dataset.h = html; }
     lb.classList.toggle("hot", !!r);
     lb.setAttribute("aria-label", `${lb.textContent}。點一下看每墩紀錄`);
@@ -336,7 +352,7 @@ const handNodes = new Map<number, HTMLButtonElement>();
 function renderHand() {
   const s = v!, box = $("lsHand");
   const cards = s.hand.filter(id => id !== s.myLock);
-  const canPick = s.phase === "lock" && s.myLock < 0 && !busy && !s.result && !showing();
+  const canPick = s.phase === "lock" && s.myLock < 0 && !busy && !s.result && !showing() && stage.flyingId() < 0;
   for (const [id, el] of handNodes) if (!cards.includes(id)) { el.remove(); handNodes.delete(id); }
   cards.forEach((id, i) => {
     let b = handNodes.get(id);
@@ -349,6 +365,7 @@ function renderHand() {
       handNodes.set(id, b);
     }
     b.classList.toggle("sel", id === sel);
+    b.classList.toggle("away", id === stage.flyingId());        // 正在飛向桌面的那張：手牌裡先藏起來
     b.setAttribute("aria-selected", String(id === sel));
     b.disabled = !canPick;
     if (box.children[i] !== b) box.insertBefore(b, box.children[i] ?? null);
@@ -363,11 +380,15 @@ function renderAsk(opp: string, pool: number) {
   const poolTxt = pool ? `（＋疊池 ${pool}）` : "";
   const theirs = s.commit[1 - me], mine = s.commit[me];
   let q = "", sm = "", mineTurn = false;
-  if (s.result) {
+  if (s.result && !verdictOn()) {
+    const R = stage.presenting()!;
+    q = `第 ${R.trick} 墩${DIR_LABEL[R.dir]}：翻牌！`;
+  } else if (s.result) {
     const w = s.result.winner;
     q = w < 0 ? `平手（各 ${s.stacks[me]} 枚）` : w === me ? `你贏了這場（${s.stacks[me]}：${s.stacks[1 - me]}）` : `${opp}贏了這場（${s.stacks[1 - me]}：${s.stacks[me]}）`;
-  } else if (showing() && showRec) {
-    q = `第 ${showRec.trick} 墩${DIR_LABEL[showRec.dir]}：${shortResult(showRec, opp).replace(/<[^>]+>/g, "")}`;
+  } else if (showing()) {
+    const R = stage.presenting()!;
+    q = verdictOn() ? `第 ${R.trick} 墩${DIR_LABEL[R.dir]}：${shortResult(R, opp).replace(/<[^>]+>/g, "")}` : `第 ${R.trick} 墩${DIR_LABEL[R.dir]}：翻牌！`;
     sm = "點牌桌直接下一墩";
   } else if (busy) q = "送出中…";
   else switch (s.phase) {

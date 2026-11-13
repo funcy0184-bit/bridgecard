@@ -44,10 +44,18 @@ const probe = () => {
   const CAT = ["小", "中", "大"], DIR = { high: "比大", low: "比小" };
   if (!revealing) {
     if (oppFaces.length || oppCats.length) issues.push(`翻牌前對手出牌位出現牌面：${oppFaces.join(",")}${oppCats.join(",")}`);
+    // P2.5-B：特效層（飛行中的牌）也不能有不是我自己的牌面
+    const fxFaces = [...document.querySelectorAll("#fx .card:not(.back)")].map(e => Number(e.dataset.id)).filter(id => !v.hand.includes(id) && id !== v.myLock);
+    if (fxFaces.length) issues.push(`翻牌前特效層出現不是我的牌面：${fxFaces.join(",")}`);
     if (myFaces.length) issues.push("展示結束了，我的出牌位還留著上一墩的牌（沒有清場）");
     if (v.locked[op] && !document.querySelector("#lsOppSlot .card.back")) issues.push("對手蓋了牌，出牌位沒有牌背");
     if (document.getElementById("lsDirBig").textContent !== DIR[v.dir]) issues.push(`方向顯示 ${document.getElementById("lsDirBig").textContent} ≠ 這一墩 ${DIR[v.dir]}`);
     if (!v.result && document.getElementById("lsTrick").textContent !== `第 ${v.trick}／9 墩`) issues.push(`頂列墩數 ${document.getElementById("lsTrick").textContent} ≠ 這一墩 ${v.trick}`);
+  } else if (["pre", "reveal", "collect"].includes(globalThis.__hbLSStage?.().phase)) {
+    // P2.5-B：翻牌途中（牌正在轉、勝負還沒揭曉）、收牌途中（牌正在飛走）不檢查金框和牌面位置；
+    //   但翻牌還沒揭曉就先畫金框／變暗算錯；隱藏資訊在下面另外檢查（不管哪個階段都跑）
+    if (globalThis.__hbLSStage().phase === "reveal" && document.querySelector("#lsOppSlot.win, #lsMySlot.win, #lsOppSlot.lose, #lsMySlot.lose")) issues.push("翻牌還沒揭曉就先畫了金框／變暗");
+    if (document.getElementById("lsDirBig").textContent !== DIR[last.dir]) issues.push(`攤開第 ${last.trick} 墩，方向卻顯示 ${document.getElementById("lsDirBig").textContent}（那一墩是 ${DIR[last.dir]}）`);
   } else {
     // 展示中：頂列墩數、身分標也是那一墩的；對手名牌不出現下一墩的動作（想翻轉嗎…）
     if (!v.result && document.getElementById("lsTrick").textContent !== `第 ${last.trick}／9 墩`) issues.push(`攤開第 ${last.trick} 墩，頂列卻寫 ${document.getElementById("lsTrick").textContent}`);
