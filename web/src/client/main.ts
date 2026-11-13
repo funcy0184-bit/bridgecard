@@ -87,7 +87,7 @@ function show(id: ScreenId) {
   setTheme(id === "shuo" || (id === "online" && wantMode === "laststand"));
   $("app").classList.toggle("on-ls", id === "lstable");      // 梭了啦牌桌：提示條改蓋在標題列（不蓋對手那一格）
   if (id === "shuo") refreshLsAiEntry();
-  watchPerf(id === "table");
+  watchPerf(id === "table" || id === "lstable");      // P2.5-F：梭了啦牌桌也依實際幀時間自動降級
   if (id !== "table") { resetAura(); closePops(); }
   if (screen === id) return;
   screen = id;

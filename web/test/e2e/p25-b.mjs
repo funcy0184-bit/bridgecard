@@ -17,9 +17,9 @@ let fails = 0;
 const ok = (c, m) => { console.log(`  ${c ? "✓" : "✗"} ${m}`); if (!c) fails++; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function open(reduce) {
+async function open(reduce, quality = "") {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 664 }, isMobile: true, hasTouch: true, reducedMotion: reduce ? "reduce" : "no-preference" });
-  await ctx.addInitScript(() => { if (!sessionStorage.getItem("__i")) { sessionStorage.setItem("__i", "1"); localStorage.setItem("hb-name", "大雞"); localStorage.setItem("hb-story-offered", "1"); } });
+  await ctx.addInitScript(([q, key]) => { if (!sessionStorage.getItem("__i")) { sessionStorage.setItem("__i", "1"); localStorage.setItem("hb-name", "大雞"); localStorage.setItem("hb-story-offered", "1"); if (q) localStorage.setItem(key, JSON.stringify({ quality: q })); } }, [quality, "hb-web-settings"]);
   const P = await ctx.newPage();
   const errors = [];
   P.on("pageerror", e => errors.push(String(e)));
@@ -29,7 +29,7 @@ async function open(reduce) {
   // 頁面裡的記錄器：每 30ms 記一次演出階段、檢查隱藏資訊、記錄出現過的飛行牌
   await P.evaluate(() => {
     const g = globalThis;
-    g.__rec = { phases: [], leaks: [], clones: 0, hiddenDuringFly: 0, flySamples: 0, chips: 0, moneyBad: [], preMoneyBad: [] };
+    g.__rec = { phases: [], leaks: [], clones: 0, hiddenDuringFly: 0, flySamples: 0, chips: 0, shadows: 0, moneyBad: [], preMoneyBad: [] };
     let last = "";
     setInterval(() => {
       const v = g.__hbLS?.(), s = g.__hbLSStage?.();
@@ -39,6 +39,7 @@ async function open(reduce) {
       last = key;
       if (document.querySelector("#fx .lsfly")) g.__rec.clones++;
       if (document.querySelector("#fx .lsflychip")) g.__rec.chips++;
+      if (document.querySelector("#lsFelt .impactlayer > .cshadow")) g.__rec.shadows++;
       // P2.5-C 錢：沒在展示時，名牌上的餘額＝伺服器的餘額；展示途中籌碼還沒收完時＝結算前（開局餘額−本墩承諾）
       const me = v.seat, mine = Number(document.getElementById("lsMyChips").textContent), theirs = Number(document.getElementById("lsOppChips").textContent);
       if (s.phase === "idle" && !s.trick && (mine !== v.stacks[me] || theirs !== v.stacks[1 - me])) g.__rec.moneyBad.push(`${mine}/${theirs} ≠ ${v.stacks[me]}/${v.stacks[1 - me]}`);
@@ -147,9 +148,14 @@ console.log("P2.5-B 卡牌手感（iPhone 13）");
   ok(st.dbl >= 1 && !st.dblBad, `連點蓋牌只演一次（${st.dbl} 次連點）`);
   ok(st.drag >= 1, `拖牌上桌蓋牌（${st.drag} 次）`);
   ok(st.tips?.[0] === true && st.tips.slice(1).every(x => !x), `首次提示只出現一次（蓋牌提示：${(st.tips ?? []).map(x => (x ? "有" : "無")).join("")}）`);
+  ok(st.rec.shadows > 0, `標準品質落桌有接觸陰影（取樣到 ${st.rec.shadows} 次）`);
   ok(st.rec.chips > 0, `籌碼有飛（下注推上桌、結算收走；取樣到 ${st.rec.chips} 次）`);
   ok(st.rec.moneyBad.length === 0, `沒在展示時，名牌上的餘額＝伺服器的餘額${st.rec.moneyBad.length ? `：${st.rec.moneyBad.slice(0, 3).join("；")}` : ""}`);
   ok(st.rec.preMoneyBad.length === 0, `翻牌、判勝負時餘額還是結算前的（籌碼收完才變）${st.rec.preMoneyBad.length ? `：${st.rec.preMoneyBad.slice(0, 3).join("；")}` : ""}`);
+  // P2.5-F：打完整場之後特效層沒有殘留（飛行的牌、籌碼、翻牌用的牌背、接觸陰影）
+  await sleep(1500);
+  const left = await P.evaluate(() => ({ fx: document.querySelectorAll("#fx .lsfly, #fx .lsflychip").length, flip: document.querySelectorAll(".lsflipback, .lsscan").length, shadow: document.querySelectorAll("#lsFelt .impactlayer > *").length }));
+  ok(!left.fx && !left.flip && left.shadow <= 1, `打完整場特效沒有殘留（飛行 ${left.fx}、翻牌蓋 ${left.flip}、陰影 ${left.shadow}）`);
   ok(errors.length === 0, `沒有頁面錯誤${errors.length ? `：${errors[0]}` : ""}`);
 
   // 重新整理（等同斷線回來拿整份快照）：在牌飛到一半的時候重整
@@ -188,6 +194,19 @@ console.log("減少動態（系統設定）");
   ok(st.rec.clones === 0, `沒有飛行的牌（取樣到 ${st.rec.clones} 次）`);
   ok(st.rec.leaks.length === 0, "翻牌前整頁沒有對手的牌面");
   ok(errors.length === 0, `沒有頁面錯誤${errors.length ? `：${errors[0]}` : ""}`);
+  await ctx.close();
+}
+
+console.log("精簡品質（低階手機／自動降級）");
+{
+  const { ctx, P, errors } = await open(false, "lite");
+  const st = await play(P);
+  ok(st.ended, "打完整場");
+  const q = await P.evaluate(() => document.documentElement.dataset.quality ?? "");
+  ok(st.land.length >= 3 && Math.max(...st.land) <= 2, `精簡品質照樣飛牌、落桌對準（${st.land.length} 次）`);
+  ok(st.rec.shadows === 0, `精簡品質不畫接觸陰影（對局中取樣到 ${st.rec.shadows} 次）`);
+  ok(st.rec.leaks.length === 0, "翻牌前整頁沒有對手的牌面");
+  ok(errors.length === 0, `沒有頁面錯誤${errors.length ? `：${errors[0]}` : ""}${q ? `（品質 ${q}）` : ""}`);
   await ctx.close();
 }
 

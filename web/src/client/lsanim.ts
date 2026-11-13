@@ -24,6 +24,9 @@ export function motionLevel(): MotionLevel {
   return "full";
 }
 
+// P2.5-F：精簡品質（低階手機、perf.ts 自動降級）：飛行照演，但少畫裝飾（接觸陰影、光環、籌碼只畫 2 枚）
+const lite = () => fx.quality() === "lite";
+
 // 正在跑的動畫、飛行中的複製品：取消時一次收乾淨（取消＝回到原本的樣子，快照會重新擺好）
 const live = new Set<Animation>();
 const clones = new Set<HTMLElement>();
@@ -77,7 +80,7 @@ const visible = (b: DOMRect | undefined): b is DOMRect => !!b && b.width > 0 && 
 export function chipFly(from: Element | null, to: Element | null, n: number, opp: boolean, o: { delay?: number; dur?: number; sound?: "chip" | "in" } = {}): Promise<void> {
   const fb = rectOf(from), tb = rectOf(to);
   if (n <= 0 || motionLevel() !== "full" || !visible(fb) || !visible(tb)) return Promise.resolve();
-  const k = Math.min(5, n), dur = fx.ms(o.dur ?? 300), gap = fx.ms(45), d0 = o.delay ?? 0;
+  const k = Math.min(lite() ? 2 : 5, n), dur = fx.ms(o.dur ?? 300), gap = fx.ms(45), d0 = o.delay ?? 0;     // 低階手機（精簡品質）最多畫 2 枚
   const fx0 = fb.left + fb.width / 2, fy0 = fb.top + fb.height / 2, tx = tb.left + tb.width / 2, ty = tb.top + tb.height / 2;
   if (o.sound === "in") sfx.chipsIn(n, (d0 + dur * 0.7) / 1000); else sfx.chip(k, (d0 + dur) / 1000);
   const ps: Promise<void>[] = [];
@@ -162,7 +165,7 @@ export function domAnims(r: AnimRefs): StageAnims & { verdictCards?(rec: TrickRe
       sfx.slap(1.1, flightMs(240) / 1000);
       await slamFly(c, lifted, to, { dur: 240, lift: 26, flipAt: () => toBack(c) });
       if (mine !== c) return;
-      contact(c, $("lsFelt"), 1.1);
+      if (lite()) fx.land(c, 1.1); else contact(c, $("lsFelt"), 1.1);     // 精簡品質：只壓扁回彈，不畫接觸陰影
       await settle(c);
       // 驗收用：落桌那一刻複製品和出牌位的位置（誤差要很小，交接才不會跳一下）
       const cb = c.getBoundingClientRect(), sb = slot.getBoundingClientRect();
@@ -201,7 +204,7 @@ export function domAnims(r: AnimRefs): StageAnims & { verdictCards?(rec: TrickRe
       (globalThis as Record<string, unknown>).__hbLSOppFrom = { inNameplate: from.top >= ob.top - 1 && from.bottom <= ob.bottom + 1 && from.left >= ob.left - 1 && from.right <= ob.right + 1 };
       sfx.slap(0.8, flightMs(260, 0.8) / 1000);
       await slamFly(c, from, to, { dur: 260, weight: 0.8, lift: 16 });
-      contact(c, $("lsFelt"), 0.7);
+      if (lite()) fx.land(c, 0.7); else contact(c, $("lsFelt"), 0.7);
       await settle(c);
       drop(c);
     },
@@ -227,7 +230,7 @@ export function domAnims(r: AnimRefs): StageAnims & { verdictCards?(rec: TrickRe
       const win = rec.winner === me ? my : rec.winner === 1 - me ? opp : null;
       // 大墩（梭哈、或一墩輸贏 6 枚以上）：加一圈光環、低沉的一聲
       const big = rec.allIn >= 0 || rec.transfer + rec.poolTaken >= 6;
-      if (win && big && lv === "full") { fx.shockAt(win, { size: 150 }); sfx.boom(0.55); }
+      if (win && big && lv === "full") { if (!lite()) fx.shockAt(win, { size: 150 }); sfx.boom(0.55); }
       if (win) {
         sfx.land(rec.winner === me ? 0.9 : 0.6);
         if (lv === "full") await done(anim(win, [{ scale: "1.04" }, { scale: "1.13" }, { scale: "1" }, { scale: "1.04" }], { duration: fx.ms(280), easing: "ease-out" }));
