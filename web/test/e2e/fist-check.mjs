@@ -2,9 +2,9 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
-const PAGE = process.argv[3] ?? new URL("../../public/fist/index.html", import.meta.url).href;
+const PAGE = process.argv[3] ?? new URL("../../public/fist/proto.html", import.meta.url).href;
 const OUT = process.argv[2] ?? "";
-// 用法：node test/e2e/fist-check.mjs [截圖資料夾] [網址]（不給網址就直接開 public/fist/index.html）
+// 用法：node test/e2e/fist-check.mjs [截圖資料夾] [網址]（不給網址就直接開 public/fist/proto.html）
 const b = await chromium.launch();
 const P = await (await b.newContext({ viewport: { width: 1000, height: 640 } })).newPage();
 const errs = []; P.on("pageerror", e => errs.push(String(e)));
