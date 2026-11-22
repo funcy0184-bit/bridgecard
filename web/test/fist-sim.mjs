@@ -8,6 +8,7 @@ import { mulberry32 } from "../public/fist/src/engine.js";
 const N = Number(process.argv[2] ?? 60), STEP = 1 / 120;
 const levels = ["easy", "mid", "master"];
 const tally = { games: 0, rounds: 0, clash: 0, parry: 0, roll: 0, red: 0, ko: 0, extra: 0, maxCombo: 0, phases: new Set(), wins: {}, timeoutGames: 0 };
+const secs = [], secsBy = {};
 const bad = [];
 for (let g = 0; g < N; g++) {
   const rng = mulberry32(1000 + g);
@@ -35,8 +36,14 @@ for (let g = 0; g < N; g++) {
     if (bad.length > 5) break;
   }
   if (e.phase !== PH.GAMEOVER) { tally.timeoutGames++; bad.push(`第 ${g} 場（${la} vs ${lb}）600 秒沒打完，停在 ${e.phase}`); }
-  else { tally.games++; const k = `${[la, lb][e.winner]}`; tally.wins[k] = (tally.wins[k] ?? 0) + 1; }
+  else { secs.push(t); const mk = [la, lb].sort().join("-"); (secsBy[mk] ??= []).push(t); tally.games++; const k = `${[la, lb][e.winner]}`; tally.wins[k] = (tally.wins[k] ?? 0) + 1; }
 }
 console.log(JSON.stringify({ ...tally, phases: [...tally.phases].sort() }, null, 0));
+// 單場時長（遊戲時間）：目標 60～75 秒
+const stat = a => { const s = [...a].sort((x, y) => x - y); return { avg: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), median: +s[Math.floor(s.length / 2)].toFixed(1), min: +s[0].toFixed(1), max: +s[s.length - 1].toFixed(1) }; };
+if (secs.length) {
+  console.log("單場秒數（全部）", JSON.stringify(stat(secs)), "｜每場回合", (tally.rounds / tally.games).toFixed(1), "｜每條命回合", (tally.rounds / tally.ko).toFixed(1));
+  for (const [k, a] of Object.entries(secsBy).sort()) console.log(`  ${k.padEnd(12)} ${JSON.stringify(stat(a))}`);
+}
 if (bad.length) { console.log("問題：\n" + bad.slice(0, 10).join("\n")); process.exit(1); }
 console.log("模擬全部正常");

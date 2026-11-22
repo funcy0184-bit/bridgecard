@@ -2,6 +2,7 @@
 //   · 480×270 邏輯畫布、關閉平滑、整數倍率放大；中文字另外用高解析度畫（才清楚）
 //   · 繪製順序（美術聖經 §5）：背景 → 平台 → 紅區填色與斜紋 → 殘影 → 角色 → 命中粒子與 KO → 紅格邊線、藍框、方向箭頭 → HUD
 //   · 頓幀只停「演出」：凍結世界層畫面幾十毫秒，HUD 倒數照走（引擎本身不停）
+//   · 底部鍵位卡改由 keybar.js（DOM）負責；畫布只畫世界、提示與上方 HUD
 //   · 15 個角色動畫狀態（美術換皮接口，見 ANIM_STATES）；有 Sprite Sheet 就照 ART.spriteAtlas 切格，沒有就程式繪製
 import { ART, CONFIG } from "./config.js";
 import { PH, PH_LABEL, GLABEL, cellX } from "./engine.js";
@@ -42,17 +43,68 @@ function drawBitmap(g, rows, x, y, fill, outline, scale = 1) {
   for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (rows[r][c] === "#") g.fillRect(x + c * scale, y + r * scale, scale, scale);
 }
 
+// ---------------- 架式氣泡與手勢圖示（ART.telegraphs.stanceBubbles，v1.2） ----------------
+//   24×24 對話框（含下方小尾巴）、14×14 手勢幾何；藍招頭頂框沿用同一套手勢幾何、改用藍色盤
+const SB = ART.telegraphs.stanceBubbles;
+function inPoly(x, y, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
+const BUBBLE = (() => {
+  const [W, H] = SB.sizePx, poly = SB.framePolygonPx.map(([x, y]) => [x * (W / (W - 1)), y * (H / (H - 1))]);   // 頂點是像素索引（含）→ 換成邊界座標
+  const inside = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => inPoly(x + 0.5, y + 0.5, poly)));
+  const at = (x, y) => y >= 0 && y < H && x >= 0 && x < W && inside[y][x];
+  const fill = [], rim = [], outline = [];
+  for (let y = -1; y <= H; y++) for (let x = -1; x <= W; x++) {
+    if (at(x, y)) { fill.push([x, y]); if (!at(x, y - 1) || !at(x - 1, y) || !at(x + 1, y)) rim.push([x, y]); }   // 內緣亮線：上緣與左右兩側
+    else if (at(x - 1, y) || at(x + 1, y) || at(x, y - 1) || at(x, y + 1)) outline.push([x, y]);
+  }
+  return { fill, rim, outline };
+})();
+const GLYPH_PIX = {};
+for (const [k, v] of Object.entries(SB.variants)) {
+  const G = v.geometry, ink = new Set(), acc = new Set();
+  for (const [x, y, w, h] of G.inkRects ?? []) for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) ink.add(xx + "," + yy);
+  for (const poly of G.inkPolygons ?? []) for (let yy = 0; yy < 14; yy++) for (let xx = 0; xx < 14; xx++) if (inPoly(xx + 0.5, yy + 0.5, poly)) ink.add(xx + "," + yy);
+  for (const [x, y, w, h] of G.clearRects ?? []) for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) ink.delete(xx + "," + yy);
+  for (const [x, y, w, h] of G.accentRects ?? []) for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) { ink.delete(xx + "," + yy); acc.add(xx + "," + yy); }
+  GLYPH_PIX[k] = { ink: [...ink].map(p => p.split(",").map(Number)), acc: [...acc].map(p => p.split(",").map(Number)) };
+}
+const GESTURE_GLYPH = { rock: "rock", scissors: "scissors", paper: "paper", hidden: "hidden" };
+function drawGestureGlyph(g, key, x, y, ink, accent) {
+  const G = GLYPH_PIX[key]; if (!G) return;
+  g.fillStyle = ink; for (const [px, py] of G.ink) g.fillRect(x + px, y + py, 1, 1);
+  g.fillStyle = accent; for (const [px, py] of G.acc) g.fillRect(x + px, y + py, 1, 1);
+}
+function drawBubble(g, x0, y0, key, now, reduced) {
+  const v = SB.variants[key]; if (!v) return;
+  g.fillStyle = SB.outerOutline; for (const [x, y] of BUBBLE.outline) g.fillRect(x0 + x, y0 + y, 1, 1);
+  g.fillStyle = v.panel; for (const [x, y] of BUBBLE.fill) g.fillRect(x0 + x, y0 + y, 1, 1);
+  g.fillStyle = v.rim; for (const [x, y] of BUBBLE.rim) g.fillRect(x0 + x, y0 + y, 1, 1);
+  const [gx, gy] = SB.glyphOriginPx;
+  if (v.mist) {                                                    // 藏招：框內飄一點黑霧（減少動態時固定）
+    const M = v.mist, step = reduced && M.staticWhenReducedMotion ? 0 : Math.floor(now * 1000 / M.stepMs);
+    g.globalAlpha = M.maxOpacity;
+    for (let i = 0; i < M.maxClusters; i++) { const k = (i * 7 + step) % 12; g.fillStyle = M.colors[(i + step) % M.colors.length]; g.fillRect(x0 + 3 + ((k * 5 + i * 3) % 15), y0 + 3 + ((k * 3 + i * 5) % 13), M.clusterSizePx[0], M.clusterSizePx[1]); }
+    g.globalAlpha = 1;
+  }
+  drawGestureGlyph(g, key, x0 + gx, y0 + gy, v.ink, v.accent);
+}
+
 // ---------------- 武者（程式繪製／Sprite Sheet） ----------------
 const Fighter = (() => {
-  const A = ART.spriteAtlas, F = PAL.fighters;
-  const sheets = [null, null];
-  ["p1", "p2"].forEach((p, i) => {
+  const A = ART.spriteAtlas, WA = ART.weaponVariantAtlas, F = PAL.fighters;
+  const sheets = [null, null], wsheets = [null, null];
+  // 正式圖檔依 imageByPlayer 檔名接入（放在 public/fist/ 下）：基礎圖集 500×800、武器圖集 500×500；沒有就用程式繪製
+  const load = (file, w, h, put) => {
     if (typeof Image === "undefined") return;
     const img = new Image();
-    img.onload = () => { if (img.naturalWidth === A.imageWidth && img.naturalHeight === A.imageHeight) sheets[i] = img; };
+    img.onload = () => { if (img.naturalWidth === w && img.naturalHeight === h) put(img); };
     img.onerror = () => {};
-    img.src = new URL(`../${A.imageByPlayer[p]}`, import.meta.url).href;
+    img.src = new URL(`../${file}`, import.meta.url).href;
+  };
+  ["p1", "p2"].forEach((p, i) => {
+    load(A.imageByPlayer[p], A.imageWidth, A.imageHeight, img => { sheets[i] = img; });
+    load(WA.imageByPlayer[p], WA.imageWidth, WA.imageHeight, img => { wsheets[i] = img; });
   });
+  const ATTACK_STATES = new Set(["clash", "mash_hit", "finisher_blue", "finisher_red"]);
   function atlasAnim(state, alt) { return A.animations[ATLAS_ROW_OF(state) ?? (alt ? "combo_2" : "combo_1")]; }
   function frameOf(state, t, f, view) {
     const an = atlasAnim(state, f.anim.alt);
@@ -88,26 +140,83 @@ const Fighter = (() => {
     if (o.mouth) P(25 + hx, 19 + hy, 2, 1, "O");
     return { dx, dy };
   }
-  const W = {
-    rockHigh(dx, dy) { P(26 + dx, 13 + dy, 3, 9, "P"); P(21 + dx, 14 + dy, 3, 8, "S"); P(24 + dx, 11 + dy, 5, 3, "K"); P(23 + dx, 13 + dy, 2, 2, "B"); P(21 + dx, 15 + dy, 2, 2, "B"); P(19 + dx, 17 + dy, 2, 2, "B"); P(25 + dx, 2 + dy, 11, 8, "M"); P(26 + dx, 3 + dy, 9, 1, "H"); P(25 + dx, 9 + dy, 11, 1, "B"); },
-    rockSwing(dx, dy, r) { P(28 + dx, 23 + dy, 4 + r, 3, "P"); P(31 + dx + r, 22 + dy, 3, 4, "K"); P(34 + dx + r, 23 + dy, 4, 2, "B"); P(37 + dx + r, 18 + dy, 9, 10, "M"); P(38 + dx + r, 19 + dy, 7, 1, "H"); },
-    blades(dx, dy, r) { P(29 + dx, 24 + dy, 5 + r, 3, "P"); P(29 + dx, 28 + dy, 4 + r, 3, "S"); P(33 + dx + r, 24 + dy, 2, 3, "K"); P(32 + dx + r, 28 + dy, 2, 3, "K"); P(35 + dx + r, 23 + dy, 9, 2, "M"); P(35 + dx + r, 23 + dy, 9, 1, "H"); P(44 + dx + r, 24 + dy, 1, 1, "M"); P(34 + dx + r, 28 + dy, 8, 2, "M"); P(34 + dx + r, 28 + dy, 8, 1, "H"); P(42 + dx + r, 29 + dy, 1, 1, "M"); },
-    palms(dx, dy, r) { P(28 + dx, 18 + dy, 4 + r, 3, "P"); P(32 + dx + r, 13 + dy, 5, 7, "K"); P(37 + dx + r, 14 + dy, 1, 5, "K"); P(28 + dx, 29 + dy, 4 + r, 3, "S"); P(32 + dx + r, 29 + dy, 5, 7, "K"); P(37 + dx + r, 30 + dy, 1, 5, "K"); },
+  // ---- 三把實體武器（美術聖經 v1.1 §2）：石頭＝大槌子、剪刀＝一把張開的 V 字大剪刀、布＝鼓鼓的大布袋 ----
+  //   座標都是 48×48 角色格、面右；腳底錨點 (24,40)
+  const line = (x0, y0, x1, y1, c, t = 1) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1); for (let i = 0; i <= n; i++) P(Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), t, t, c); };
+  const ell = (cx, cy, rx, ry, c) => { for (let y = -ry; y <= ry; y++) { const w = Math.round(rx * Math.sqrt(Math.max(0, 1 - (y / (ry + 0.5)) ** 2))); if (w > 0) P(Math.round(cx - w), Math.round(cy + y), w * 2, 1, c); } };
+  const ring = (x, y, c) => { P(x, y, 4, 1, c); P(x, y + 3, 4, 1, c); P(x, y, 1, 4, c); P(x + 3, y, 1, 4, c); };
+  const WP = {
+    // 大槌子：槌頭 14×9（左上角 hx,hy），長柄接到握點 (gx,gy)
+    hammer(hx, hy, gx, gy) {
+      line(gx, gy, hx + 7, hy + 4, "B", 2);
+      P(hx, hy, 14, 9, "M"); P(hx + 1, hy + 1, 12, 1, "H"); P(hx, hy + 3, 14, 2, "B"); P(hx + 12, hy + 1, 1, 7, "S");
+      P(gx - 1, gy - 1, 3, 3, "K"); P(gx - 4, gy + 1, 3, 3, "K");
+    },
+    // 大剪刀：鉸鏈 (x,y)，刃往前（+x）長 len、刃尖張開 spread（≥4 才看得出 V）；鉸鏈後面兩個柄環
+    shears(x, y, spread, len) {
+      const up = Math.ceil(spread / 2), dn = spread - up;
+      line(x, y - 1, x + len, y - 1 - up, "M", 2); line(x + 1, y - 1, x + len - 1, y - 1 - up, "H");
+      line(x, y + 1, x + len, y + 1 + dn, "M", 2);
+      ring(x - 7, y - 5, "B"); ring(x - 7, y + 2, "B"); line(x - 4, y - 2, x, y, "B"); line(x - 4, y + 3, x, y + 1, "B");
+      P(x - 1, y - 1, 3, 3, "B"); P(x, y, 1, 1, "H");
+      P(x - 8, y - 4, 3, 3, "K"); P(x - 8, y + 3, 3, 3, "K");
+    },
+    // 大布袋：袋口 (mx,my) 收窄打結，袋腹 w×h 往下鼓（lag：袋身慢一拍的偏移）
+    sack(mx, my, w, h, lag = 0) {
+      const cx = mx + lag, cy = my + 3 + Math.round(h / 2);
+      ell(cx, cy, Math.round(w / 2), Math.round(h / 2), "C");
+      ell(cx + 2, cy + 2, Math.round(w / 2) - 3, Math.round(h / 2) - 3, "D"); ell(cx - 1, cy - 1, Math.round(w / 2) - 3, Math.round(h / 2) - 3, "C");
+      line(cx - 2, cy - Math.round(h / 2) + 3, cx + 1, cy + Math.round(h / 2) - 2, "D");       // 縫線
+      P(mx - 2, my, 5, 3, "C"); P(mx - 3, my + 2, 7, 1, "T");                                     // 收窄的袋口＋繩結
+      P(mx - 4, my - 1, 3, 3, "K"); P(mx + 2, my - 1, 3, 3, "K");
+    },
     armDown(dx, dy) { P(26 + dx, 23 + dy, 3, 8, "P"); P(26 + dx, 31 + dy, 3, 2, "K"); },
   };
-  const weaponOf = (st, dx, dy, r) => (st === "scissors" ? W.blades(dx, dy, r) : st === "paper" ? W.palms(dx, dy, r) : W.rockSwing(dx, dy, r));
+  // 攻擊姿勢：kind = clash | jab | sweep | windBlue | hitBlue | windRed | hitRed；r = 後座（像素）
+  const ATTACK = {
+    rock: {
+      clash: (dx, dy, r) => WP.hammer(32 + dx - r, 12 + dy, 26 + dx, 24 + dy),
+      jab: (dx, dy, r) => WP.hammer(15 + dx - r, 9 + dy, 34 + dx - r, 25 + dy),                // 槌柄短頂
+      sweep: (dx, dy, r) => WP.hammer(32 + dx - r, 27 + dy, 25 + dx, 26 + dy),                 // 轉髖低掃
+      windBlue: (dx, dy) => WP.hammer(7 + dx, 3 + dy, 22 + dx, 22 + dy),
+      hitBlue: (dx, dy, r) => WP.hammer(33 + dx - r, 23 + dy, 27 + dx, 23 + dy),              // 跨步下砸
+      windRed: (dx, dy) => WP.hammer(15 + dx, 0 + dy, 25 + dx, 21 + dy),                      // 拉過頭頂
+      hitRed: (dx, dy) => WP.hammer(32 + dx, 31 + dy, 27 + dx, 26 + dy),                      // 砸地、槌頭沉住
+    },
+    scissors: {
+      clash: (dx, dy, r) => WP.shears(33 + dx - r, 23 + dy, 9, 11),
+      jab: (dx, dy, r) => WP.shears(35 + dx - r, 24 + dy, 5, 10),                            // 半開刃前刺
+      sweep: (dx, dy, r) => WP.shears(33 + dx - r, 24 + dy, 12, 11),                         // 大幅開闔
+      windBlue: (dx, dy) => WP.shears(27 + dx, 24 + dy, 12, 10),
+      hitBlue: (dx, dy, r) => WP.shears(33 + dx - r, 25 + dy, 1, 14),                        // 瞬間合攏
+      windRed: (dx, dy) => WP.shears(30 + dx, 33 + dy, 10, 12),                              // 低身拖開
+      hitRed: (dx, dy) => WP.shears(31 + dx, 36 + dy, 2, 15),                                // 貼地橫掃後剪合
+    },
+    paper: {
+      clash: (dx, dy, r) => WP.sack(32 + dx - r, 17 + dy, 14, 11, 3),                        // 袋腹相撞擠扁
+      jab: (dx, dy, r) => WP.sack(35 + dx - r, 18 + dy, 10, 9, 3),                           // 袋口短甩
+      sweep: (dx, dy, r) => WP.sack(33 + dx - r, 9 + dy, 16, 13, 4),                         // 轉身甩出鼓袋
+      windBlue: (dx, dy) => WP.sack(20 + dx, 8 + dy, 14, 12, -4),
+      hitBlue: (dx, dy, r) => WP.sack(37 + dx - r, 10 + dy, 16, 16, 2),                      // 袋口罩住對方輪廓
+      windRed: (dx, dy) => WP.sack(27 + dx, 2 + dy, 16, 12, 0),                              // 雙手掄起整袋
+      hitRed: (dx, dy) => WP.sack(38 + dx, 31 + dy, 20, 6, 0),                               // 拍地壓扁
+    },
+  };
+  const attack = (g, kind, dx, dy, r = 0) => (ATTACK[g] ?? ATTACK.rock)[kind](dx, dy, r);
   const STATES = {
-    idle(f, n) { const b = body(f.i, { dy: n === 3 ? 1 : 0 }); W.armDown(b.dx, b.dy); },
-    step(f, n) { const b = body(f.i, { spread: n >= 1 && n <= 3 ? 3 : 1, dx: 1 }); W.armDown(b.dx, b.dy); },
+    idle(f, n) { const b = body(f.i, { dy: n === 3 ? 1 : 0 }); WP.armDown(b.dx, b.dy); },
+    step(f, n) { const b = body(f.i, { spread: n >= 1 && n <= 3 ? 3 : 1, dx: 1 }); WP.armDown(b.dx, b.dy); },
     exhausted(f, n) { const b = body(f.i, { dy: 3, dx: 2, hx: 2, hy: n === 2 ? 2 : 1, eyes: "shut", mouth: true }); P(27 + b.dx, 25 + b.dy, 3, 8, "P"); P(27 + b.dx, 33 + b.dy, 3, 2, "K"); const y = Math.floor((f.anim.t * 24) % 8); P(14, 10 + y, 1, 2, "fx"); P(32, 12 + ((y + 4) % 8), 1, 2, "fx"); },
-    stance_rock(f, n) { const b = body(f.i, { spread: 2, dy: n % 2 }); W.rockHigh(b.dx, b.dy); },
-    stance_scissors(f, n) { const b = body(f.i, { spread: 3, dx: 2, dy: 3 }); W.blades(b.dx, b.dy + (n % 2), 1); },
-    stance_paper(f, n) { const b = body(f.i, { spread: 2, dx: 1 }); W.palms(b.dx, b.dy + (n === 2 ? 1 : 0), 0); },
+    // 架式 6 幀：石頭第 2 格膝蓋吃重、第 4 格抬回；剪刀第 2 格開到最大、第 4 格半合；布袋第 2 格提袋口、第 4 格擠壓回彈
+    stance_rock(f, n) { const dip = [0, 0, 1, 1, -1, 0][n] ?? 0; const b = body(f.i, { spread: 2, dy: Math.max(0, dip) }); WP.hammer(11 + b.dx, 0 + b.dy + Math.min(0, dip), 27 + b.dx, 23 + b.dy); },
+    stance_scissors(f, n) { const b = body(f.i, { spread: 3, dx: 2, dy: 3 }); WP.shears(34 + b.dx - 2, 25, [6, 8, 10, 8, 6, 7][n] ?? 6, 11); },
+    stance_paper(f, n) { const lift = [0, -1, -2, -1, 0, 0][n] ?? 0, lag = [0, 0, -1, -2, -1, 0][n] ?? 0; const b = body(f.i, { spread: 2, dx: 1 }); const sq = n === 4; WP.sack(33 + b.dx, 22 + lift, sq ? 18 : 16, sq ? 13 : 14, 2 + Math.round(lag / 2)); },
     stance_hidden(f, n) { const b = body(f.i, { spread: 1, dy: n === 1 ? 1 : 0 }); P(24 + b.dx, 24 + b.dy, 6, 5, "P"); },
-    clash(f) { const b = body(f.i, { spread: 3, dx: -2, eyes: "shut" }); weaponOf(f.stance, b.dx + 1, b.dy, 2); },
-    mash_hit(f, n) { const alt = f.anim.alt, k = Math.min(1, f.anim.t * 12); const b = body(f.i, { spread: alt ? 5 : 4, dx: alt ? 5 : 3, dy: alt ? 1 : 0 }); weaponOf(f.stance, b.dx, b.dy - (alt ? 2 : 0), Math.round((alt ? 7 : 5) * (1 - k * 0.4))); },
-    finisher_blue(f) { if (!f.fin) { const b = body(f.i, { spread: 3, dx: -2 }); weaponOf(f.stance, b.dx - 6, b.dy - 2, 0); } else { const b = body(f.i, { spread: 5, dx: 5 }); weaponOf(f.stance, b.dx, b.dy, 8); } },
-    finisher_red(f) { if (!f.fin) { const b = body(f.i, { spread: 4, dy: 3 }); W.rockHigh(b.dx, b.dy - 2); P(24, 1, 13, 1, "R"); P(36, 2, 1, 8, "R"); P(15, 19, 1, 5, "R"); } else { const b = body(f.i, { spread: 6, dx: 3, dy: 4 }); P(28 + b.dx, 27 + b.dy, 6, 3, "P"); P(33 + b.dx, 29 + b.dy, 12, 10, "M"); P(34 + b.dx, 30 + b.dy, 10, 1, "H"); } },
+    clash(f) { const b = body(f.i, { spread: 3, dx: -2, eyes: "shut" }); attack(f.stance, "clash", b.dx + 1, b.dy, 0); },
+    mash_hit(f) { const alt = f.anim.alt, k = Math.min(1, f.anim.t * 12); const b = body(f.i, { spread: alt ? 5 : 4, dx: alt ? 5 : 3, dy: alt ? 1 : 0 }); attack(f.stance, alt ? "sweep" : "jab", b.dx - 3, b.dy - (alt ? 2 : 0), Math.round(3 * k)); },
+    finisher_blue(f) { if (!f.fin) { const b = body(f.i, { spread: 3, dx: -2 }); attack(f.stance, "windBlue", b.dx, b.dy - 2); } else { const b = body(f.i, { spread: 5, dx: 5 }); attack(f.stance, "hitBlue", b.dx - 4, b.dy, 0); } },
+    // 紅招：蓄力時肩線亮紅邊光
+    finisher_red(f) { if (!f.fin) { const b = body(f.i, { spread: 4, dy: 3 }); attack(f.stance, "windRed", b.dx, b.dy - 3); P(16 + b.dx, 20 + b.dy, 4, 1, "R"); P(27 + b.dx, 20 + b.dy, 4, 1, "R"); } else { const b = body(f.i, { spread: 6, dx: 3, dy: 4 }); attack(f.stance, "hitRed", b.dx - 3, b.dy - 4); } },
     parry_success(f) { const b = body(f.i, { spread: 4, dx: 2 }); P(29 + b.dx, 17 + b.dy, 3, 12, "P"); P(30 + b.dx, 15 + b.dy, 4, 3, "K"); },
     roll(f) { P(15, 24, 18, 16, "P"); P(17, 26, 14, 12, "S"); P(22, 28, 7, 6, "K"); P(21, 26, 9, 2, f.i === 0 ? "W" : "S"); },
     hitstun(f) { const b = body(f.i, { dx: -3, hx: -2, hy: 1, eyes: "x", mouth: true }); P(20 + b.dx, 23 + b.dy, 3, 7, "P"); },
@@ -115,12 +224,12 @@ const Fighter = (() => {
   };
   function colorsFor(f, mode) {
     const p = F["p" + (f.i + 1)];
-    if (mode === "hidden") return { P: F.hiddenFill, S: F.hiddenFill, W: p.secondary, H: F.hiddenFill, K: F.hiddenFill, M: F.hiddenFill, B: F.hiddenFill, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
-    if (mode === "white") { const w = PAL.fx.impact.core; return { P: w, S: w, W: w, H: w, K: w, M: w, B: w, O: w, R: w, fx: w }; }
-    return { P: p.primary, S: p.shadow, W: p.secondary, H: p.highlight, K: CONFIG.skin, M: F.neutralSteel, B: PAL.platform.oxidizedBronze, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
+    if (mode === "hidden") return { P: F.hiddenFill, S: F.hiddenFill, W: p.secondary, H: F.hiddenFill, K: F.hiddenFill, M: F.hiddenFill, B: F.hiddenFill, C: F.hiddenFill, D: F.hiddenFill, T: F.hiddenFill, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
+    if (mode === "white") { const w = PAL.fx.impact.core; return { P: w, S: w, W: w, H: w, K: w, M: w, B: w, C: w, D: w, T: w, O: w, R: w, fx: w }; }
+    return { P: p.primary, S: p.shadow, W: p.secondary, H: p.highlight, K: CONFIG.skin, M: F.neutralSteel, B: PAL.platform.oxidizedBronze, C: CONFIG.cloth.fill, D: CONFIG.cloth.shade, T: CONFIG.cloth.tie, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
   }
   return {
-    frameOf, sheets,
+    frameOf, sheets, wsheets,
     draw(ctx, f, state, t, x, y, face, opt = {}) {
       g = ctx; OX = Math.round(x); OY = Math.round(y); FACE = face;
       const n = frameOf(state, t, f, opt.view);
@@ -131,8 +240,16 @@ const Fighter = (() => {
       const sh = sheets[f.i];
       if (sh && !opt.white) {
         const an = atlasAnim(state, f.anim.alt);
+        let img = sh, row = an.row, col = n;
+        // 大剪刀／大布袋的攻擊動作：讀武器圖集；變體圖還沒好 → 先停在對應武器的架式（不會突然變成槌子）
+        const gest = ATTACK_STATES.has(state) ? f.stance : null;
+        if (gest === "scissors" || gest === "paper") {
+          const key = state === "mash_hit" ? (f.anim.alt ? "combo_2" : "combo_1") : state, v = WA.variantsByGesture[gest]?.[key];
+          if (v && wsheets[f.i]) { img = wsheets[f.i]; row = v.row; }
+          else { row = A.animations[ART.weapons.byGesture[gest].stanceState].row; col = 0; }
+        }
         g.translate(OX, OY); if (face < 0) g.scale(-1, 1);
-        g.drawImage(sh, A.originX + A.strideX * n, A.originY + A.strideY * an.row, A.frameWidth, A.frameHeight, -A.pivot.x, -A.pivot.y, A.frameWidth, A.frameHeight);
+        g.drawImage(img, A.originX + A.strideX * col, A.originY + A.strideY * row, A.frameWidth, A.frameHeight, -A.pivot.x, -A.pivot.y, A.frameWidth, A.frameHeight);
       } else {
         parts = [];
         (STATES[state] ?? STATES.idle)(f, n);
@@ -157,6 +274,8 @@ export class Renderer {
     this.cam = { zoom: 1, x: CONFIG.W / 2, y: CONFIG.H / 2 };
     this.stars = Array.from({ length: 46 }, () => ({ x: (Math.random() * CONFIG.W) | 0, y: (Math.random() * 110) | 0, tw: Math.random() * 6 }));
     this.names = CONFIG.names.slice();
+    this.showHints = true;                                // 出招提示：頭頂拳種氣泡、藏招 ❓（main.js 依設定切換）
+    this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null }));
     this.resize();
   }
   static get ANIM_STATES() { return ANIM_STATES; }
@@ -164,7 +283,7 @@ export class Renderer {
   hasSheet(seat) { return !!Fighter.sheets[seat]; }
   setNames(n) { this.names = n; }
   keyPress(btn) { this.keyFlash[btn] = 0.12; }
-  reset() { this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; }
+  reset() { this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null })); }
   resize(availW = innerWidth, availH = innerHeight) {
     const dpr = globalThis.devicePixelRatio || 1, fit = Math.min(availW / CONFIG.W, availH / CONFIG.H);
     this.scale = fit >= 1 ? Math.floor(fit) : fit;          // 整數倍率；視窗剩下的空間留邊
@@ -194,7 +313,7 @@ export class Renderer {
           this.flashT[e.p] = ms(FX.impactFrameFlash.durationMs);
           const n = e.kind === "extra" ? 4 + e.n * 2 : 6;
           this.spark(e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24 - (e.kind === "extra" ? Math.random() * 10 : 0), e.kind === "extra" ? PAL.fx.impact.core : PAL.fx.impact.spark, n, e.kind === "extra" ? 2.8 : 2.2);
-          this.popup(e.x, CONFIG.floorY - 58 - (e.kind === "extra" ? e.n * 3 : 0), `+${e.damage}%`, PAL.fx.impact.core, e.kind === "extra" ? 8 : 10);
+          this.popup(e.x, CONFIG.floorY - 58 - (e.kind === "extra" ? e.n * 3 : 0), `+${+e.damage.toFixed(1)}%`, PAL.fx.impact.core, e.kind === "extra" ? 8 : 10);
           if (e.combo !== undefined && view.round) this.combo = { n: e.combo, at: now, x: view.fighters[view.round.att].x, extra: e.kind === "extra" };
           break;
         }
@@ -243,9 +362,10 @@ export class Renderer {
     this.drawFighters(world);
     this.drawFx(now);
     this.drawHazardEdges(view);
+    this.drawStanceBubbles(view, now);
     this.drawTelegraphs(view, now);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.drawHudPixels(view, now);
+    this.drawHudPixels(view, now, dt);
     const s = this.scale * this.dpr, sctx = this.sctx;
     sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.imageSmoothingEnabled = false;
     sctx.drawImage(this.buf, 0, 0, this.screen.width, this.screen.height);
@@ -389,7 +509,7 @@ export class Renderer {
       const x = Math.round(att.x) - S / 2, y = CONFIG.floorY + T.offsetPx[1] - S / 2, C = PAL.fx.blue;
       this.roundRect(x - 1, y - 1, S + 2, S + 2, C.outline); this.roundRect(x, y, S, S, "#0E2747");
       this.perimeter(x, y, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2);
-      if (r.gesture) drawBitmap(ctx, GLYPH[r.gesture], x + 5, y + 5, C.core, C.outline);
+      if (r.gesture) drawGestureGlyph(ctx, GESTURE_GLYPH[r.gesture], x + 5, y + 5, C.core, C.rim);   // 頭頂只顯示攻擊手勢，不顯示克制答案
     } else {
       const def = view.fighters[r.def], T = ART.telegraphs.redRoll;
       for (const d of r.dirs) {
@@ -398,6 +518,18 @@ export class Renderer {
         ctx.fillStyle = PAL.fx.safeArrow.outline; ctx.fillRect(ax - 3, ay + 10, 18, 4);
         ctx.fillStyle = blink ? PAL.fx.red.rim : PAL.fx.safeArrow.fill; ctx.fillRect(ax - 2, ay + 11, Math.round(16 * left), 2);
       }
+    }
+  }
+  // 架式氣泡（showHints）：亮招期顯示各自已擺的拳種、藏招期雙方都變 ❓；位置固定在腳底上 55px，靠太近時 P2 往上錯開
+  drawStanceBubbles(view, now) {
+    if (!this.showHints || view.phase !== PH.RPS) return;
+    const hidden = view.t >= CONFIG.rps.reveal, [W] = SB.sizePx, O = SB.onFighterOverlap;
+    const items = view.fighters.map(f => ({ f, key: hidden ? "hidden" : ["rock", "scissors", "paper"].includes(f.stance) ? f.stance : null })).filter(o => o.key && !o.f.out);
+    const close = items.length === 2 && Math.abs(items[0].f.x - items[1].f.x) < O.minCenterGapPx;
+    for (const { f, key } of items) {
+      const x0 = clamp(Math.round(f.x - W / 2), 0, CONFIG.W - W);
+      const y0 = Math.round(CONFIG.floorY + SB.offsetPx[1] - W / 2) - (close && f.i === 1 ? O.maxVerticalStaggerPx : 0);
+      drawBubble(this.ctx, x0, y0, key, now, REDUCED);
     }
   }
   roundRect(x, y, w, h, c) { const ctx = this.ctx; ctx.fillStyle = c; ctx.fillRect(x + 2, y, w - 4, h); ctx.fillRect(x, y + 2, w, h - 4); ctx.fillRect(x + 1, y + 1, w - 2, h - 2); }
@@ -413,31 +545,77 @@ export class Renderer {
   }
 
   // ---- HUD（像素） ----
+  // 損傷數字：依 ART.palette.damageBands 換色、描邊、陰影；受擊時照該級 motion 位移；粒子畫在數字後面
   drawDigits(text, x, y, band, alignRight) {
-    const ctx = this.ctx, scale = 4, cwOf = ch => (DIGIT[ch]?.[0].length ?? 4) * scale + 3;
+    const ctx = this.ctx, scale = 4, cwOf = ch => (DIGIT[ch]?.[0].length ?? 4) * scale + 3, D = ART.hud.damageText;
     const w = [...text].reduce((s, ch) => s + cwOf(ch), 0) - 3;
-    let cx = alignRight ? x - w : x;
-    for (const ch of text) {
-      const rows = DIGIT[ch];
-      if (rows) {
-        drawBitmap(ctx, rows, cx, y, band.fill, PAL.fighters.outline, scale);
-        if (band.topRim) { ctx.fillStyle = band.topRim; rows.forEach((r, ri) => [...r].forEach((c, ci) => { if (c === "#" && (ri === 0 || rows[ri - 1][ci] !== "#")) ctx.fillRect(cx + ci * scale, y + ri * scale, scale, 1); })); }
-      }
-      cx += cwOf(ch);
-    }
-    return { x0: alignRight ? x - w : x, w };
+    const x0 = alignRight ? x - w : x;
+    const cells = []; let cx = x0;
+    for (const ch of text) { const rows = DIGIT[ch]; if (rows) rows.forEach((r, ri) => [...r].forEach((c, ci) => { if (c === "#") cells.push([cx + ci * scale, y + ri * scale, ri, ci, rows]); })); cx += cwOf(ch); }
+    const [sx, sy] = D.shadowOffsetPx, o = D.outlineWidthPx;
+    ctx.fillStyle = band.shadow; for (const [px, py] of cells) ctx.fillRect(px + sx - o, py + sy - o, scale + o * 2, scale + o * 2);
+    ctx.fillStyle = band.outline; for (const [px, py] of cells) ctx.fillRect(px - o, py - o, scale + o * 2, scale + o * 2);
+    ctx.fillStyle = band.fill; for (const [px, py] of cells) ctx.fillRect(px, py, scale, scale);
+    if (band.topRim) { ctx.fillStyle = band.topRim; for (const [px, py, ri, ci, rows] of cells) if (ri === 0 || rows[ri - 1][ci] !== "#") ctx.fillRect(px, py, scale, D.topRimWidthPx); }
+    return { x0, w };
   }
-  drawHudPixels(view, now) {
+  bandOf(dmg) { return PAL.damageBands.find(b => dmg >= b.minInclusive && (b.maxInclusive === null || dmg <= b.maxInclusive)) ?? PAL.damageBands[0]; }
+  shownDamage(f) { return Math.max(ART.hud.damageText.clampDisplayedValueMin, Math.floor(f.damage + 1e-6)); }
+  // 損傷粒子（火花、裂痕、煙）：依分級設定產生；layer = behind_text
+  hudParticles(i, band, box, ay, now, increased) {
+    const st = this.dmgFx[i], right = i === 1, list = st.parts;
+    const corners = { lower: [[box.x0 - 2, ay + 24], [box.x0 + box.w + 1, ay + 24]], upper: [[box.x0 - 2, ay - 1], [box.x0 + box.w + 1, ay - 1]] };
+    const tips = [];
+    for (const P of band.particles) {
+      if (P.kind === "crack") {                                     // 階梯狀分岔裂痕：分級期間常駐（減少動態也保留）
+        corners.upper.forEach(([cx, cy], k) => {
+          const dir = k === 0 ? -1 : 1, len = P.lengthRangePx[0] + ((i * 3 + k * 5) % (P.lengthRangePx[1] - P.lengthRangePx[0] + 1));
+          let x = cx, y = cy;
+          for (let n = 0; n < len; n++) { this.ctx.fillStyle = P.colors[0]; this.ctx.fillRect(x, y, 1, 1); if (n === Math.floor(len / 2)) { this.ctx.fillStyle = P.colors[1]; this.ctx.fillRect(x + dir, y + 1, 1, 1); this.ctx.fillRect(x + dir * 2, y + 2, 1, 1); } if (n % 2) y -= 1; else x += dir; }
+          tips.push([x, y]);
+        });
+      }
+    }
+    for (const P of band.particles) {
+      if (P.kind === "spark" && increased && !(REDUCED && !ART.hud.damageText.reducedMotion.animateParticles)) {
+        const from = P.anchor === "crack_tips" && tips.length ? tips : corners.lower;
+        for (let n = 0; n < P.count; n++) { const [cx, cy] = from[n % from.length], dir = cx < box.x0 ? -1 : 1, life = P.lifetimeMs / 1000; list.push({ k: "spark", x: cx, y: cy, vx: dir * P.travelPx[0] / life * (0.6 + 0.4 * Math.random()), vy: P.travelPx[1] / life, life, max: life, color: P.colors[n % P.colors.length], size: P.sizeRangePx[0] + (n % 2) * (P.sizeRangePx[1] - P.sizeRangePx[0]) }); }
+      }
+      if (P.kind === "smoke") {
+        if (REDUCED) {                                                // 減少動態：保留瀕死煙的固定剪影
+          this.ctx.globalAlpha = P.maxOpacity; this.ctx.fillStyle = P.colors[0];
+          this.ctx.fillRect(right ? box.x0 - 6 : box.x0 + box.w + 3, ay - 3, 3, 2); this.ctx.fillRect(right ? box.x0 - 3 : box.x0 + box.w, ay - 7, 2, 2); this.ctx.globalAlpha = 1;
+        } else if (now - st.smokeAt >= P.spawnIntervalMs / 1000 && list.filter(q => q.k === "smoke").length < P.maxAlive) {
+          st.smokeAt = now; const life = P.lifetimeMs / 1000, sz = P.sizeRangePx[0] + Math.floor(Math.random() * (P.sizeRangePx[1] - P.sizeRangePx[0] + 1));
+          list.push({ k: "smoke", x: box.x0 + Math.random() * box.w, y: ay - 1, vx: P.travelPx[0] / life * (Math.random() < 0.5 ? -1 : 1), vy: P.travelPx[1] / life, life, max: life, color: P.colors[Math.floor(Math.random() * P.colors.length)], size: sz, op: P.maxOpacity });
+        }
+      }
+    }
+  }
+  drawHudFx(dt) {
+    const ctx = this.ctx;
+    for (const st of this.dmgFx) {
+      for (const q of st.parts) { q.life -= dt; q.x += q.vx * dt; q.y += q.vy * dt; }
+      st.parts = st.parts.filter(q => q.life > 0);
+      for (const q of st.parts) { const a = clamp(q.life / q.max, 0, 1); ctx.globalAlpha = q.k === "smoke" ? q.op * a : a; ctx.fillStyle = q.color; ctx.fillRect(Math.round(q.x), Math.round(q.y), q.size, q.k === "smoke" ? Math.max(1, q.size - 1) : q.size); }
+    }
+    ctx.globalAlpha = 1;
+  }
+  drawHudPixels(view, now, dt) {
     const ctx = this.ctx, H = ART.hud.playerPanels;
+    this.drawHudFx(dt);
     for (const f of view.fighters) {
       const right = f.i === 1, ax = right ? H.p2.anchorX : H.p1.anchorX, ay = H.p1.anchorY;
-      const band = PAL.damageBands.find(b => f.damage >= b.minInclusive && (b.maxInclusive === null || f.damage <= b.maxInclusive));
-      const box = this.drawDigits(`${Math.min(999, f.damage)}%`, ax, ay, band, right);
-      if (band.smoke && !REDUCED) {
-        const S = FX.damageSmoke;
-        for (let i = 0; i < S.maxPuffsPerPlayer; i++) { const k = (now * 0.8 + i / S.maxPuffsPerPlayer) % 1; ctx.globalAlpha = S.maxOpacity * (1 - k); ctx.fillStyle = band.smokeColor; ctx.fillRect(right ? box.x0 - 6 - i * 3 : box.x0 + box.w + 4 + i * 3, ay + 6 - Math.round(k * S.maxHeightPx), 2, 2); }
-        ctx.globalAlpha = 1;
-      }
+      const dmg = this.shownDamage(f), band = this.bandOf(dmg), st = this.dmgFx[f.i];
+      const increased = dmg > st.prev; if (increased) st.hitAt = now; st.prev = dmg; st.band = band;
+      // 受擊位移：依分級 motion.offsetsPx 每 frameMs 走一格（減少動態：不動）
+      let [ox, oy] = [0, 0];
+      const M = band.motion;
+      if (!REDUCED && M.trigger === "damage_increase" && st.hitAt) { const k = Math.floor((now - st.hitAt) * 1000 / M.frameMs); if (k < M.offsetsPx.length) [ox, oy] = M.offsetsPx[k]; }
+      const text = `${Math.min(999, dmg)}%`;
+      const box = { x0: right ? ax - this.digitsWidth(text) : ax, w: this.digitsWidth(text) };
+      this.hudParticles(f.i, band, box, ay, now, increased);
+      this.drawDigits(text, ax + ox, ay + oy, band, right);
       const [sw, sh] = H.stockSizePx, gap = H.iconGapPx, team = PAL.fighters["p" + (f.i + 1)];
       for (let i = 0; i < H.stockCount; i++) {
         const sx = right ? ax - sw - i * (sw + gap) : ax + i * (sw + gap), sy = ay + 28;
@@ -453,8 +631,8 @@ export class Renderer {
       }
     }
     this.drawPhaseBar(view, now);
-    this.drawKeyRow(view);
   }
+  digitsWidth(text) { return [...text].reduce((s, ch) => s + (DIGIT[ch]?.[0].length ?? 4) * 4 + 3, 0) - 3; }
   urgent(view) { const left = view.dur - view.t; return view.phase === PH.WINDOW ? left <= CONFIG.countdown.urgentSec : (view.phase === PH.MOVE || view.phase === PH.RPS) && left <= CONFIG.countdown.phaseTickLast; }
   timed(view) { return view.dur > 0 && [PH.MOVE, PH.RPS, PH.MASH, PH.SELECT, PH.WINDOW].includes(view.phase); }
   drawPhaseBar(view, now) {
@@ -475,58 +653,59 @@ export class Renderer {
     for (let s = 0.1; s < view.dur - 1e-6; s += 0.1) ctx.fillRect(x + Math.round(W * (s / view.dur)), y, 1, H);
     if (ph === PH.RPS) { ctx.fillStyle = PAL.hud.focusOutline; ctx.fillRect(x + Math.round(W * (1 - CONFIG.rps.reveal / CONFIG.rps.dur)), y - 3, 1, H + 6); }
   }
-  keyIcons(view) {
-    const ph = view.phase, r = view.round, I = ART.hud.keyRow.iconsByPhase;
-    if (ph === PH.MOVE) return { set: I.step, mid: "lock" };
-    if (ph === PH.RPS) return { set: view.t >= CONFIG.rps.reveal ? I.hidden_commit : I.standoff };
-    if (ph === PH.MASH) return { set: ["rock", "scissors", "paper"], mash: true };
-    if (ph === PH.SELECT) return { set: I.finisher_select };
-    if (ph === PH.WINDOW && r?.type) return r.type === "red" ? { set: I.red_roll, lit: r.dirs } : { set: I.blue_parry };
-    return { set: I.resolution };
-  }
-  drawKeyRow(view) {
-    const ctx = this.ctx, K = ART.hud.keyRow, [kw, kh] = K.keySizePx, x0 = K.centerX - (kw * 3 + K.gapPx * 2) / 2, y0 = K.topY;
-    const { set, mid, lit, mash } = this.keyIcons(view), btns = ["L", "M", "R"];
-    const hiddenPhase = view.phase === PH.RPS && view.t >= CONFIG.rps.reveal;
-    const mine = view.seat >= 0 ? view.fighters[view.seat] : null;
-    set.forEach((icon, i) => {
-      const x = x0 + i * (kw + K.gapPx), active = icon !== "inactive" || (i === 1 && mid === "lock");
-      const dirOk = !lit || (icon === "left_arrow" ? lit.includes(-1) : icon === "right_arrow" ? lit.includes(1) : true);
-      const sharedHidden = hiddenPhase && view.seat < 0;                 // 同機雙人：藏招時共用按鍵列不能洩露手勢
-      const pressed = this.keyFlash[btns[i]] > 0 && !sharedHidden;
-      const chosen = mine && view.phase === PH.RPS && mine.stance && mine.stance !== "hidden" && ["rock", "scissors", "paper"][i] === mine.stance;   // 自己的已選手勢
-      const dy = pressed ? 1 : 0;
-      ctx.globalAlpha = active && dirOk ? 1 : 0.35;
-      ctx.fillStyle = chosen ? PAL.hud.focusOutline : PAL.fighters.outline; ctx.fillRect(x - 1, y0 - 1, kw + 2, kh + 2);
-      ctx.fillStyle = PAL.hud.plate; ctx.fillRect(x, y0, kw, kh);
-      ctx.fillStyle = pressed ? PAL.hud.focusOutline : mash ? PAL.fx.impact.spark : active && dirOk ? PAL.hud.muted : PAL.hud.powerEmpty;
-      ctx.fillRect(x + 1, y0 + 1 + dy, kw - 2, 1); ctx.fillRect(x + 1, y0 + kh - 2 + dy, kw - 2, 1); ctx.fillRect(x + 1, y0 + 1 + dy, 1, kh - 3); ctx.fillRect(x + kw - 2, y0 + 1 + dy, 1, kh - 3);
-      const glyph = icon === "left_arrow" ? GLYPH.left : icon === "right_arrow" ? GLYPH.right : GLYPH[icon];
-      if (glyph) drawBitmap(ctx, glyph, x + Math.round((kw - glyph[0].length) / 2), y0 + 2 + dy + Math.round((kh - 10 - glyph.length) / 2), active && dirOk ? PAL.hud.label : PAL.hud.muted, PAL.fighters.outline);
-      else if (mid === "lock" && i === 1) { ctx.fillStyle = PAL.hud.muted; ctx.fillRect(x + 11, y0 + 7 + dy, 8, 6); ctx.fillRect(x + 12, y0 + 4 + dy, 1, 3); ctx.fillRect(x + 17, y0 + 4 + dy, 1, 3); ctx.fillRect(x + 12, y0 + 4 + dy, 6, 1); }
-      ctx.globalAlpha = 1;
-    });
+  // ---- 耐受度狀態字（% 數字下方；四級樣式依 ART.palette.damageBands，動態依 CONFIG.status） ----
+  //   穩如泰山：靜止｜腳步微晃：受擊彈跳縮放｜搖搖欲墜！：持續 ±1px 低頻抖動＋微弱火花｜瀕死！！：±2px 高頻震動＋紅白閃爍＋黑煙
+  drawStatusLabel(g, f, now) {
+    const st = this.dmgFx[f.i], band = st.band ?? this.bandOf(this.shownDamage(f)), L = ART.hud.damageText.statusLabel, S = CONFIG.status;
+    const right = f.i === 1, H = ART.hud.playerPanels, ax = (right ? H.p2.anchorX : H.p1.anchorX) + L.offsetFromPanelAnchorPx[0], ay = H.p1.anchorY + L.offsetFromPanelAnchorPx[1];
+    const crit = band.id === "critical";
+    let text = band.label, size = L.fontSizePx, dx = 0, dy = 0, scale = 1, fill = band.fill;
+    if (crit) { size += 2; if (Math.floor(now / S.altEverySec) % 2) text = S.criticalAlt; }
+    if (!REDUCED) {
+      const J = S.jitter[band.id];
+      if (J) { const k = Math.floor(now * J.hz) + f.i * 7; dx = ((k * 37) % 3 - 1) * J.px; dy = ((k * 53) % 3 - 1) * (J.px > 1 ? 1 : 0); }
+      if (band.id === "wobbling" && st.hitAt && now - st.hitAt < S.popMs / 1000) scale = 1 + 0.35 * Math.sin(Math.PI * (now - st.hitAt) / (S.popMs / 1000));
+      if (crit && (now % S.flashEverySec) < S.flashMs / 1000) fill = "#FFFFFF";
+      if (band.id === "teetering" && now - st.sparkAt > 0.45) {          // 微弱像素火花
+        st.sparkAt = now; const w = 52;
+        st.parts.push({ k: "spark", x: right ? ax - Math.random() * w : ax + Math.random() * w, y: ay + 2, vx: (Math.random() - 0.5) * 20, vy: -18, life: 0.3, max: 0.3, color: Math.random() < 0.5 ? "#FFD194" : "#F07848", size: 1 });
+      }
+      if (crit && now - st.sparkAt > 0.22) {                              // 字旁飄黑煙
+        st.sparkAt = now;
+        st.parts.push({ k: "smoke", x: right ? ax - 10 - Math.random() * 50 : ax + 10 + Math.random() * 50, y: ay + 4, vx: (Math.random() - 0.5) * 6, vy: -16, life: 0.55, max: 0.55, color: Math.random() < 0.5 ? "#251C2B" : "#151520", size: 2 + Math.floor(Math.random() * 2), op: 0.45 });
+      }
+    }
+    g.save();
+    g.translate(ax + dx, ay + dy + size); if (scale !== 1) { g.translate(right ? -20 : 20, -size / 2); g.scale(scale, scale); g.translate(right ? 20 : -20, size / 2); }
+    g.textAlign = right ? "right" : "left"; g.textBaseline = "alphabetic"; g.font = `900 ${size}px sans-serif`; g.lineJoin = "round";
+    g.fillStyle = band.shadow; g.fillText(text, 1, 1);
+    g.lineWidth = crit ? 3 : 2; g.strokeStyle = band.outline; g.strokeText(text, 0, 0);
+    g.fillStyle = fill; g.fillText(text, 0, 0);
+    if (band.topRim) { g.save(); g.beginPath(); g.rect(right ? -200 : 0, -size, 200, Math.max(1, size * 0.22)); g.clip(); g.fillStyle = band.topRim; g.fillText(text, 0, 0); g.restore(); }
+    g.restore();
   }
 
   // ---- HUD（高解析度文字） ----
   drawHudText(g, view, now) {
     const ph = view.phase, r = view.round, cam = this.cam, toScreen = (x, y) => [(x - cam.x) * cam.zoom + CONFIG.W / 2, (y - cam.y) * cam.zoom + CONFIG.H / 2];
     g.textBaseline = "alphabetic";
+    for (const f of view.fighters) this.drawStatusLabel(g, f, now);
     g.font = "bold 7px sans-serif";
     for (const f of view.fighters) {
       const right = f.i === 1, team = PAL.fighters["p" + (f.i + 1)];
       g.textAlign = right ? "right" : "left"; g.fillStyle = team.secondary;
-      g.fillText(this.names[f.i] + (view.seat === f.i ? "（你）" : ""), right ? 464 : 16, 66);
-      if (f.stun > 0) { g.fillStyle = "#9CD8FF"; g.fillText(`硬直 ${f.stun.toFixed(1)}s`, right ? 464 : 16, 76); }
+      g.fillText(this.names[f.i] + (view.seat === f.i ? "（你）" : ""), right ? 464 : 16, 81);
+      if (f.stun > 0) { g.fillStyle = "#9CD8FF"; g.fillText(`硬直 ${f.stun.toFixed(1)}s`, right ? 464 : 16, 91); }
     }
     g.textAlign = "center";
     const fin = ph === PH.WINDOW, left = Math.max(0, view.dur - view.t);
     let label = PH_LABEL[ph] ?? "";
-    if (ph === PH.RPS) label += view.t >= CONFIG.rps.reveal ? "・藏招" : "・亮招";
+    const deathmatch = view.fighters.some(f => this.shownDamage(f) >= PAL.damageBands[PAL.damageBands.length - 1].minInclusive);
+    if (ph === PH.RPS) label = (deathmatch ? CONFIG.deathmatchTitle : label) + (view.t >= CONFIG.rps.reveal ? "・藏招" : "・亮招");
     if (fin && r?.type) label = r.type === "red" ? "翻滾！紅招不可彈反" : "彈反！按克制手勢";
     if (ph === PH.SELECT && r) label = "終結擇：短按選手勢｜長按贏拳鍵＝紅光";
-    g.font = `bold ${fin ? 12 : 10}px sans-serif`;
-    g.fillStyle = fin ? (r?.type === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim) : PAL.hud.label;
+    g.font = `bold ${fin || (deathmatch && ph === PH.RPS) ? 12 : 10}px sans-serif`;
+    g.fillStyle = fin ? (r?.type === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim) : deathmatch && ph === PH.RPS ? PAL.fx.red.rim : PAL.hud.label;
     if (label) g.fillText(label, CONFIG.W / 2, 20);
     if (this.timed(view)) {
       const urgent = this.urgent(view);
@@ -541,24 +720,6 @@ export class Renderer {
       g.font = "bold 13px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(`${this.combo.n} HIT COMBO!`, 1, 1);
       g.fillStyle = this.combo.n >= 6 ? PAL.fx.red.core : PAL.fx.impact.spark; g.fillText(`${this.combo.n} HIT COMBO!`, 0, 0);
       g.restore();
-    }
-    const K = ART.hud.keyRow, [kw, kh] = K.keySizePx, x0 = K.centerX - (kw * 3 + K.gapPx * 2) / 2;
-    g.font = "bold 6px monospace"; g.fillStyle = PAL.hud.muted;
-    ["L", "M", "R"].forEach((b, i) => g.fillText(view.seat >= 0 ? CONFIG.keyLabel[0][b] : `${CONFIG.keyLabel[0][b]}·${CONFIG.keyLabel[1][b]}`, x0 + i * (kw + K.gapPx) + kw / 2, K.topY + kh - 2));
-    // 兩側：誰該做什麼
-    g.font = "bold 7px sans-serif";
-    for (const f of view.fighters) {
-      const right = f.i === 1, Kl = CONFIG.keyLabel[view.seat >= 0 ? 0 : f.i];
-      if (view.seat >= 0 && f.i !== view.seat) continue;              // 單人／線上只提示自己
-      let tip = "";
-      if (ph === PH.MOVE) tip = f.locked ? "已鎖定" : f.steps >= CONFIG.move.maxSteps ? "步數用完" : `${Kl.L}◀ ${Kl.M}鎖定 ${Kl.R}▶ 每步1氣`;
-      else if (ph === PH.RPS) tip = f.stun > 0 ? "硬直中：按鍵鎖死" : `${Kl.L}石 ${Kl.M}剪 ${Kl.R}布`;
-      else if (ph === PH.MASH && r) tip = f.i === r.att ? "狂按任意鍵追加連擊！" : "被壓著打…";
-      else if (ph === PH.SELECT && r) tip = f.i === r.att ? (f.power >= CONFIG.select.redCost ? `短按選手勢｜長按${Kl[r.winKey]}＝紅光` : "短按選終結手勢") : "準備防守…";
-      else if (fin && r?.type) tip = f.i === r.def ? (r.type === "blue" ? "按克制手勢！只有一次" : `往 ${r.dirs.map(d => (d < 0 ? Kl.L + "◀" : Kl.R + "▶")).join(" 或 ")} 翻滾！`) : "";
-      g.textAlign = right && view.seat < 0 ? "right" : "left";
-      g.fillStyle = fin && r?.def === f.i ? PAL.hud.focusOutline : PAL.hud.label;
-      g.fillText(tip, right && view.seat < 0 ? 464 : 16, 252);
     }
     for (const p of this.fx) {
       if (p.k === "text") {

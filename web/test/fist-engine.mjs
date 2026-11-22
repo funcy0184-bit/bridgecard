@@ -64,7 +64,7 @@ console.log("猜拳 → 連打 → 終結擇 → 藍光彈反");
   ok(e.round.att === 0, "石頭贏剪刀：P1 成為攻方");
   for (let i = 0; i < 12; i++) tap(e, 0, ["L", "M", "R"][i % 3], 0.01);     // 狂按 12 下
   until(e, () => e.phase === PH.SELECT);
-  ok(e.round.hits === 2 && e.round.extra === 4 && e.f[1].damage === 24 + 8, `連打：保底 2 拳 + 追加上限 4 拳（P2 ${e.f[1].damage}%）`);
+  ok(e.round.hits === 2 && e.round.extra === 4 && e.f[1].damage === 2 * CONFIG.mash.baseDamage + 4 * CONFIG.mash.extraDamage, `連打：保底 2 拳 + 追加上限 4 拳（P2 ${e.f[1].damage}%）`);
   ok(e.f[1].pos === 7, `保底兩拳把對手推到崖邊（格 ${e.f[1].pos}），撞崖邊停住`);
   ok(e.viewFor(1).round.gesture === null, "終結擇：守方看不到攻方選的手勢");
   tap(e, 0, "R");                                                            // 短按布：普通終結改成布
@@ -72,7 +72,7 @@ console.log("猜拳 → 連打 → 終結擇 → 藍光彈反");
   until(e, () => e.phase === PH.WINDOW);
   ok(e.viewFor(1).round.gesture === "paper" && e.viewFor(1).round.type === "blue", "判定窗：手勢公開、藍光");
   tap(e, 1, "M");                                                            // 剪刀剋布 → 彈反
-  ok(e.round.result === "parry" && e.f[0].damage === CONFIG.parry.counterDamage, "按克制手勢：完美彈反，原攻方吃反擊 +15%");
+  ok(e.round.result === "parry" && e.f[0].damage === CONFIG.parry.counterDamage, `按克制手勢：完美彈反，原攻方吃反擊 +${CONFIG.parry.counterDamage}%`);
   until(e, () => e.phase === PH.MOVE);
   ok(e.f[1].pos < e.f[0].pos && e.f[0].power === 3 && e.f[1].power === 3, `彈反互換站位（P1 格 ${e.f[0].pos}、P2 格 ${e.f[1].pos}）；回合結束雙方 +1 氣`);
 }
@@ -109,7 +109,7 @@ console.log("紅招：零氣閃避（翻滾穿過攻方）／按錯吃招擊飛 
 {
   const setup = S({ pos: 6, power: 2 }, { pos: 7, power: 0, damage: 110 }, { phase: PH.WINDOW, round: { att: 0, red: true } });
   const e = make(setup);
-  ok(JSON.stringify(e.round.zone) === "[7]" && JSON.stringify(e.round.dirs) === "[-1]", `崖邊：紅區 ${JSON.stringify(e.round.zone)}，只亮 ◀（${JSON.stringify(e.round.dirs)}）`);
+  ok(JSON.stringify(e.round.zone) === "[6,7]" && JSON.stringify(e.round.dirs) === "[-1]", `崖邊：紅區 ${JSON.stringify(e.round.zone)}，只亮 ◀（${JSON.stringify(e.round.dirs)}）`);
   tap(e, 1, "L");
   ok(e.round.result === "roll" && e.f[1].pos === 5, `0 氣照樣翻滾 2 格到格 ${e.f[1].pos}（穿過格 6 的攻方）`);
   const e2 = make(setup);
@@ -125,11 +125,12 @@ console.log("擊飛公式");
   const e = make(S({ pos: 3, power: 2 }, { pos: 4, power: 2, damage: 40 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }));
   run(e, 0.55);
   const ev = e.log.find(x => x.type === "finisher_hit"), R = CONFIG.resolve;
-  ok(Math.abs(ev.v - R.vBase * (1 + 60 / R.damageDiv)) < 1e-6, `藍光：V = vBase × (1 + 60/60) = ${ev.v.toFixed(1)}`);
+  const d = 40 + CONFIG.finisherDamage;
+  ok(Math.abs(ev.v - R.vBase * (1 + d / R.damageDiv)) < 1e-6, `藍光：V = vBase × (1 + ${d}/${R.damageDiv}) = ${ev.v.toFixed(1)}`);
   const e2 = make(S({ pos: 3, power: 2 }, { pos: 4, power: 2, damage: 40 }, { phase: PH.WINDOW, round: { att: 0, red: true } }));
   run(e2, 0.55);
   const ev2 = e2.log.find(x => x.type === "finisher_hit");
-  ok(Math.abs(ev2.v - R.vBase * 2 * R.redMult) < 1e-6, `紅光：再 × ${R.redMult} = ${ev2.v.toFixed(1)}`);
+  ok(Math.abs(ev2.v - R.vBase * (1 + d / R.damageDiv) * R.redMult) < 1e-6, `紅光：再 × ${R.redMult} = ${ev2.v.toFixed(1)}`);
 }
 
 console.log("拼刀與回氣");
@@ -151,6 +152,18 @@ console.log("flow 中途 reset 不吞事件（教學用）");
   until(e, () => e.phase === PH.WINDOW);
   ok(has(e, "mash_end", x => x.extra === 4), "連打結束時 flow 換段：mash_end（追加 4）仍有送出");
   ok(e.phase === PH.WINDOW && e.round.att === 1, "且已換到下一段的設定");
+}
+
+console.log("紅區永遠兩格、線上延遲寬容");
+{
+  const e = make(S({ pos: 3, power: 2 }, { pos: 4, power: 0 }, { phase: PH.WINDOW, round: { att: 0, red: true } }));
+  ok(JSON.stringify(e.round.zone) === "[4,5]", `台中央：紅區是守方腳下＋往外一格（${JSON.stringify(e.round.zone)}）`);
+  const late = grace => { const x = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }), rng: () => 0.1, windowGrace: grace }); x.log = []; run(x, CONFIG.window.dur + 0.04); x.input(1, "down", "R"); run(x, STEP * 2); return x.round.result; };
+  ok(late(0) === "hit", "本機（無寬容）：0.54s 才按 → 已逾時吃招");
+  ok(late(CONFIG.net.windowGraceMs / 1000) === "parry", `線上（寬容 ${CONFIG.net.windowGraceMs}ms）：0.54s 抵達的正確按鍵仍算彈反`);
+  const x = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }), rng: () => 0.1, windowGrace: 0.08 }); x.log = [];
+  run(x, CONFIG.window.dur + 0.09);
+  ok(x.round.result === "hit" && has(x, "timeout"), "寬容期過了才逾時");
 }
 
 console.log(fails ? `\n✗ ${fails} 項沒過` : "\n全部通過");

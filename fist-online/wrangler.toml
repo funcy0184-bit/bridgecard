@@ -1,0 +1,28 @@
+# 《拳刃交鋒》線上對戰：獨立的 Worker（跟來打橋牌主站 web/wrangler.jsonc 完全分開，不會被主站自動部署帶到）
+#   本機：npx wrangler dev --port 8790      → http://127.0.0.1:8790/
+#   部署：npx wrangler deploy              → https://fist-duel.<帳戶子網域>.workers.dev（要部署前先問過專案負責人）
+name = "fist-duel"
+main = "worker/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+preview_urls = false
+
+# 前端靜態檔：直接用 web/public/fist（index.html、src/*.js、美術圖）
+#   /api/* 與 /ws/* 先給 Worker 處理，其餘都是靜態檔
+[assets]
+directory = "../web/public/fist"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/ws/*"]
+
+# 每個 4 碼房號 = 一個 GameRoom Durable Object（權威狀態機＋WebSocket 廣播）
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "GameRoom"
+
+# 免費方案要用 SQLite 版的 Durable Object
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+[observability]
+enabled = true

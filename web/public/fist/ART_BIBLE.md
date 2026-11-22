@@ -1,6 +1,6 @@
 # 《拳刃交鋒》像素視覺聖經
 
-美術規格 v1.0 · 供角色美術與 Claude Canvas 實作使用
+美術規格 v1.1 · 供角色美術與 Claude Canvas 實作使用
 
 畫面是一座夜色中的浮空石台。玩家先看武者的姿勢猜拳，再看終結提示決定是彈反還是翻滾。**藍招看攻方頭頂，紅招看腳下。** 兩套提示在第一幀就顯示完整形狀和可用按鍵，目標是在 200 ms 內分出操作種類。500 ms 是藍招的輸入時間，200 ms 是辨識測試目標。
 
@@ -35,16 +35,24 @@
 
 ## 2　前搖剪影與藏招
 
-架式切換後，**第 0 格就給完整、可辨識的剪影**。後面幾格只讓呼吸、衣角或武器浮動 1–2 px。美術上用 **1,300 ms 公開架式＋500 ms 藏招**作時間分配，切換瞬間以遊戲事件為準。
+三種手勢各自換上實體武器：**石頭拿雙手大槌子，剪刀拿一把大剪刀，布拿一個大布袋。** 架式切換後，第 0 格就露出武器特徵；後面用六幀表現重心、開闔或布料甩動。美術上用 **1,300 ms 公開架式＋500 ms 藏招**作時間分配，切換瞬間以遊戲事件為準。
 
 | 手勢 | 一眼看到的輪廓 | 48 px 畫布內的畫法 |
 | --- | --- | --- |
-| 石頭 `stance_rock` | **高、重、一整塊。** | 雙手舉起一顆約 11 × 8 px 的方錘頭，置於頭頂前側，錘柄斜過肩。前腿扎穩，背後留空。黑稿會先看到一個明顯高點。 |
-| 剪刀 `stance_scissors` | **低、尖、兩條線。** | 蹲低前傾，兩把短刃朝正前方伸出。刀尖相差 4–6 px 高度，中間保留至少 3 px 空隙。避免交叉成單一大方塊。 |
-| 布 `stance_paper` | **寬、開、兩個掌面。** | 雙肘向外，一手前上、一手前下，約 5 px 寬的手掌能從前臂分出來。兩掌與胸口留空，能看到一個開放的框形。 |
+| 石頭 `stance_rock` | **頭上有一顆大方槌。** | 槌頭約 14 × 9 px，雙手握住一根長柄。槌先斜架到肩上，膝蓋吃重微沉，再抬回原位。高點和方頭在六幀裡一直看得見。 |
+| 剪刀 `stance_scissors` | **身前一把張開的 V 字大剪刀。** | 角色壓低並雙手操控同一把剪刀。畫出中央鉸鏈和兩個柄環，把刃尖的空隙留到至少 4 px。架式會小幅開闔；完整剪合留給出手。 |
+| 布 `stance_paper` | **側身拖著一個鼓鼓的大布袋。** | 兩手抓袋口兩側，袋身約 16 × 14 px。收窄袋口，保留圓鼓袋腹與垂落的下緣。角色先提，袋身慢一幀才被帶起，回落時在腳邊輕擠一下。 |
 | 藏招 `stance_hidden` | **雙方都回到收手黑影。** | 到藏招瞬間直接切入共用收手姿勢。清掉上一架式的武器、粒子、殘影與對手可見的手勢圖示。藏招期間可沿用隊伍角標或衣領辨識色，但不能跟著新手勢改輪廓。自己的按鍵列仍能回饋已選手勢。 |
 
-先把三種架式全塗成實色，左右鏡像各看一次。即使拿掉隊伍配色、武器高光和字幕，也應能看出「高方錘、低雙尖、寬雙掌」。如果兩把刀在縮放後黏成一條，先拉開間距。
+先把三種架式全塗成實色，左右鏡像各看一次。應能從三個外形認出：高處方槌、前方 V 字剪刀、下方鼓袋。如果剪刀在縮放後只剩一道線，優先拉開刃尖；如果布袋像盾牌，縮窄袋口並讓下緣有下垂和反彈。
+
+| 武器 | 拼刀 `clash` | 連段 `combo_1` → `combo_2` | 藍招 `finisher_blue` | 紅招 `finisher_red` |
+| --- | --- | --- | --- | --- |
+| 大槌子 | 槌頭相碰，雙臂被重量震低。 | 用槌柄短頂，接著轉髖低掃。 | 跨步下砸，一拍停住，再費力拔槌。 | 把槌拉過頭頂猛砸地面，槌頭沉住，碎石往外甩。 |
+| 大剪刀 | 張開的刃口交扣，拔開後兩人退步。 | 用半開刃前刺，下一拍大幅開闔。 | 身體跨前，剪刃張開後瞬間合攏，再甩腕張回。 | 低身拖開剪刀，貼地橫掃後重重剪合，斜向火花沿刃口甩出。 |
+| 大布袋 | 袋腹相撞擠扁，彈回時袋口晚一拍落下。 | 用打結的袋口短甩，接著轉身甩出鼓袋。 | 袋口短暫罩住對方輪廓，隨即一抖把人甩出去。 | 雙手掄起整袋拍地，布面先壓扁，再向外翻起一圈布浪。 |
+
+槌子靠慢抬與沉重收招，剪刀靠瞬間咬合，布袋靠慣性、擠壓與回彈。布袋短暫罩人的畫面從接觸事件開始，佔用既有命中演出。三種動畫都沿用相同的判定時點、傷害和原有危險區。武器的槌頭、鉸鏈與袋口都留在 48 × 48 角色格裡，延伸到角色格外的火花、地裂和布浪由特效層繪製。
 
 ## 3　兩種終結技的第一幀
 
@@ -92,15 +100,15 @@
 | 0 | `idle` | 6／10 | 站姿、吸氣、落肩；循環。腳底固定。 |
 | 1 | `step` | 5／24 | 壓腳 → 蹬地 → 側移 → 落腳 → 回穩。第 1 格蹬、第 3 格落。 |
 | 2 | `exhausted` | 6／12 | 二連移動後剎步，彎腰喘氣，肩下沉再抬頭。腳底留在第二步終點。實際能恢復輸入的時點由遊戲狀態切換。 |
-| 3 | `stance_rock` | 4／12 | 第 0 格已舉起高方錘。後續只讓錘柄和肩下沉 1 px。循環。 |
-| 4 | `stance_scissors` | 4／12 | 第 0 格就亮出雙刃尖，前傾蓄勢，保留雙尖間距。循環。 |
-| 5 | `stance_paper` | 4／12 | 第 0 格雙掌已展開，吸氣時手掌輕移。循環。 |
+| 3 | `stance_rock` | 6／12 | 第 0 格亮出大槌，第 2 格膝蓋吃重，第 4 格抬回原高度。循環。 |
+| 4 | `stance_scissors` | 6／12 | 第 0 格是 V 字大剪刀，第 2 格開至最大，第 4 格半合。循環。 |
+| 5 | `stance_paper` | 6／12 | 第 0 格亮出鼓袋，第 2 格先提袋口，第 4 格袋腹擠壓回彈。循環。 |
 | 6 | `stance_hidden` | 4／8 | 第 0 格直接換成收手黑影；只留小幅衣角變化，最後一格維持到藏招結束。 |
-| 7 | `clash` | 5／24 | 第 1 格武器接觸，第 3 格雙方彈開。火花由程式產生。 |
-| 8 | `combo_1` | 5／24 | 壓身、跨步、短打。第 2 格接觸，第 4 格收臂。 |
-| 9 | `combo_2` | 6／24 | 轉髖、上步、大幅揮擊。第 3 格接觸，第 5 格回收。 |
-| 10 | `finisher_blue` | 10／16 | 第 0–7 格是蓄力，第 8 格命中，第 9 格收招。頭頂手勢框走獨立特效層。 |
-| 11 | `finisher_red` | 10／16 | 第 0–7 格先壓身蓄力再升武器，第 8 格重砸，第 9 格隨重量回收。紅區和箭頭由程式繪製。 |
+| 7 | `clash` | 5／24 | 第 1 格武器接觸，第 3 格雙方彈開。依手勢切武器動作。 |
+| 8 | `combo_1` | 5／24 | 第 2 格接觸，第 4 格收招。大槌柄頂、大剪刀前刺或布袋口短甩。 |
+| 9 | `combo_2` | 6／24 | 第 3 格接觸，第 5 格收招。大槌低掃、大剪刀開闔或鼓袋轉甩。 |
+| 10 | `finisher_blue` | 10／16 | 第 0–7 格蓄力、第 8 格接觸、第 9 格收招。各武器分別下砸、剪合、套甩。 |
+| 11 | `finisher_red` | 10／16 | 第 0–7 格蓄力、第 8 格接觸、第 9 格收招。各武器分別砸地、掃剪、布浪。 |
 | 12 | `parry_success` | 6／24 | 第 0 格接招，第 1 格架住，第 3 格跨身，第 5 格落位。換位座標跟遊戲事件。 |
 | 13 | `roll` | 6／24 | 第 0 格蹲，第 2 格團身，第 4 格腳踩地，第 5 格起身。 |
 | 14 | `hitstun` | 4／20 | 第 0 格肩先退，第 2 格踉蹌，最後一格守到允許恢復。 |
@@ -108,7 +116,7 @@
 
 切圖用 0 起算。假設 `animation = spec.spriteAtlas.animations[state]`，第 `f` 格用 `sx = 1 + 50*f` 與 `sy = 1 + 50*animation.row`，源矩形寬高都是 48。將腳底 `(24,40)` 對齊遊戲角色位置。JSON 裡的 `contact` 錨點是建議的火花位置。遊戲若已提供雙方實際接觸點，火花以該座標為準。
 
-第一批圖的藍招可共用跨步揮擊，猜拳屬性由頭頂圖示顯示；紅招先共用雙手下砸。若後續要讓每種普通終結技真的揮不同武器，再為 `finisher_blue` 加圖像變體，沿用相同的時間軸和 HUD。
+基礎圖集的五種攻擊動作畫大槌。大剪刀與大布袋各有 `clash`、`combo_1`、`combo_2`、`finisher_blue`、`finisher_red` 五條獨立動畫。每位角色加一張 **500 × 500 px** 武器圖集，前五列畫大剪刀，後五列畫大布袋，列序按上述五種狀態排列。格距、透明邊和腳底錨點都與基礎圖集一致。武器圖集每個變體沿用該狀態的幀數、FPS 和接觸幀，只替換圖格和火花錨點。
 
 ## 7　交給 Claude 的串接約定
 
@@ -116,21 +124,29 @@
 
 遊戲向畫面提供 `phase`、`cueAt`、`deadlineAt`、`attackerId`、`defenderId`、招式手勢、危險格索引及安全翻滾方向。畫面以遊戲時鐘和這些欄位顯示提示，下個畫面更新時立刻顯示正確剩餘量。全部結束時間以遊戲邏輯為準，Sprite FPS 都是建議播放速度。以預設 16 FPS 播放時，終結技的前八格正好 500 ms；如果測試改了時窗，把第 0–7 格映射到新的提示時間，第 8 格仍在接觸事件上播放。命中、彈反、換位和 KO 只在程式確認事件後播對應演出。`hold_last` 代表播放完停最後一格，`tail_loop` 代表首段只播一次，從 `loopStartFrame` 開始循環，`event_driven` 代表接觸幀和結算事件對齊。正式圖檔完成後依 JSON 的 `imageByPlayer` 檔名接入。
 
+`weapons.byGesture` 將猜拳手勢對應到武器。拼刀和兩段連擊讀已結算的猜拳手勢，終結技讀已確認的出招手勢；如果兩者不同，在終結技提示亮起時換武器。大剪刀和布袋從 `weaponVariantAtlas` 讀該狀態的列索引。變體圖未就緒時，暫時顯示對應武器的架式並照常播放共用特效，避免大剪刀或布袋出手突然變成槌子。猜拳 HUD 維持同一套手勢圖示。
+
 ## 8　AI 生圖英文 Prompt
 
 **Prompt A · 武者設計與前搖剪影參考**
 
 ```text
-Create an original 2D pixel-art concept sheet for a side-view 1v1 browser platform fighter. Show two full-body martial artists, both in strict profile facing screen right, on a plain slate background. Use a crisp 16-bit arcade sprite aesthetic with hand-placed hard square pixels, 1-pixel stepped outlines, flat cel shading, and restrained readable detail. Give fighter A a burnt-ochre jacket (#D58941), ivory shoulder plate and belt (#FFF0C3), a squared shoulder silhouette, and dark outline (#10121B). Give fighter B a jade jacket (#4BB381), pale mint collar and split short cloak (#C6F9D8), and a low angled shoulder silhouette. They have identical sprite scale and comparable reach. Design them to remain readable in a native 48-by-48 pixel frame, with the body about 18 by 26 pixels and room for the weapon. Show each fighter in three clearly distinct windup poses at the same foot baseline: (1) ROCK, a broad rectangular hammer head raised above the shoulder, with one high block silhouette; (2) SCISSORS, a low forward lean with two parallel pointed short blades separated by a visible dark gap; (3) PAPER, elbows wide and both flat palms visible, one high and one low, with open negative space between the palms and torso. Arrange the same three poses in a second pass as solid black silhouettes. Keep the figures original, clean, and readable even at thumbnail size. No labels, no environmental scenery, no UI, no ground effects, no large bloom, no anti-aliasing, no painterly textures, no perspective or three-quarter views.
+Create an original 2D pixel-art weapon pose sheet for a side-view 1v1 browser platform fighter. Show two full-body martial artists in strict profile facing screen right on a plain slate background. Use a crisp 16-bit arcade sprite aesthetic, stepped 1-pixel outlines, flat shading, and clean clusters. Fighter A has a burnt-ochre jacket (#D58941), ivory shoulder plate and belt (#FFF0C3), and square shoulders. Fighter B has a jade jacket (#4BB381), pale mint collar and split short cloak (#C6F9D8), and angled shoulders. Both use the same scale, about 18-by-26 body pixels inside a 48-by-48 active frame. Give each fighter three poses, each showing a different large handheld physical prop. ROCK: a two-handed oversized sledgehammer with a rectangular head, held high above the shoulder on one long handle, with bent knees under its weight. SCISSORS: one giant hinged pair of shears with one clear center pivot and two loop handles, held low and open toward the opponent, with an unmistakable V-shaped blade gap. PAPER: a big rounded cloth sack grasped with both hands at its gathered mouth, hanging below waist level with a bulging belly, a visible seam, and a soft sagging bottom. Include a matching solid-black silhouette pass. Use the same foot baseline, faces, clothes, proportions and facing throughout. No swords, handheld fans, shields, empty-hand poses, labels, environment, ground effects, blur, anti-aliasing, or three-quarter views.
 ```
 
-**Prompt B · 紅招 Sprite Strip 候選稿**
+**Prompt B · 武器紅招 Sprite Strip 候選稿**
 
 ```text
-Create a game sprite strip for the red finisher of the attached original ochre fighter. Preserve the reference character's head, face, ivory shoulder plate, belt, proportions, pixel clusters, and hammer shape in every frame. Strict 2D side view, facing screen right throughout. Exactly ten frames in one horizontal row on a transparent background, visual target canvas 500 pixels by 50 pixels. Each slot is 50 by 50 pixels with a centered 48-by-48 pixel active frame and a 1-pixel transparent border on all sides. Use local foot pivot (24, 40) within the active frame as a shared baseline in all frames. Frame 0: low planted ready pose. Frame 1: knees compress. Frame 2: shift the hammer back. Frame 3: rotate the shoulder and grip. Frame 4: raise the hammer overhead. Frame 5: settle under the hammer. Frame 6: hold the loaded arc. Frame 7: lean into the last windup. Frame 8: heavy downward strike, with the hammer still entirely inside the cell. Frame 9: low heavy follow-through with the front foot planted. Keep body scale fixed. Use clean hand-placed pixel clusters, hard alpha edges, and the reference palette. No text, numbers, grid lines, background, floor, drop shadow, camera changes, duplicated frames, interpolated blur, or cropping. Exclude hit sparks, danger stripes, glows, arrows, and motion trails so the game can draw those separately.
+Create a red-finisher sprite strip for the attached original fighter using exactly one prop and one motion beat list provided below. Preserve the reference fighter's face, clothing, proportions and palette. Strict 2D side view, facing screen right. Exactly ten distinct frames in one horizontal row on transparent alpha, target canvas 500 by 50 pixels. Each slot is 50 by 50 pixels with a centered 48-by-48 active frame and a 1-pixel transparent border. Use local foot pivot (24, 40) as a shared baseline. Frames 0 through 7 are a continuous windup, frame 8 is the first contact, frame 9 is follow-through. Keep the fighter and physical prop inside the cell. Clean hard pixels and consistent prop construction. No labels, floor, shadow baked into the strip, grid lines, perspective, camera motion, extra weapons, sparks, danger stripes, glow, arrows, trails, or motion blur.
 ```
 
-用 Prompt B 的格式一次做一個狀態，把幀數、動作和角色參考換掉。生圖是動作候選稿。最終需人工校正透明底、固定腳底、武器長度、實際畫布尺寸及逐格位置，再排入正式表格；光效、HUD 和傷害字不烘進 PNG。左右鏡像用程式跑一次，確認接觸點也跟著翻。
+將以下其中一條動作指令接在 Prompt B 後，再附上該角色的參考圖。
+
+- **Hammer.** Frames 0–2 lower the body and drag the oversized sledgehammer back; 3–5 rotate the shoulders and heave it overhead; 6–7 lean into the loaded swing; 8 plant the hammer head hard into the ground plane; 9 leave the head low and let both shoulders jolt from the impact.
+- **Giant shears.** Frames 0–2 lower a single hinged pair of oversized shears; 3–5 pull the handles apart to form a clear open V; 6–7 twist into a low forward sweep; 8 snap both blades shut around the center hinge; 9 let the wrists recoil and open the blades slightly. Both blades always belong to the same hinged tool.
+- **Cloth sack.** Frames 0–2 haul up a large soft cloth sack by its gathered mouth; 3–5 lift the arms first and let the rounded sack belly lag behind; 6–7 carry the bulging sack overhead; 8 slam the sack belly down and flatten it against the ground plane; 9 keep the arms planted while the soft cloth edge ripples and the bag rebounds. The sack remains closed at impact.
+
+一次做一個武器與狀態。做其他招式時也要把模板的總幀數、接觸幀和動作描述改成該列規格。生圖是動作候選稿，排入圖集前要人工校正透明底、腳底位置、武器尺寸、畫布和逐格位置。光效、HUD 和傷害字由程式渲染。左右鏡像後檢查火花錨點也跟著翻。
 
 ## 9　驗收時看哪裡
 

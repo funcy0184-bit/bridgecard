@@ -35,10 +35,12 @@ export class Engine {
    * @param {() => number} [opts.rng]   亂數（逾時沒出拳時隨機）
    * @param {(from:string,to:string,engine:Engine)=>void|{phase?:string,data?:object,reset?:object}} [opts.flow]
    *        階段切換前的掛鉤（教學用來重來、跳關、停在 IDLE）
+   * @param {number} [opts.windowGrace]  終結判定窗的延遲寬容（秒）：線上伺服器設 0.08，畫面倒數仍是 0.5s，伺服器多收這段時間內抵達的按鍵
    */
   constructor(opts = {}) {
     this.rng = opts.rng ?? Math.random;
     this.flow = opts.flow ?? null;
+    this.windowGrace = opts.windowGrace ?? 0;
     this.reset(opts.setup ?? DEFAULT_SETUP);
   }
 
@@ -110,10 +112,11 @@ export class Engine {
       }
       const r = this.round, att = this.f[r.att], def = this.f[r.def];
       r.done = false; r.type = r.red ? "red" : "blue"; r.cueAt = this.rt; r.result = null;
-      att.stance = r.red ? "rock" : r.gesture; att.fin = 0;
+      att.stance = r.gesture; att.fin = 0;                                   // 終結技拿「已公開的出招手勢」那把武器（紅招＝贏拳手勢）
       r.away = Math.sign(def.pos - att.pos) || 1;
       if (r.red) {                                                        // 危險格在提示亮起時鎖定，到收招都不變
-        r.zone = [def.pos, def.pos + r.away].filter(c => c >= 1 && c <= C.cells);
+        const next = def.pos + r.away;                                    // 規格：相鄰兩格（崖邊時往台內補一格）
+        r.zone = next >= 1 && next <= C.cells ? [def.pos, next].sort((x, y) => x - y) : [def.pos - r.away, def.pos].sort((x, y) => x - y);
         r.dirs = [-1, 1].filter(d => { const to = def.pos + d * C.roll.cells; return to >= 1 && to <= C.cells && to !== att.pos; });
         this.setAnim(att, "finisher_red");
       } else { r.zone = []; r.dirs = []; this.setAnim(att, "finisher_blue"); }
@@ -233,7 +236,7 @@ export class Engine {
   // ---------------- PHASE_MASH（連打加壓） ----------------
   [`upd_${PH.MASH}`](dt, evs, ph) {
     const r = this.round, att = this.f[r.att], def = this.f[r.def], C = CONFIG.mash;
-    // 保底自動兩拳：+12% ×2、把對手往崖邊推（撞崖邊強制停住）
+    // 保底自動兩拳：各 +baseDamage%、把對手往崖邊推（撞崖邊強制停住）
     while (r.hits < C.baseHits.length && this.t >= C.baseHits[r.hits]) {
       r.hits++;
       def.damage += C.baseDamage;
@@ -244,7 +247,7 @@ export class Engine {
       this.emit("hit", { p: def.i, kind: "base", n: r.hits, damage: C.baseDamage, combo: r.hits + r.extra, x: def.x, toward: away });
       this.emit("hitstop", { ev: r.hits === 1 ? "combo_1" : "combo_2" });
     }
-    // 狂按任意三鍵：每 2 下追加 1 拳小連擊 +2%，上限 4 拳
+    // 狂按任意三鍵：每 2 下追加 1 拳小連擊 +extraDamage%，上限 4 拳
     for (const e of evs) {
       if (this.phase !== ph) return;
       if (e.type !== "down" || e.p !== r.att) continue;
@@ -270,18 +273,19 @@ export class Engine {
       if (this.phase !== ph) return;
       if (e.p !== r.att || r.red) continue;
       if (e.type === "down") {
-        if (e.btn === r.winKey && att.power >= S.redCost) { r.charging = true; r.chargeStart = this.rt; r.gesture = r.winGesture; this.emit("charge_start", { p: att.i }); }
-        else { if (r.charging) this.emit("charge_stop", { p: att.i }); r.charging = false; r.gesture = GESTURE_OF[e.btn]; this.emit("finisher_pick", { p: att.i, gesture: r.gesture, private: att.i }); }
+        // 蓄力事件標 private：守方只在紅光成形（red_ready）那一刻才知道
+        if (e.btn === r.winKey && att.power >= S.redCost) { r.charging = true; r.chargeStart = this.rt; r.gesture = r.winGesture; this.emit("charge_start", { p: att.i, private: att.i }); }
+        else { if (r.charging) this.emit("charge_stop", { p: att.i, private: att.i }); r.charging = false; r.gesture = GESTURE_OF[e.btn]; this.emit("finisher_pick", { p: att.i, gesture: r.gesture, private: att.i }); }
         r.chosen = true;
       } else if (e.type === "up" && r.charging && e.btn === r.winKey) {
-        r.charging = false; this.emit("charge_stop", { p: att.i });              // 未滿 0.3s 放開：藍光普通終結、不扣氣
+        r.charging = false; this.emit("charge_stop", { p: att.i, private: att.i });              // 未滿 0.3s 放開：藍光普通終結、不扣氣
       }
     }
     if (r.charging && this.held(r.att, r.winKey) && this.rt - r.chargeStart >= S.chargeTime) {   // 長按贏拳鍵滿 0.3s：紅光強化
       r.charging = false; r.red = true; att.power -= S.redCost; att.redGlow = true;
       this.emit("red_ready", { p: att.i });
     }
-    if (this.t >= this.dur) { if (r.charging) this.emit("charge_stop", { p: att.i }); r.charging = false; this.go(PH.WINDOW); }
+    if (this.t >= this.dur) { if (r.charging) this.emit("charge_stop", { p: att.i, private: att.i }); r.charging = false; this.go(PH.WINDOW); }
   }
 
   // ---------------- PHASE_FINISHER_WINDOW（接受區間 cueAt ≤ now < deadlineAt） ----------------
@@ -299,7 +303,7 @@ export class Engine {
       }
       return;
     }
-    if (!r.done && this.t >= this.dur) { r.done = true; this.emit("timeout", { p: r.def }); this.finisherHit(); }
+    if (!r.done && this.t >= this.dur + this.windowGrace) { r.done = true; this.emit("timeout", { p: r.def }); this.finisherHit(); }
   }
   parry() {
     const r = this.round, att = this.f[r.att], def = this.f[r.def];
@@ -309,7 +313,7 @@ export class Engine {
     this.emit("hitstop", { ev: "parry_success", ms: CONFIG.parry.hitstopMs });
     [att.pos, def.pos] = [def.pos, att.pos];                                  // 互換站位
     this.setAnim(def, "parry_success");
-    att.damage += CONFIG.parry.counterDamage;                                 // 原守方反打一下重拳：+15%、擊退 1 格（撞崖邊停住）
+    att.damage += CONFIG.parry.counterDamage;                                 // 原守方反打一下重拳、擊退 1 格（撞崖邊停住）
     const away = Math.sign(att.pos - def.pos) || 1;
     const to = clamp(att.pos + away * CONFIG.parry.counterKnock, 1, CONFIG.cells);
     if (to !== def.pos) att.pos = to;
@@ -333,7 +337,7 @@ export class Engine {
     const r = this.round, att = this.f[r.att], def = this.f[r.def], R = CONFIG.resolve;
     r.result = "hit";
     def.damage += CONFIG.finisherDamage;
-    const v = R.vBase * (1 + def.damage / R.damageDiv) * (r.red ? R.redMult : 1);   // V = V_base × (1 + damage / 60)（紅招 × 1.45）
+    const v = R.vBase * (1 + def.damage / R.damageDiv) * (r.red ? R.redMult : 1);   // V = V_base × (1 + damage / damageDiv)（紅招 × redMult）
     const a = R.angleDeg * Math.PI / 180;
     def.vx = Math.cos(a) * v * r.away; def.vy = -Math.sin(a) * v; def.air = true; def.rot = 0;
     att.fin = 1;

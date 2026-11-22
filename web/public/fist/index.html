@@ -25,13 +25,29 @@
   .link { font: 12px monospace; color: var(--muted); word-break: break-all; margin: 0; }
   #game { padding: 0; place-items: center; }
   canvas#screen { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
-  .bar { position: fixed; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; pointer-events: none; z-index: 2; }
+  .bar { position: fixed; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; pointer-events: none; z-index: 4; }   /* 房間面板開著時，上排按鈕（回大廳、出招提示、延遲）仍可按 */
   .bar > * { pointer-events: auto; }
   .tag { font-size: 12px; color: var(--muted); background: rgba(16,24,39,.8); padding: 4px 8px; border-radius: 4px; }
   .tiny { font: 600 12px/1 inherit; color: var(--ink); background: var(--plate); border: 1px solid var(--edge); border-radius: 4px; padding: 7px 10px; cursor: pointer; }
   #objective { position: fixed; left: 50%; top: 40px; transform: translateX(-50%); max-width: calc(100% - 24px); font-size: 15px; font-weight: 700; color: var(--focus); background: rgba(16,24,39,.9); border: 2px solid var(--gold); border-radius: 4px; padding: 8px 14px; z-index: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #objective.retry { border-color: var(--red); color: #FFD0A1; }
-  #netStatus { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); font-size: 13px; color: var(--focus); background: rgba(16,24,39,.9); border: 1px solid var(--edge); border-radius: 4px; padding: 6px 12px; z-index: 2; }
+  .tiny.hint[aria-pressed="false"] { color: var(--muted); }
+  .panel > .tiny.hint { align-self: center; }
+  #ping[data-q="good"] { color: #7FE3A0; } #ping[data-q="ok"] { color: var(--gold); } #ping[data-q="bad"] { color: var(--red); }
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10,15,26,.62); z-index: 3; padding: 16px; }
+  .roomCard { width: min(420px, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 8px; background: var(--plate); border: 2px solid var(--gold); border-radius: 6px; padding: 14px 16px; box-shadow: 0 6px 0 #05080F; }
+  .rTitle { margin: 0; text-align: center; color: var(--muted); font-size: 13px; } .rTitle b { display: block; font: 800 40px/1.1 monospace; letter-spacing: .3em; color: var(--focus); padding-left: .3em; }
+  .rHead { margin: 0; text-align: center; font-weight: 800; color: var(--gold); min-height: 1.2em; }
+  .copy { align-self: center; font-size: 14px; padding: 9px 14px; border-color: var(--gold); }
+  .seats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seat { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 2px solid var(--edge); border-radius: 4px; font-size: 13px; color: var(--muted); }
+  .seat b { color: var(--ink); } .seat.on { border-color: #4E7A63; } .seat.on span::before { content: "● "; color: #7FE3A0; }
+  .seat.ready { border-color: var(--gold); background: rgba(244,213,140,.08); } .seat.ready span { color: var(--gold); font-weight: 800; }
+  .btn.ready { align-items: center; text-align: center; border-color: var(--gold); } .btn.ready b { font-size: 20px; letter-spacing: .2em; } .btn.ready.on { background: #2B3A2E; border-color: #7FE3A0; }
+  #rcOver .btn { flex: 1; align-items: center; text-align: center; }
+  .roomCard .back { align-self: center; }
+  .bigCount { position: fixed; inset: 0; display: grid; place-items: center; font: 900 min(30vw, 180px)/1 monospace; color: var(--focus); text-shadow: 6px 6px 0 #10121B; z-index: 3; pointer-events: none; background: rgba(10,15,26,.35); }
+  #pauseBox { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); font-size: 18px; font-weight: 800; color: var(--focus); background: rgba(16,24,39,.94); border: 2px solid var(--red); border-radius: 6px; padding: 14px 20px; z-index: 3; text-align: center; }
   #debug { position: fixed; left: 8px; bottom: 8px; margin: 0; font: 11px/1.4 monospace; color: #9fffa8; background: rgba(10,15,26,.85); padding: 6px 8px; border-radius: 4px; z-index: 2; white-space: pre; }
   .keys { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0 0; }
 </style>
@@ -46,7 +62,8 @@
       <button class="btn" data-go="difficulty"><b>單人對戰 AI</b><small>新手木樁／道場師兄／讀心宗師</small></button>
       <button class="btn" data-go="local2p"><b>同機雙人（Local 2P）</b><small>P1 A／S／D　P2 J／K／L</small></button>
       <button class="btn" data-go="online"><b>線上對戰</b><small>建立房間，或輸入 4 碼房號加入</small></button>
-      <p class="keys">左鍵＝石頭／往左　中鍵＝剪刀／鎖定　右鍵＝布／往右　｜　Esc 回大廳　` 除錯資訊</p>
+      <button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button>
+      <p class="keys">左鍵＝石頭／往左　中鍵＝剪刀／原地　右鍵＝布／往右　｜　Esc 回大廳　` 除錯資訊</p>
     </div>
   </section>
 
@@ -68,7 +85,7 @@
       <div class="row"><input class="code" id="roomInput" maxlength="4" placeholder="房號" autocomplete="off" aria-label="4 碼房號"><button class="btn" data-go="join" style="flex:none"><b>加入</b></button></div>
       <p class="err" id="roomError"></p>
       <p class="link" id="roomLink"></p>
-      <p class="keys">連線後端下一步補上：目前畫面與 WebSocketTransport 骨架已就緒</p>
+      <p class="keys">建立後會自動進房；把邀請連結傳給朋友，點開就直接加入</p>
     </div>
   </section>
 
@@ -77,10 +94,26 @@
     <canvas id="screen" aria-label="拳刃交鋒 遊戲畫面"></canvas>
     <div class="bar">
       <span class="tag" id="modeTag"></span>
-      <span class="row"><button class="tiny" id="skipTut" data-go="skip" hidden>跳過教學</button><button class="tiny" data-go="menu">回大廳</button></span>
+      <span class="row"><span class="tag" id="ping" hidden title="來回延遲（每 15 秒心跳）">-- ms</span><button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button><button class="tiny" id="skipTut" data-go="skip" hidden>跳過教學</button><button class="tiny" data-go="menu">回大廳</button></span>
     </div>
     <div id="objective" hidden></div>
-    <div id="netStatus" hidden></div>
+    <div id="keybar" aria-label="鍵位提示"></div>
+    <!-- 線上房間：待機（READY）／結算（Rematch、離開） -->
+    <div id="room" class="overlay" hidden>
+      <div class="roomCard" role="dialog" aria-label="線上房間">
+        <p class="rTitle">房號 <b id="rcCode">----</b></p>
+        <p class="rHead" id="rcHead"></p>
+        <button class="tiny copy" id="rcCopy" data-go="copy">📋 一鍵複製邀請連結</button>
+        <p class="link" id="rcLink"></p>
+        <div class="seats"><div class="seat" id="seat0"></div><div class="seat" id="seat1"></div></div>
+        <button class="btn ready" id="rcReady" data-go="ready" hidden><b>READY</b><small>雙方都準備好後倒數 3 秒開戰</small></button>
+        <div class="row" id="rcOver" hidden><button class="btn" id="rcRematch" data-go="rematch"><b>再來一局（Rematch）</b><small>雙方都按就原地重開</small></button></div>
+        <button class="back" data-go="leave">離開房間</button>
+        <p class="err" id="rcMsg"></p>
+      </div>
+    </div>
+    <div id="countdown" class="bigCount" hidden>3</div>
+    <div id="pauseBox" hidden></div>
     <pre id="debug" hidden></pre>
   </section>
 
