@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>拳刃交鋒｜同機雙人原型</title>
 <style>
-  :root { --bg: #0b0a12; --bar: #16131f; --ink: #f2e9d8; --muted: #8f8aa3; --gold: #f2c45a; }
+  :root { --bg: #0A0F1A; --bar: #101827; --ink: #F4F3EE; --muted: #8592A4; --gold: #F4D58C; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; overflow: hidden; }
   #wrap { position: fixed; inset: 0 0 52px 0; display: grid; place-items: center; }
   canvas#screen { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
-  #bar { position: fixed; left: 0; right: 0; bottom: 0; height: 52px; display: flex; gap: 6px; align-items: center; justify-content: center; padding: 6px 10px; background: var(--bar); border-top: 1px solid #2c2740; flex-wrap: nowrap; overflow-x: auto; }
-  #bar button { flex: none; font: 600 13px/1 inherit; color: var(--ink); background: #2a2440; border: 1px solid #4a4170; border-radius: 6px; padding: 9px 12px; cursor: pointer; }
-  #bar button:hover { background: #3a3258; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; height: 52px; display: flex; gap: 6px; align-items: center; justify-content: center; padding: 6px 10px; background: var(--bar); border-top: 1px solid #243249; flex-wrap: nowrap; overflow-x: auto; }
+  #bar button { flex: none; font: 600 13px/1 inherit; color: var(--ink); background: #1C2B41; border: 1px solid #394B61; border-radius: 6px; padding: 9px 12px; cursor: pointer; }
+  #bar button:hover { background: #243249; }
   #bar button.on { border-color: var(--gold); color: var(--gold); }
   #bar .hint { flex: none; font-size: 11px; color: var(--muted); margin-left: 6px; white-space: nowrap; }
 </style>
@@ -29,14 +29,82 @@
 "use strict";
 /* =====================================================================
    拳刃交鋒（Local 2P 原型）
-   結構：CONFIG（所有可調數值）→ Sfx（Web Audio 合成）→ Input（放開再按、判定窗鎖死）
-        → Game（五階段狀態機）→ Renderer（像素武者，狀態接口可換 Sprite Sheet）→ 主迴圈
+   結構：ART（美術規格 art_spec.json 原樣內嵌）→ CONFIG（玩法數值）→ Sfx → Input → Game（五階段狀態機）
+        → Renderer（像素武者：程式繪製；有 Sprite Sheet 就照 ART.spriteAtlas 切格）→ 畫面（照聖經的繪製順序）→ 主迴圈
+   頓幀只停「演出」（角色動畫、命中特效、擊飛飛行）；倒數與輸入照常進行（美術聖經 §4）
    ===================================================================== */
 
-// ===================== CONFIG：試玩後只改這裡 =====================
+// ===================== ART：美術規格（art_spec.json v1.0，原樣） =====================
+const ART = {
+  "schemaVersion": "1.0.0",
+  "project": "拳刃交鋒",
+  "canvas": { "width": 480, "height": 270, "pixelPerfect": true, "imageSmoothingEnabled": false, "integerScale": true, "roundDrawCoordinates": true },
+  "stage": { "tileCount": 7, "tileWidthPx": 48, "leftX": 72, "rightXExclusive": 408, "surfaceY": 184, "dangerTileCount": 2, "dangerTilesContiguous": true, "dangerTileIndexBase": 0, "dangerTopBandHeightPx": 6, "koBeamX": { "left": 16, "right": 464 }, "koBeamBottomY": 224 },
+  "palette": {
+    "background": { "skyTop": "#101625", "skyHorizon": "#1C2B41", "distantCliffs": "#232F46", "mist": "#2B3D53", "abyss": "#0A0F1A" },
+    "platform": { "outline": "#111622", "stoneShadow": "#243249", "stoneMid": "#394B61", "topEdge": "#8495A6", "tileSeam": "#536579", "oxidizedBronze": "#796047" },
+    "fighters": { "outline": "#10121B", "neutralSteel": "#A9A9AC", "p1": { "shadow": "#713B29", "primary": "#D58941", "secondary": "#FFF0C3", "highlight": "#FFF9E8" }, "p2": { "shadow": "#23544E", "primary": "#4BB381", "secondary": "#C6F9D8", "highlight": "#ECFFF1" }, "hiddenFill": "#131A2A" },
+    "hud": { "plate": "#101827", "label": "#F4F3EE", "muted": "#8592A4", "focusOutline": "#FFF5D8", "powerFill": "#F4D58C", "powerEmpty": "#39475D" },
+    "damageBands": [
+      { "minInclusive": 0, "maxInclusive": 39, "fill": "#F4F6FA", "smoke": false },
+      { "minInclusive": 40, "maxInclusive": 69, "fill": "#FFE186", "smoke": false },
+      { "minInclusive": 70, "maxInclusive": 99, "fill": "#FFAA63", "smoke": false },
+      { "minInclusive": 100, "maxInclusive": null, "fill": "#E05266", "topRim": "#FFD7D9", "smoke": true, "smokeColor": "#7D374D" }
+    ],
+    "fx": { "blue": { "outline": "#1B477E", "rim": "#58B6FF", "core": "#E4F7FF" }, "red": { "outline": "#691E37", "rim": "#FF4F62", "core": "#FFD0A1", "hatch": "#FF9A78", "floorFill": "#AF263D" }, "safeArrow": { "fill": "#FFF5D8", "outline": "#151822" }, "impact": { "core": "#FFF7E5", "spark": "#FFC878" }, "ko": { "core": "#FFF3D8", "rim": "#FFBE78", "outer": "#D77769" } }
+  },
+  "hud": {
+    "safeMarginPx": { "x": 16, "y": 12 },
+    "playerPanels": { "p1": { "anchorX": 16, "anchorY": 12, "align": "left" }, "p2": { "anchorX": 464, "anchorY": 12, "align": "right" }, "damageFontPx": 24, "stockCount": 3, "stockSizePx": [8, 8], "powerCount": 3, "powerSizePx": [11, 5], "iconGapPx": 3 },
+    "keyRow": { "centerX": 240, "topY": 232, "keySizePx": [30, 25], "gapPx": 5, "glyphSizePx": [14, 14], "rowsFacing": "screen", "slotOrder": ["left", "center", "right"],
+      "iconsByPhase": { "step": ["left_arrow", "inactive", "right_arrow"], "standoff": ["rock", "scissors", "paper"], "hidden_commit": ["rock", "scissors", "paper"], "combo": ["inactive", "inactive", "inactive"], "finisher_select": ["rock", "scissors", "paper"], "blue_parry": ["rock", "scissors", "paper"], "red_roll": ["left_arrow", "inactive", "right_arrow"], "resolution": ["inactive", "inactive", "inactive"] } }
+  },
+  "telegraphs": {
+    "publicStanceSuggestedMs": 1300, "hiddenStanceMs": 500, "recognitionTargetMs": 200,
+    "blueParry": { "inputWindowMs": 500, "frameShape": "rounded_square", "anchor": "attacker_foot", "offsetPx": [0, -55], "frameSizePx": [24, 24], "gestureGlyphSizePx": [14, 14], "timerStyle": "perimeter_deplete", "showCounterAnswer": false },
+    "redRoll": { "cueDurationSuggestedMs": 500, "hazardShape": "diagonal_hatch", "hazardAnchor": "stage_tile", "safeArrowAnchor": "defender_foot", "safeArrowOffsetAbsPx": [14, -7], "safeArrowSizePx": [12, 10], "hazardFillOpacity": 0.44, "hazardHatchPeriodPx": 6, "hazardHatchStepMs": 80, "timerStyle": "horizontal_deplete", "hazardTilesLockedAtCue": true }
+  },
+  "effects": {
+    "presentationOnly": true,
+    "hitstopMs": { "clash": 45, "combo_1": 36, "combo_2": 48, "finisher_blue": 68, "finisher_red": 86, "parry_success": 120 },
+    "impactFrameFlash": { "targetOnly": true, "durationMs": 33, "maxOpacity": 0.76 },
+    "parryFlash": { "localOnly": true, "durationMs": 42, "maxOpacity": 0.8 },
+    "motionTrail": { "maxAfterimages": 3, "sampleIntervalMs": 24, "lifetimeMs": 96, "alphaNewestToOldest": [0.42, 0.26, 0.12] },
+    "cameraShakePx": { "clash": 1, "combo_1": 1, "combo_2": 2, "finisher_blue": 2, "finisher_red": 3, "parry_success": 2, "ko": 4 },
+    "koBlast": { "durationMs": 380, "chargeMs": 40, "coreMs": 90, "fadeMs": 250, "beamMaxWidthPx": 22 },
+    "damageSmoke": { "maxPuffsPerPlayer": 3, "maxHeightPx": 8, "maxOpacity": 0.4 },
+    "reducedMotion": { "cameraShakeMultiplier": 0, "flashOpacityMultiplier": 0, "trailMaxAfterimages": 1, "staticTelegraphHatching": true, "keepCountdownAndSignals": true }
+  },
+  "spriteAtlas": {
+    "imageByPlayer": { "p1": "fighter_p1.png", "p2": "fighter_p2.png" },
+    "imageWidth": 500, "imageHeight": 800, "columns": 10, "rows": 16, "frameWidth": 48, "frameHeight": 48, "strideX": 50, "strideY": 50, "originX": 1, "originY": 1,
+    "pivot": { "x": 24, "y": 40 }, "baseFacing": "right", "mirrorForLeft": true, "alphaBackground": true, "frameIndexBase": 0,
+    "stateOrder": ["idle", "step", "exhausted", "stance_rock", "stance_scissors", "stance_paper", "stance_hidden", "clash", "combo_1", "combo_2", "finisher_blue", "finisher_red", "parry_success", "roll", "hitstun", "knockback"],
+    "animations": {
+      "idle": { "row": 0, "frames": 6, "fps": 10, "playback": "loop", "keyFrames": { "neutral": 0, "inhalePeak": 3 } },
+      "step": { "row": 1, "frames": 5, "fps": 24, "playback": "hold_last", "keyFrames": { "pushOff": 1, "plant": 3 } },
+      "exhausted": { "row": 2, "frames": 6, "fps": 12, "playback": "hold_last", "keyFrames": { "brake": 0, "gasp": 2, "readyPose": 5 } },
+      "stance_rock": { "row": 3, "frames": 4, "fps": 12, "playback": "loop", "keyFrames": { "readablePose": 0 } },
+      "stance_scissors": { "row": 4, "frames": 4, "fps": 12, "playback": "loop", "keyFrames": { "readablePose": 0 } },
+      "stance_paper": { "row": 5, "frames": 4, "fps": 12, "playback": "loop", "keyFrames": { "readablePose": 0 } },
+      "stance_hidden": { "row": 6, "frames": 4, "fps": 8, "playback": "hold_last", "keyFrames": { "fullyMasked": 0 } },
+      "clash": { "row": 7, "frames": 5, "fps": 24, "playback": "event_driven", "keyFrames": { "contact": 1, "recoil": 3 }, "anchors": { "contact": [37, 20] } },
+      "combo_1": { "row": 8, "frames": 5, "fps": 24, "playback": "event_driven", "keyFrames": { "contact": 2, "recovery": 4 }, "anchors": { "contact": [39, 24] } },
+      "combo_2": { "row": 9, "frames": 6, "fps": 24, "playback": "event_driven", "keyFrames": { "contact": 3, "recovery": 5 }, "anchors": { "contact": [41, 20] } },
+      "finisher_blue": { "row": 10, "frames": 10, "fps": 16, "playback": "event_driven", "keyFrames": { "cue": 0, "windupLast": 7, "contact": 8, "recovery": 9 }, "anchors": { "contact": [42, 23] } },
+      "finisher_red": { "row": 11, "frames": 10, "fps": 16, "playback": "event_driven", "keyFrames": { "cue": 0, "windupLast": 7, "contact": 8, "recovery": 9 }, "anchors": { "contact": [40, 32] } },
+      "parry_success": { "row": 12, "frames": 6, "fps": 24, "playback": "event_driven", "keyFrames": { "contact": 0, "brace": 1, "crossStep": 3, "settle": 5 }, "anchors": { "contact": [35, 22] } },
+      "roll": { "row": 13, "frames": 6, "fps": 24, "playback": "hold_last", "keyFrames": { "duck": 0, "tuck": 2, "land": 4, "recover": 5 } },
+      "hitstun": { "row": 14, "frames": 4, "fps": 20, "playback": "hold_last", "keyFrames": { "recoil": 0, "stagger": 2 } },
+      "knockback": { "row": 15, "frames": 6, "fps": 18, "playback": "tail_loop", "loopStartFrame": 2, "keyFrames": { "launch": 0, "tumbleStart": 2 } }
+    }
+  }
+};
+
+// ===================== CONFIG：玩法數值（試玩後只改這裡） =====================
 const CONFIG = {
-  W: 480, H: 270,                         // 虛擬解析度
-  cells: 7, cellW: 56, stageX: 44, floorY: 198,
+  W: ART.canvas.width, H: ART.canvas.height,
+  cells: ART.stage.tileCount, cellW: ART.stage.tileWidthPx, stageX: ART.stage.leftX, floorY: ART.stage.surfaceY,
   stocks: 3, powerMax: 3, powerStart: 2,
   spawn: [3, 5],                          // 掉命後重置的格子（P1、P2）
 
@@ -44,8 +112,8 @@ const CONFIG = {
   rps: { dur: 1.8, reveal: 1.3 },         // 前 1.3s 亮招、後 0.5s 藏招
   clash: { dur: 0.75 },
   combo: { dur: 0.9, hitTimes: [0.18, 0.48], hitDamage: 12, chargeTime: 0.35, redCost: 2 },
-  finisher: { dur: 0.5, slowmo: 0.35, hitDamage: 20 },
-  parry: { hitstop: 0.15, counterDamage: 15, counterKnock: 1 },
+  finisher: { dur: 0.5, hitDamage: 20 },
+  parry: { counterDamage: 15, counterKnock: 1 },
   roll: { cells: 2, time: 0.28 },
   resolve: {
     minDur: 0.6,
@@ -57,41 +125,25 @@ const CONFIG = {
     koMargin: 26,                         // 飛出畫面多少像素算場外擊落
     koPause: 0.9,
   },
+  // 倒數提示（比美術規格再明顯一點）：最後 urgentSec 秒變紅閃、每 0.1 秒一聲嗒
+  countdown: { urgentSec: 0.15, tickEvery: 0.1, phaseTickLast: 0.3, bigBarW: 160 },
+  feel: { zoomCombo: 1.12, zoomLerp: 8 },  // 鏡頭推近只在連轟（終結提示出現時鏡頭回穩，規格 §4）；設 1 就關掉
 
-  feel: {
-    hitstop: { hit: 0.055, hit2: 0.075, clash: 0.1, launch: 0.12, red: 0.18, ko: 0.2 },
-    shake: { hit: 2.5, clash: 3.5, launch: 5, red: 8, ko: 9, parry: 4, step: 0.8 },
-    zoom: { combo: 1.22, finisher: 1.34, parry: 1.45, ko: 1.15 },
-    zoomLerp: 7,
-  },
-
-  keys: {                                 // L=左 M=中 R=右
-    p1: { KeyA: "L", KeyS: "M", KeyD: "R" },
-    p2: { KeyJ: "L", KeyK: "M", KeyL: "R" },
-  },
+  keys: { p1: { KeyA: "L", KeyS: "M", KeyD: "R" }, p2: { KeyJ: "L", KeyK: "M", KeyL: "R" } },
   keyLabel: [{ L: "A", M: "S", R: "D" }, { L: "J", M: "K", R: "L" }],
   gestureOf: { L: "rock", M: "scissors", R: "paper" },   // 左=石頭 中=剪刀 右=布
+  names: ["P1 赭鋒", "P2 翠嵐"],
+  skin: "#E6B48A",                        // 臉與手（美術規格未列，取中性暖膚色）
 
-  colors: {
-    sky1: "#120f24", sky2: "#2a1f45", star: "#a49cc9",
-    tile: "#5b4a3a", tileTop: "#8a7257", tileEdge: "#3a2e25", tileNum: "#c9b28c",
-    abyss: "#07060c",
-    redZone: "#ff3b3b", blue: "#4fb2ff", red: "#ff4a3d", gold: "#f2c45a", white: "#ffffff",
-    skin: "#f0c89a", hair: "#1c1626", outline: "#0b0a12",
-    p: [
-      { gi: "#2f6fb0", giDark: "#1d4677", band: "#8fe3ff", name: "P1 青嵐" },
-      { gi: "#b2353d", giDark: "#6e1d24", band: "#ffb36b", name: "P2 赤焰" },
-    ],
-    stone: "#8d8a96", stoneHi: "#c4c1cc", stoneDark: "#55525e", blade: "#cfe9ff", bladeDark: "#6f8ea8", wood: "#6b4a2b", wind: "#9ff3ff",
-  },
-
-  // 測試場景：pos 格子、power 力量、damage 損傷
   scenarios: [
     { name: "場景 1：中央對峙", p: [{ pos: 3, power: 2, damage: 0 }, { pos: 5, power: 2, damage: 0 }] },
     { name: "場景 2：崖邊二連走位", p: [{ pos: 5, power: 2, damage: 0 }, { pos: 7, power: 2, damage: 90 }] },
     { name: "場景 3：零力量閃紅招", p: [{ pos: 6, power: 2, damage: 0 }, { pos: 7, power: 0, damage: 110 }] },
   ],
 };
+const PAL = ART.palette, FX = ART.effects;
+const REDUCED = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ms = v => v / 1000;
 
 const GLABEL = { rock: "石", scissors: "剪", paper: "布" };
 const BEATS = { rock: "scissors", scissors: "paper", paper: "rock" };          // 誰贏誰
@@ -110,7 +162,7 @@ const Sfx = (() => {
     if (!A) return;
     ac = new A();
     master = ac.createGain(); master.gain.value = 0.55; master.connect(ac.destination);
-    noiseBuf = ac.createBuffer(1, ac.sampleRate * 1.0, ac.sampleRate);
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
@@ -133,6 +185,8 @@ const Sfx = (() => {
   return {
     unlock,
     tick() { tone(1600, 0.03, 0.05, "square"); },
+    count(urgent) { tone(urgent ? 1320 : 990, 0.045, urgent ? 0.13 : 0.08, "square"); },   // 倒數嗒聲
+    hide() { noise(0.18, 0.12, 2400, "bandpass", 1, 0, 600); },
     deny() { tone(180, 0.08, 0.08, "square", 0.8); },
     step() { noise(0.05, 0.12, 900, "lowpass"); tone(120, 0.06, 0.12, "sine", 0.6); },
     wobble() { tone(520, 0.08, 0.05, "triangle", 1.3); },
@@ -187,7 +241,8 @@ const Input = (() => {
     queue.push({ type: "up", p: o.p, btn: o.btn });
   });
   addEventListener("blur", () => { for (const c in keys) { keys[c].down = false; keys[c].stale = true; } queue.length = 0; });
-  const codeOf = (p, btn) => Object.keys(p === 0 ? CONFIG.keys.p1 : CONFIG.keys.p2).find(c => (p === 0 ? CONFIG.keys.p1 : CONFIG.keys.p2)[c] === btn);
+  const mapOf = p => (p === 0 ? CONFIG.keys.p1 : CONFIG.keys.p2);
+  const codeOf = (p, btn) => Object.keys(mapOf(p)).find(c => mapOf(p)[c] === btn);
   return {
     drain() { return queue.splice(0, queue.length); },
     phaseReset() { for (const c in keys) if (keys[c].down) keys[c].stale = true; queue.length = 0; },
@@ -202,25 +257,26 @@ const PH_LABEL = { MOVE: "走位", RPS: "猜拳對峙", CLASH: "拼刀！", COMB
 
 const Game = {
   phase: PH.MOVE, t: 0, rt: 0, dur: 1, debug: false, scenario: 0,
-  f: [], freeze: 0, slow: 1, flash: 0, flashColor: "#fff", shake: 0, fx: [], log: [],
-  cam: { zoom: 1, target: 1, x: CONFIG.W / 2, y: 150, tx: CONFIG.W / 2, ty: 150 },
-  round: null,
+  f: [], freeze: 0, fx: [], log: [], round: null, winner: -1,
+  shake: { amp: 0, t: 0 }, cam: { zoom: 1, target: 1, x: CONFIG.W / 2, y: CONFIG.H / 2 },
+  lastTick: -1, keyFlash: { L: 0, M: 0, R: 0 }, committed: [false, false],
 
   makeFighter(i, s) {
-    const f = {
+    return {
       i, pos: s.pos, power: s.power, damage: s.damage, stocks: CONFIG.stocks,
       stun: 0, steps: 0, locked: false, move: null, wobble: 0, deny: 0,
       stance: null, x: cellX(s.pos), y: CONFIG.floorY, vx: 0, vy: 0, air: false, rot: 0,
-      face: i === 0 ? 1 : -1, anim: { state: "idle", t: 0 }, trail: [], out: false, offX: 0, roll: null,
+      face: i === 0 ? 1 : -1, anim: { state: "idle", t: 0 }, trail: [], trailClock: 0, trailOn: false,
+      out: false, offX: 0, gl: null, flashT: 0, rimT: 0, fin: 0,
     };
-    return f;
   },
   loadScenario(n) {
     this.scenario = n;
     const sc = CONFIG.scenarios[n];
     this.f = [this.makeFighter(0, sc.p[0]), this.makeFighter(1, sc.p[1])];
-    this.fx = []; this.freeze = 0; this.flash = 0; this.shake = 0; this.slow = 1; this.winner = -1;
-    this.banner(sc.name, "#f2c45a");
+    this.fx = []; this.freeze = 0; this.winner = -1; this.shake = { amp: 0, t: 0 }; this.round = null;
+    delete this.koTimer;
+    this.banner(sc.name, PAL.hud.focusOutline);
     this.enter(PH.MOVE);
     document.querySelectorAll("#bar button").forEach(b => b.classList.toggle("on", Number(b.dataset.sc) === n));
   },
@@ -228,74 +284,96 @@ const Game = {
   setAnim(f, st) { if (f.anim.state !== st) f.anim = { state: st, t: 0 }; },
   note(m) { this.log.push(`${this.phase} ${this.t.toFixed(2)} ${m}`); if (this.log.length > 12) this.log.shift(); },
 
+  // 給畫面的提示資料（美術聖經 §7：phase、cueAt、deadlineAt、attackerId、defenderId、手勢、危險格、安全方向）
+  cue() {
+    const r = this.round;
+    if (this.phase !== PH.FINISHER || !r) return null;
+    return { phase: this.phase, kind: r.type, cueAt: r.cueAt, deadlineAt: r.cueAt + CONFIG.finisher.dur, now: this.rt, attackerId: r.att, defenderId: r.def, gesture: r.gesture, dangerTiles: r.zone ?? [], safeDirs: r.dirs ?? [], done: r.done };
+  },
+
   enter(ph) {
-    this.phase = ph; this.t = 0;
+    this.phase = ph; this.t = 0; this.lastTick = -1;
     Input.phaseReset();                                   // 跨階段：還按著的鍵要放開再按
     const [a, b] = this.f;
     if (ph === PH.MOVE) {
-      this.dur = CONFIG.move.dur; this.slow = 1; this.cam.target = 1;
-      for (const f of this.f) { f.steps = 0; f.locked = false; f.stance = null; if (!f.move) this.setAnim(f, f.power <= 0 ? "exhausted" : "idle"); }
+      this.dur = CONFIG.move.dur; this.cam.target = 1;
+      for (const f of this.f) { f.steps = 0; f.locked = false; f.stance = null; f.trailOn = false; if (!f.move) this.setAnim(f, f.stun > 0 || f.power <= 0 ? "exhausted" : "idle"); }
     } else if (ph === PH.RPS) {
-      this.dur = CONFIG.rps.dur;
+      this.dur = CONFIG.rps.dur; this.committed = [false, false];
       for (const f of this.f) { f.stance = null; f.picked = false; }
     } else if (ph === PH.CLASH) {
       this.dur = CONFIG.clash.dur;
       for (const f of this.f) this.setAnim(f, "clash");
       const mx = (a.x + b.x) / 2;
-      this.hit(CONFIG.feel.hitstop.clash, CONFIG.feel.shake.clash);
-      this.spark(mx, CONFIG.floorY - 26, "#ffe9a8", 22, 3.2); this.ring(mx, CONFIG.floorY - 26, "#ffe9a8");
-      this.popup(mx, CONFIG.floorY - 64, "拼刀！", "#ffe9a8", 14);
+      this.hit("clash");
+      this.spark(mx, CONFIG.floorY - 24, PAL.fx.impact.spark, 5, 2.2, true);
+      this.popup(mx, CONFIG.floorY - 64, "拼刀！", PAL.fx.impact.core, 14);
       Sfx.clash();
     } else if (ph === PH.COMBO) {
       this.dur = CONFIG.combo.dur;
       const r = this.round;
       r.hits = 0; r.gesture = r.winGesture; r.red = false; r.charging = false; r.chargeStart = 0;
-      this.cam.target = CONFIG.feel.zoom.combo;
+      this.cam.target = CONFIG.feel.zoomCombo;
     } else if (ph === PH.FINISHER) {
-      this.dur = CONFIG.finisher.dur; this.slow = CONFIG.finisher.slowmo;
+      this.dur = CONFIG.finisher.dur;
       const r = this.round, att = this.f[r.att], def = this.f[r.def];
-      r.done = false; r.type = r.red ? "red" : "blue";
+      r.done = false; r.type = r.red ? "red" : "blue"; r.cueAt = this.rt;
       att.stance = r.red ? "rock" : r.gesture;               // 終結手勢＝武器（紅招一律巨錘重砸）
+      att.fin = 0;
       r.away = Math.sign(def.pos - att.pos) || 1;
-      if (r.red) {
+      if (r.red) {                                          // 危險格在提示亮起時鎖定、到收招都不變
         r.zone = [def.pos, def.pos + r.away].filter(c => c >= 1 && c <= CONFIG.cells);
         r.dirs = [-1, 1].filter(d => { const to = def.pos + d * CONFIG.roll.cells; return to >= 1 && to <= CONFIG.cells && to !== att.pos; });
         this.setAnim(att, "finisher_red");
-      } else this.setAnim(att, "finisher_blue");
+      } else { r.zone = []; r.dirs = []; this.setAnim(att, "finisher_blue"); }
       this.setAnim(def, "idle");
-      this.cam.target = CONFIG.feel.zoom.finisher;
+      this.cam.target = 1;                                  // 提示出現：鏡頭回穩
     } else if (ph === PH.RESOLVE) {
-      this.dur = CONFIG.resolve.minDur; this.slow = 1; this.cam.target = 1;
+      this.dur = CONFIG.resolve.minDur; this.cam.target = 1;
     } else if (ph === PH.GAMEOVER) {
       this.dur = 0; this.cam.target = 1;
     }
     this.note(`進入 ${ph}`);
   },
 
-  // ---------- 主更新（固定步長） ----------
+  // ---------- 主更新（固定步長）：邏輯一定跑；頓幀只停演出 ----------
   update(dt) {
-    // 頓幀：遊戲邏輯、計時、輸入處理全部停住（輸入留在佇列，頓幀結束後照順序處理）
-    this.rt += dt;                                        // 真實時間（頓幀也照走）：長按蓄力用，玩家按多久就算多久
-    if (this.freeze > 0) { this.freeze -= dt; return; }
+    this.rt += dt;
     const evs = Input.drain();
     this.t += dt;
-    const vdt = dt * this.slow;                           // 視覺時間（慢動作）
+    const frozen = this.freeze > 0;
+    if (frozen) this.freeze = Math.max(0, this.freeze - dt);
+    const vdt = frozen ? 0 : dt;                          // 演出時間：頓幀時停住
     for (const f of this.f) {
       f.anim.t += vdt;
       if (f.stun > 0) f.stun = Math.max(0, f.stun - dt);  // 第二步硬直：真實時間、跨階段
       if (f.wobble > 0) f.wobble = Math.max(0, f.wobble - dt);
       if (f.deny > 0) f.deny = Math.max(0, f.deny - dt);
+      f.flashT = Math.max(0, f.flashT - dt); f.rimT = Math.max(0, f.rimT - dt);
       this.updateMove(f, dt);
-      this.updateRoll(f, vdt);
-      f.offX *= Math.pow(0.0005, dt);
-      if (f.trail.length) for (const s of f.trail) s.life -= dt;
-      f.trail = f.trail.filter(s => s.life > 0);
+      this.updateGlide(f, vdt);
+      f.offX *= Math.pow(0.0005, vdt);
+      this.updateTrail(f, vdt);
     }
-    for (const f of this.f) { const o = this.other(f); if (!f.air && !f.out) f.face = Math.sign(o.x - f.x) || f.face; }
+    for (const f of this.f) { const o = this.other(f); if (!f.air && !f.out && !f.gl) f.face = Math.sign(o.x - f.x) || f.face; }
+    for (const k in this.keyFlash) this.keyFlash[k] = Math.max(0, this.keyFlash[k] - dt);
+    for (const e of evs) if (e.type === "down") this.keyFlash[e.btn] = 0.12;
+    this.countdownTicks();
     const fn = this["upd" + this.phase];
-    if (fn) fn.call(this, dt, evs);
-    this.updateFx(vdt);
+    if (fn) fn.call(this, dt, evs, vdt);
+    this.updateFx(vdt, dt);
     this.updateCam(dt);
+  },
+  // 倒數嗒聲：終結判定窗每 0.1 秒一聲；走位／猜拳最後 0.3 秒；猜拳進藏招一聲
+  countdownTicks() {
+    const C = CONFIG.countdown, left = this.dur - this.t;
+    if (this.phase === PH.FINISHER && this.round && !this.round.done) {
+      const n = Math.ceil(left / C.tickEvery);
+      if (n !== this.lastTick && n >= 1) { this.lastTick = n; Sfx.count(left <= C.urgentSec + 0.05); }
+    } else if ((this.phase === PH.MOVE || this.phase === PH.RPS) && left <= C.phaseTickLast + 1e-6 && left > 0) {
+      const n = Math.ceil(left / C.tickEvery);
+      if (n !== this.lastTick) { this.lastTick = n; Sfx.count(n === 1); }
+    }
   },
 
   // ---------- PHASE_MOVE ----------
@@ -303,7 +381,7 @@ const Game = {
     for (const e of evs) {
       if (e.type !== "down") continue;
       const f = this.f[e.p];
-      if (e.btn === "M") { if (!f.locked) { f.locked = true; Sfx.tick(); this.popup(f.x, CONFIG.floorY - 58, "鎖定", "#cfc6ff", 8); } continue; }
+      if (e.btn === "M") { if (!f.locked) { f.locked = true; Sfx.tick(); this.popup(f.x, CONFIG.floorY - 58, "鎖定", PAL.hud.muted, 8); } continue; }
       this.tryStep(f, e.btn === "L" ? -1 : 1);
     }
     if (this.t >= this.dur) this.enter(PH.RPS);
@@ -313,7 +391,7 @@ const Game = {
     if (f.locked || f.move || f.steps >= C.maxSteps) { f.deny = 0.25; Sfx.deny(); return; }
     const to = f.pos + dir;
     if (to < 1 || to > CONFIG.cells) { f.wobble = C.wobbleTime; f.wobbleDir = dir; Sfx.wobble(); return; }   // 崖邊：踩空微晃，不扣氣不計步
-    if (f.power < 1) { f.deny = 0.4; Sfx.deny(); this.popup(f.x, CONFIG.floorY - 58, "沒氣了", "#ff9a8a", 8); return; }
+    if (f.power < 1) { f.deny = 0.4; Sfx.deny(); this.popup(f.x, CONFIG.floorY - 58, "沒氣了", "#FFAA63", 8); return; }
     f.power -= 1; f.steps += 1;
     const o = this.other(f), om = o.move;
     let bump = false;
@@ -325,8 +403,8 @@ const Game = {
     this.setAnim(f, "step");
     if (bump) {
       const mx = (cellX(f.pos) + cellX(to)) / 2 + (o.pos === to ? -Math.sign(dir) * CONFIG.cellW * 0.3 : 0);
-      this.spark(mx, CONFIG.floorY - 24, "#ffd27a", 10, 2); Sfx.bump(); this.shakeAdd(CONFIG.feel.shake.clash * 0.5);
-      this.popup(mx, CONFIG.floorY - 52, "頂撞！", "#ffd27a", 9);
+      this.spark(mx, CONFIG.floorY - 22, PAL.fx.impact.spark, 4, 1.6, true); Sfx.bump(); this.shakeKick(1, 0.06);
+      this.popup(mx, CONFIG.floorY - 52, "頂撞！", PAL.fx.impact.spark, 9);
     } else Sfx.step();
     this.note(`P${f.i + 1} 走 ${dir > 0 ? "右" : "左"} → ${to}${bump ? "（頂撞彈回）" : ""}`);
   },
@@ -337,30 +415,31 @@ const Game = {
     const k = clamp(m.t / m.dur, 0, 1);
     if (m.bump) f.x = lerp(cellX(m.from), cellX(m.to), 0.42 * Math.sin(Math.PI * k));
     else f.x = lerp(cellX(m.from), cellX(m.to), 1 - Math.pow(1 - k, 2));
-    f.y = CONFIG.floorY - Math.sin(Math.PI * k) * (m.bump ? 4 : 7);
+    f.y = CONFIG.floorY - Math.sin(Math.PI * k) * (m.bump ? 3 : 5);
     if (k >= 1) {
       if (!m.bump) f.pos = m.to;
       f.x = cellX(f.pos); f.y = CONFIG.floorY; f.move = null;
       if (m.second) { f.stun = CONFIG.move.secondStepStun; this.note(`P${f.i + 1} 第二步落地：硬直 ${CONFIG.move.secondStepStun}s`); }   // 第二步落地起算硬直
-      this.shakeAdd(CONFIG.feel.shake.step);
-      if (this.phase === PH.MOVE || this.phase === PH.RPS) this.setAnim(f, f.stun > 0 || f.power <= 0 ? "exhausted" : "idle");   // 硬直：喘氣流汗
+      if (this.phase === PH.MOVE || this.phase === PH.RPS) this.setAnim(f, f.stun > 0 || f.power <= 0 ? "exhausted" : "idle");   // 硬直：彎腰喘氣
     }
   },
 
   // ---------- PHASE_RPS ----------
   updRPS(dt, evs) {
+    const hidden = this.t >= CONFIG.rps.reveal;
     for (const e of evs) {
       if (e.type !== "down") continue;
       const f = this.f[e.p];
       if (f.stun > 0) { f.deny = 0.3; Sfx.deny(); continue; }       // 硬直：按鍵反灰鎖死
-      f.stance = CONFIG.gestureOf[e.btn]; f.picked = true; Sfx.tick();
+      f.stance = CONFIG.gestureOf[e.btn]; f.picked = true; this.committed[f.i] = true; Sfx.tick();
     }
-    const hidden = this.t >= CONFIG.rps.reveal;
+    if (hidden && !this.hidSound) { this.hidSound = true; Sfx.hide(); for (const f of this.f) f.trail = []; }   // 藏招第一幀：清掉上一架式的殘影
+    if (!hidden) this.hidSound = false;
     for (const f of this.f) if (!f.move) this.setAnim(f, hidden ? "stance_hidden" : f.stance ? "stance_" + f.stance : f.stun > 0 ? "exhausted" : "idle");
     if (this.t >= this.dur) {
       for (const f of this.f) if (!f.stance) { f.stance = ["rock", "scissors", "paper"][Math.floor(Math.random() * 3)]; f.random = true; } else f.random = false;
       const [a, b] = this.f;
-      for (const f of this.f) { this.setAnim(f, "stance_" + f.stance); this.popup(f.x, CONFIG.floorY - 70, GLABEL[f.stance] + (f.random ? "（隨機）" : ""), CONFIG.colors.p[f.i].band, 12); }
+      for (const f of this.f) { this.setAnim(f, "stance_" + f.stance); this.popup(f.x, CONFIG.floorY - 66, GLABEL[f.stance] + (f.random ? "（隨機）" : ""), PAL.fighters["p" + (f.i + 1)].secondary, 12); }
       this.note(`出拳 P1=${a.stance} P2=${b.stance}`);
       if (a.stance === b.stance) { this.enter(PH.CLASH); return; }
       const w = BEATS[a.stance] === b.stance ? 0 : 1;
@@ -392,29 +471,32 @@ const Game = {
     }
     if (r.charging && Input.held(r.att, r.winKey) && this.rt - r.chargeStart >= C.chargeTime) {
       r.charging = false; r.red = true; att.power -= C.redCost; Sfx.chargeStop(); Sfx.redReady();
-      this.popup(att.x, CONFIG.floorY - 72, "強化紅招！", CONFIG.colors.red, 12); this.shakeAdd(3);
+      this.popup(att.x, CONFIG.floorY - 70, "強化紅招！", PAL.fx.red.rim, 12); this.shakeKick(2, 0.1);
       this.note(`P${att.i + 1} 蓄力完成：紅招（扣 ${C.redCost} 氣）`);
     }
     // 自動兩連擊
     while (r.hits < C.hitTimes.length && this.t >= C.hitTimes[r.hits]) {
       r.hits++;
-      this.setAnim(att, r.hits === 1 ? "combo_1" : "combo_2");
+      const ev = r.hits === 1 ? "combo_1" : "combo_2";
+      this.setAnim(att, ev);
       this.setAnim(def, "hitstun");
       def.damage += C.hitDamage;
       const away = Math.sign(def.pos - att.pos) || 1, to = def.pos + away;
-      if (to >= 1 && to <= CONFIG.cells) { def.trail.push(...this.ghost(def)); def.pos = to; }   // 撞到崖邊強制停住
-      def.x = cellX(def.pos);
-      att.offX = Math.sign(def.x - att.x) * 10;
-      this.hit(r.hits === 1 ? CONFIG.feel.hitstop.hit : CONFIG.feel.hitstop.hit2, CONFIG.feel.shake.hit * r.hits);
+      if (to >= 1 && to <= CONFIG.cells) def.pos = to;     // 撞到崖邊強制停住
+      this.glide(def, 0.1, 2);
+      att.offX = Math.sign(def.x - att.x) * 8;
+      att.trailOn = r.hits === 2;                           // 二連擊用殘影接上
+      def.flashT = ms(FX.impactFrameFlash.durationMs);      // 受擊方一拍輪廓反白
+      this.hit(ev);
       Sfx.punch(r.hits === 1 ? 0.8 : 1);
-      this.spark(def.x - away * 10, CONFIG.floorY - 28, "#fff2c9", 12, 2.4);
-      this.popup(def.x, CONFIG.floorY - 62, `+${C.hitDamage}%`, "#fff2c9", 10);
+      this.spark(def.x - away * 8, CONFIG.floorY - 24, PAL.fx.impact.spark, 6, 2.2, true);
+      this.popup(def.x, CONFIG.floorY - 60, `+${C.hitDamage}%`, PAL.fx.impact.core, 10);
       this.note(`第 ${r.hits} 擊 P${def.i + 1} → ${def.damage}% 格 ${def.pos}`);
     }
-    if (this.t >= this.dur) { Sfx.chargeStop(); r.charging = false; this.enter(PH.FINISHER); }
+    if (this.t >= this.dur) { Sfx.chargeStop(); r.charging = false; att.trailOn = false; this.enter(PH.FINISHER); }
   },
 
-  // ---------- PHASE_FINISHER ----------
+  // ---------- PHASE_FINISHER（接受區間 cueAt ≤ now < deadlineAt） ----------
   updFINISHER(dt, evs) {
     const r = this.round, def = this.f[r.def];
     if (!r.done) for (const e of evs) {
@@ -433,24 +515,25 @@ const Game = {
   parry() {
     const r = this.round, att = this.f[r.att], def = this.f[r.def];
     r.result = "parry";
-    this.freeze = CONFIG.parry.hitstop; this.flash = 1; this.flashColor = "#ffffff"; this.shakeAdd(CONFIG.feel.shake.parry);
-    this.cam.zoom = CONFIG.feel.zoom.parry; this.cam.target = CONFIG.feel.zoom.parry;
+    this.hit("parry_success");                             // 頓幀 120ms：完了才演跨身換位（換位由 glide 跟著演出時間走）
+    att.rimT = def.rimT = ms(FX.parryFlash.durationMs);    // 兩人短暫亮邊
     Sfx.parry();
-    this.popup(def.x, CONFIG.floorY - 74, "完美彈反！", "#ffffff", 14);
+    const cx = (att.x + def.x) / 2;
+    this.ring(cx, CONFIG.floorY - 24, PAL.fx.impact.core);
+    this.popup(def.x, CONFIG.floorY - 72, "完美彈反！", PAL.hud.focusOutline, 14);
     // 互換站位
-    att.trail.push(...this.ghost(att)); def.trail.push(...this.ghost(def));
     [att.pos, def.pos] = [def.pos, att.pos];
-    att.x = cellX(att.pos); def.x = cellX(def.pos);
     this.setAnim(def, "parry_success");
     // 原守方反打一下重拳：+15%、擊退 1 格（撞到崖邊停住）
     att.damage += CONFIG.parry.counterDamage;
     const away = Math.sign(att.pos - def.pos) || 1;
     const to = clamp(att.pos + away * CONFIG.parry.counterKnock, 1, CONFIG.cells);
     if (to !== def.pos) att.pos = to;
-    att.knock = { from: att.x, to: cellX(att.pos), t: 0 };
+    this.glide(def, 0.18, 8); this.glide(att, 0.24, 6);
+    def.trailOn = true; att.trailOn = true;
+    att.flashT = ms(FX.impactFrameFlash.durationMs);
     this.setAnim(att, "knockback");
-    this.spark(att.x, CONFIG.floorY - 28, "#ffffff", 16, 3); this.ring(att.x, CONFIG.floorY - 28, "#ffffff");
-    this.popup(att.x, CONFIG.floorY - 58, `+${CONFIG.parry.counterDamage}%`, "#ffffff", 10);
+    this.popup(cellX(att.pos), CONFIG.floorY - 56, `+${CONFIG.parry.counterDamage}%`, PAL.fx.impact.core, 10);
     Sfx.punch(1.1);
     this.note(`P${def.i + 1} 完美彈反：互換站位、反擊 P${att.i + 1} → ${att.damage}%`);
     this.enter(PH.RESOLVE);
@@ -458,12 +541,12 @@ const Game = {
   rollOut(d) {
     const r = this.round, att = this.f[r.att], def = this.f[r.def];
     r.result = "roll";
-    const from = def.pos;
-    def.pos = from + d * CONFIG.roll.cells;
-    def.roll = { from: cellX(from), to: cellX(def.pos), t: 0 };
+    def.pos = def.pos + d * CONFIG.roll.cells;
+    this.glide(def, CONFIG.roll.time, 6);
+    def.trailOn = true;
     this.setAnim(def, "roll"); Sfx.whoosh();
-    this.zoneBlast(r.zone, att);
-    this.popup(cellX(def.pos), CONFIG.floorY - 60, "閃過！", "#9ff3ff", 12);
+    att.fin = 1; this.zoneBlast(r.zone);
+    this.popup(cellX(def.pos), CONFIG.floorY - 58, "閃過！", PAL.fx.safeArrow.fill, 12);
     this.note(`P${def.i + 1} 翻滾 ${d > 0 ? "▶" : "◀"} 到格 ${def.pos}`);
     this.enter(PH.RESOLVE);
   },
@@ -473,416 +556,667 @@ const Game = {
     def.damage += CONFIG.finisher.hitDamage;
     const v = R.vBase * (1 + def.damage / R.damageDiv) * (r.red ? R.redMult : 1);   // V = V_base × (1 + damage / 60)（紅招 × 1.45）
     const a = R.angleDeg * Math.PI / 180;
-    def.vx = Math.cos(a) * v * r.away; def.vy = -Math.sin(a) * v; def.air = true; def.rot = 0;
-    this.setAnim(def, "knockback"); this.setAnim(att, r.red ? "finisher_red" : "finisher_blue");
-    if (r.red) { this.zoneBlast(r.zone, att); this.flash = 0.7; this.flashColor = "#ff3b3b"; }
-    this.hit(r.red ? CONFIG.feel.hitstop.red : CONFIG.feel.hitstop.launch, r.red ? CONFIG.feel.shake.red : CONFIG.feel.shake.launch);
+    def.vx = Math.cos(a) * v * r.away; def.vy = -Math.sin(a) * v; def.air = true; def.rot = 0; def.trailOn = true;
+    att.fin = 1;
+    this.setAnim(def, "knockback");
+    def.flashT = ms(FX.impactFrameFlash.durationMs);
+    if (r.red) this.zoneBlast(r.zone);
+    this.hit(r.red ? "finisher_red" : "finisher_blue");
     Sfx.heavy();
-    this.spark(def.x, CONFIG.floorY - 28, r.red ? "#ff7a5a" : "#9fd6ff", 26, 4); this.ring(def.x, CONFIG.floorY - 28, r.red ? "#ff4a3d" : "#4fb2ff");
-    this.popup(def.x, CONFIG.floorY - 66, `+${CONFIG.finisher.hitDamage}%`, r.red ? "#ff8a7a" : "#bfe4ff", 12);
+    this.spark(def.x, CONFIG.floorY - 24, r.red ? PAL.fx.red.core : PAL.fx.impact.spark, r.red ? 12 : 7, 3, true);
+    this.popup(def.x, CONFIG.floorY - 64, `+${CONFIG.finisher.hitDamage}%`, r.red ? PAL.fx.red.core : PAL.fx.blue.core, 12);
     this.note(`終結命中 P${def.i + 1} → ${def.damage}%，擊飛速度 ${v.toFixed(0)}`);
     this.enter(PH.RESOLVE);
   },
-  updateRoll(f, vdt) {
-    if (!f.roll) return;
-    f.roll.t += vdt / CONFIG.roll.time;
-    const k = clamp(f.roll.t, 0, 1);
-    f.x = lerp(f.roll.from, f.roll.to, 1 - Math.pow(1 - k, 2)); f.y = CONFIG.floorY - Math.sin(Math.PI * k) * 6;
-    if (Math.random() < 0.6) f.trail.push(...this.ghost(f, 0.2));
-    if (k >= 1) { f.x = f.roll.to; f.y = CONFIG.floorY; f.roll = null; this.setAnim(f, "idle"); Sfx.land(); }
-  },
 
   // ---------- PHASE_RESOLVE ----------
-  updRESOLVE(dt) {
+  updRESOLVE(dt, evs, vdt) {
     const R = CONFIG.resolve;
     for (const f of this.f) {
-      if (f.knock) {                                        // 彈反後的擊退（不擊飛）
-        f.knock.t += dt / 0.22;
-        const k = clamp(f.knock.t, 0, 1);
-        f.x = lerp(f.knock.from, f.knock.to, 1 - Math.pow(1 - k, 3));
-        if (k >= 1) { f.knock = null; this.setAnim(f, "idle"); }
-      }
-      if (f.air && !f.out) {
-        f.vy += R.gravity * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vx * dt * 0.05;
-        if (Math.random() < 0.8) f.trail.push(...this.ghost(f, 0.25));
+      if (f.air && !f.out) {                                // 擊飛飛行屬於演出：頓幀時停住
+        f.vy += R.gravity * vdt; f.x += f.vx * vdt; f.y += f.vy * vdt; f.rot += f.vx * vdt * 0.05;
         const left = CONFIG.stageX, right = CONFIG.stageX + CONFIG.cells * CONFIG.cellW;
-        if (f.y >= CONFIG.floorY && f.vy > 0 && f.x >= left && f.x <= right) {   // 落在台上：對齊最近的格子
-          f.y = CONFIG.floorY; f.air = false; f.rot = 0;
-          let c = clamp(Math.round((f.x - CONFIG.stageX) / CONFIG.cellW + 0.5), 1, CONFIG.cells);
+        if (f.y >= CONFIG.floorY && f.vy > 0 && f.x >= left && f.x < right) {   // 落在台上：對齊最近的格子
+          f.y = CONFIG.floorY; f.air = false; f.rot = 0; f.trailOn = false;
+          let c = clamp(Math.floor((f.x - CONFIG.stageX) / CONFIG.cellW) + 1, 1, CONFIG.cells);
           const o = this.other(f);
           if (c === o.pos) { const d = Math.sign(f.vx) || 1; c = (c + d >= 1 && c + d <= CONFIG.cells) ? c + d : c - d; }
-          f.pos = c; f.landFrom = f.x; f.landT = 0;
-          this.setAnim(f, "idle"); Sfx.land(); this.shakeAdd(2); this.spark(f.x, CONFIG.floorY, "#c9b28c", 8, 1.5);
+          f.pos = c; this.glide(f, 0.15, 0);
+          this.setAnim(f, "idle"); Sfx.land(); this.shakeKick(1, 0.06); this.spark(f.x, CONFIG.floorY, PAL.platform.topEdge, 4, 1.2, true);
           this.note(`P${f.i + 1} 落地 格 ${c}`);
         } else if (f.x < -R.koMargin || f.x > CONFIG.W + R.koMargin || f.y > CONFIG.H + 40) this.ko(f);
       }
-      if (f.landT !== undefined) { f.landT += dt / 0.15; f.x = lerp(f.landFrom, cellX(f.pos), clamp(f.landT, 0, 1)); if (f.landT >= 1) delete f.landT; }
     }
     if (this.koTimer !== undefined) { this.koTimer -= dt; if (this.koTimer > 0) return; delete this.koTimer; if (this.afterKO()) return; }
-    const settled = this.f.every(f => !f.air && !f.knock && !f.roll && f.landT === undefined);
+    const settled = this.f.every(f => !f.air && !f.gl);
     if (this.t >= this.dur && settled) this.endRound();
   },
   ko(f) {
-    f.out = true; f.air = false; f.stocks -= 1;
-    const x = clamp(f.x, 6, CONFIG.W - 6);
-    this.fx.push({ k: "pillar", x, life: 1.1, max: 1.1, color: f.vx < 0 ? CONFIG.colors.p[f.i].band : CONFIG.colors.p[f.i].band });
-    this.spark(x, clamp(f.y, 20, CONFIG.H - 20), "#ffffff", 40, 5);
-    this.hit(CONFIG.feel.hitstop.ko, CONFIG.feel.shake.ko); this.flash = 0.8; this.flashColor = "#ffffff";
-    this.cam.target = CONFIG.feel.zoom.ko;
+    f.out = true; f.air = false; f.trailOn = false; f.trail = []; f.stocks -= 1;
+    const K = ART.stage.koBeamX;
+    // 左右飛出：固定在 x=16 / 464；往下掉：沿墜落 x，鏡頭外才夾到內側
+    const x = f.x < 0 ? K.left : f.x > CONFIG.W ? K.right : clamp(f.x, K.left, K.right);
+    this.fx.push({ k: "beam", x: Math.round(x), age: 0, max: ms(FX.koBlast.durationMs) });
+    this.shakeKick(FX.cameraShakePx.ko, 0.2);
     Sfx.ko();
-    this.popup(clamp(x, 60, CONFIG.W - 60), 90, "KO！", "#ffffff", 22);
+    this.popup(clamp(x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22);
     this.koTimer = CONFIG.resolve.koPause;
     this.note(`P${f.i + 1} 場外擊落，剩 ${f.stocks} 命`);
   },
   afterKO() {
     const dead = this.f.find(f => f.stocks <= 0);
-    if (dead) { this.winner = 1 - dead.i; this.enter(PH.GAMEOVER); this.banner(`${CONFIG.colors.p[this.winner].name} 勝利！`, CONFIG.colors.p[this.winner].band); return true; }
+    if (dead) { this.winner = 1 - dead.i; this.enter(PH.GAMEOVER); return true; }
     for (const f of this.f) {                               // 掉命後重置站位，被擊落的一方損傷歸零
       if (f.out) { f.damage = 0; f.out = false; }
-      f.pos = CONFIG.spawn[f.i]; f.x = cellX(f.pos); f.y = CONFIG.floorY; f.air = false; f.vx = f.vy = 0; f.rot = 0; f.stun = 0; f.knock = null; f.roll = null; delete f.landT;
+      f.pos = CONFIG.spawn[f.i]; f.x = cellX(f.pos); f.y = CONFIG.floorY; f.air = false; f.vx = f.vy = 0; f.rot = 0; f.stun = 0; f.gl = null; f.trail = []; f.trailOn = false;
       this.setAnim(f, "idle");
     }
     return false;
   },
   endRound() {
-    for (const f of this.f) f.power = Math.min(CONFIG.powerMax, f.power + 1);   // 本輪結束：雙方力量 +1
-    this.popup(CONFIG.W / 2, 112, "力量 +1", "#f2c45a", 9);
+    for (const f of this.f) { f.power = Math.min(CONFIG.powerMax, f.power + 1); f.trailOn = false; }   // 本輪結束：雙方力量 +1
+    this.popup(CONFIG.W / 2, 110, "力量 +1", PAL.hud.powerFill, 9);
     this.enter(PH.MOVE);
   },
   updGAMEOVER() {},
 
-  // ---------- 打擊感工具 ----------
-  hit(stop, shake) { this.freeze = Math.max(this.freeze, stop); this.shakeAdd(shake); },
-  shakeAdd(s) { this.shake = Math.min(12, this.shake + s); },
-  ghost(f, life = 0.3) { return [{ x: f.x, y: f.y, state: f.anim.state, t: f.anim.t, face: f.face, rot: f.rot, life, max: life }]; },
-  spark(x, y, color, n, speed) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.4 + Math.random()) * speed * 60; this.fx.push({ k: "spark", x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, life: 0.25 + Math.random() * 0.3, max: 0.55, color }); } },
-  ring(x, y, color) { this.fx.push({ k: "ring", x, y, life: 0.35, max: 0.35, color }); },
+  // ---------- 演出工具 ----------
+  // 角色畫面位置滑到邏輯格子（跟著演出時間走：頓幀時停）
+  glide(f, dur, arc) { f.gl = { from: f.x, to: cellX(f.pos), t: 0, dur, arc }; },
+  updateGlide(f, vdt) {
+    const g = f.gl;
+    if (!g) return;
+    g.t += vdt;
+    const k = clamp(g.t / g.dur, 0, 1);
+    f.x = lerp(g.from, g.to, 1 - Math.pow(1 - k, 2)); f.y = CONFIG.floorY - Math.sin(Math.PI * k) * g.arc;
+    if (k >= 1) {
+      f.x = g.to; f.y = CONFIG.floorY; f.gl = null; f.trailOn = false;
+      if (f.anim.state === "roll") { this.setAnim(f, "idle"); Sfx.land(); }
+      if (f.anim.state === "knockback" && !f.air) this.setAnim(f, "idle");
+    }
+  },
+  // 殘影：最多 3 張、每 24ms 取樣、96ms 消失（減少動態：1 張）
+  updateTrail(f, vdt) {
+    const T = FX.motionTrail, max = REDUCED ? ART.effects.reducedMotion.trailMaxAfterimages : T.maxAfterimages;
+    for (const s of f.trail) s.age += vdt;
+    f.trail = f.trail.filter(s => s.age < ms(T.lifetimeMs));
+    if (!f.trailOn || vdt === 0) return;
+    f.trailClock += vdt;
+    if (f.trailClock >= ms(T.sampleIntervalMs)) {
+      f.trailClock = 0;
+      f.trail.unshift({ x: f.x, y: f.y, state: f.anim.state, t: f.anim.t, face: f.face, rot: f.rot, age: 0 });
+      f.trail.length = Math.min(f.trail.length, max);
+    }
+  },
+  // 頓幀與震動照規格（毫秒、像素）
+  hit(ev) {
+    this.freeze = Math.max(this.freeze, ms(FX.hitstopMs[ev] ?? 0));
+    this.shakeKick(FX.cameraShakePx[ev] ?? 0, ms(FX.hitstopMs[ev] ?? 40) + 0.06);
+  },
+  shakeKick(px, dur) { if (REDUCED) return; if (px >= this.shake.amp || this.shake.t <= 0) this.shake = { amp: px, t: dur }; },
+  spark(x, y, color, n, speed, square) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * speed * 50; this.fx.push({ k: "spark", x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 25, life: 0.18 + Math.random() * 0.18, max: 0.36, color, sz: square ? 2 : 1 }); } },
+  ring(x, y, color) { this.fx.push({ k: "ring", x, y, life: 0.3, max: 0.3, color }); },
   popup(x, y, text, color, size) { this.fx.push({ k: "text", x, y, text, color, size, life: 0.9, max: 0.9 }); },
   banner(text, color) { this.fx.push({ k: "banner", text, color, life: 1.6, max: 1.6 }); },
-  zoneBlast(zone, att) { for (const c of zone) { this.fx.push({ k: "zone", c, life: 0.5, max: 0.5 }); this.spark(cellX(c), CONFIG.floorY - 8, "#ff6a4a", 14, 3); } },
-  updateFx(dt) {
+  zoneBlast(zone) {
+    for (const c of zone) { this.fx.push({ k: "crack", c, life: 0.5, max: 0.5 }); for (let i = 0; i < 6; i++) this.fx.push({ k: "debris", x: cellX(c) + (Math.random() - 0.5) * 30, y: CONFIG.floorY, vx: (Math.random() - 0.5) * 160, vy: -80 - Math.random() * 120, life: 0.45, max: 0.45 }); }
+  },
+  updateFx(vdt, dt) {
     for (const p of this.fx) {
-      p.life -= dt;
-      if (p.k === "spark") { p.vy += 500 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
-      if (p.k === "text") p.y -= 18 * dt;
+      if (p.k === "beam") { p.age += dt; continue; }        // KO 光柱照真實時間
+      if (p.k === "text" || p.k === "banner") { p.life -= dt; if (p.k === "text") p.y -= 18 * dt; continue; }
+      p.life -= vdt;
+      if (p.k === "spark" || p.k === "debris") { p.vy += 500 * vdt; p.x += p.vx * vdt; p.y += p.vy * vdt; }
     }
-    this.fx = this.fx.filter(p => p.life > 0);
-    this.flash = Math.max(0, this.flash - dt * 4);
+    this.fx = this.fx.filter(p => (p.k === "beam" ? p.age < p.max : p.life > 0));
   },
   updateCam(dt) {
     const c = this.cam, [a, b] = this.f;
-    this.shake = Math.max(0, this.shake - dt * 30);
-    const focus = this.phase === PH.COMBO || this.phase === PH.FINISHER;
-    c.tx = focus ? (a.x + b.x) / 2 : CONFIG.W / 2; c.ty = focus ? CONFIG.floorY - 40 : 150;
+    if (this.shake.t > 0) this.shake.t -= dt;
+    const focus = this.phase === PH.COMBO;
+    const tx = focus ? (a.x + b.x) / 2 : CONFIG.W / 2, ty = focus ? CONFIG.floorY - 46 : CONFIG.H / 2;
     const k = 1 - Math.exp(-CONFIG.feel.zoomLerp * dt);
-    c.zoom = lerp(c.zoom, c.target, k); c.x = lerp(c.x, c.tx, k); c.y = lerp(c.y, c.ty, k);
+    c.zoom = lerp(c.zoom, c.target, k); c.x = lerp(c.x, tx, k); c.y = lerp(c.y, ty, k);
+    if (Math.abs(c.zoom - 1) < 0.004 && c.target === 1) { c.zoom = 1; c.x = lerp(c.x, CONFIG.W / 2, 1); c.y = lerp(c.y, CONFIG.H / 2, 1); }
   },
 };
 
-// ===================== Renderer：像素武者（狀態接口可換 Sprite Sheet） =====================
-//   Renderer.useSheet(state, image, { frames, fps, w, h }) 之後，該狀態改畫圖片（48×48 一格、橫向排列、腳底置中）
-//   狀態：idle / step / exhausted / stance_rock / stance_scissors / stance_paper / stance_hidden / clash /
-//        combo_1 / combo_2 / finisher_blue / finisher_red / parry_success / roll / hitstun / knockback
+// ===================== 像素圖示（14×14 手勢、12×10 箭頭、4×6 數字） =====================
+const GLYPH = {
+  rock: [
+    "..............", "...########...", "..##########..", ".############.", ".#.##.##.##.#.", ".############.", ".############.",
+    ".############.", "..##########..", "...########...", "....######....", "....######....", "..............", "..............",
+  ],
+  scissors: [
+    "#...........#.", "##.........##.", ".##.......##..", "..##.....##...", "...##...##....", "....##.##.....", ".....###......",
+    "....##.##.....", "...##...##....", ".####...####..", "##..##.##..##.", "##..##.##..##.", ".####...####..", "..............",
+  ],
+  paper: [
+    "...#.#.#.#....", "...#.#.#.#....", "...#.#.#.#....", "...#.#.#.#....", "...#######....", "#..#######....", "##.#######....",
+    ".##########...", "..#########...", "..#########...", "...#######....", "...######.....", "...######.....", "..............",
+  ],
+  right: ["......#.....", "......##....", "......###...", "##########..", "###########.", "###########.", "##########..", "......###...", "......##....", "......#....."],
+};
+GLYPH.left = GLYPH.right.map(r => [...r].reverse().join(""));
+const DIGIT = {
+  "0": ["####", "#..#", "#..#", "#..#", "#..#", "####"], "1": [".#..", "##..", ".#..", ".#..", ".#..", "###."],
+  "2": ["####", "...#", "####", "#...", "#...", "####"], "3": ["####", "...#", ".###", "...#", "...#", "####"],
+  "4": ["#..#", "#..#", "####", "...#", "...#", "...#"], "5": ["####", "#...", "####", "...#", "...#", "####"],
+  "6": ["####", "#...", "####", "#..#", "#..#", "####"], "7": ["####", "...#", "..#.", ".#..", ".#..", ".#.."],
+  "8": ["####", "#..#", "####", "#..#", "#..#", "####"], "9": ["####", "#..#", "####", "...#", "...#", "####"],
+  "%": ["##..#", "##.#.", "..#..", ".#...", "#..##", "...##"],
+};
+// 畫點陣圖：先畫描邊（四方向外擴 1px）再畫填色
+function drawBitmap(g, rows, x, y, fill, outline, scale = 1) {
+  const W = rows[0].length, H = rows.length;
+  if (outline) {
+    g.fillStyle = outline;
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (rows[r][c] === "#") for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) g.fillRect(x + (c + dx) * scale, y + (r + dy) * scale, scale, scale);
+  }
+  g.fillStyle = fill;
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (rows[r][c] === "#") g.fillRect(x + c * scale, y + r * scale, scale, scale);
+}
+
+// ===================== Renderer：像素武者 =====================
+//   · 有 Sprite Sheet（ART.spriteAtlas.imageByPlayer，跟本頁同資料夾）就照切格表畫：sx = 1 + 50·f，sy = 1 + 50·row，腳底 (24,40) 對齊
+//   · 沒有就用程式繪製：本地 48×48 座標、面向右、腳底在 (24,40)；先畫所有部件的 1px 描邊，再畫平塗色塊
+//   · 16 個狀態：idle / step / exhausted / stance_rock / stance_scissors / stance_paper / stance_hidden / clash /
+//     combo_1 / combo_2 / finisher_blue / finisher_red / parry_success / roll / hitstun / knockback
 const Renderer = (() => {
-  const C = CONFIG.colors;
-  const sheets = {};
-  let g;                                                    // 目前畫的 context
-  // 以腳底中心為原點、面向右的 48×48 座標畫一格像素塊；face < 0 時左右鏡射
-  let OX = 0, OY = 0, FACE = 1, SIL = false;
-  function px(dx, dy, w, h, color) {
-    g.fillStyle = SIL ? (color === "eye" ? "#ff3b5c" : "#08070d") : color === "eye" ? "#1a1420" : color;
-    const x = FACE > 0 ? OX + dx : OX - dx - w;
-    g.fillRect(Math.round(x), Math.round(OY - 48 + dy), w, h);
-  }
-
-  function body(pal, o) {
-    const s = o.spread ?? 0, lean = o.lean ?? 0, by = o.bob ?? 0, crouch = o.crouch ?? 0;
-    // 腿
-    px(-7 - s, 36 + crouch, 5, 10 - crouch, pal.giDark); px(2 + s, 36 + crouch, 5, 10 - crouch, pal.giDark);
-    px(-8 - s, 45, 6, 3, C.outline); px(2 + s, 45, 6, 3, C.outline);
-    // 身體
-    const tx = lean, ty = by + crouch;
-    px(-7 + tx, 22 + ty, 14, 15, pal.gi); px(-7 + tx, 22 + ty, 3, 15, pal.giDark);
-    px(-7 + tx, 33 + ty, 14, 2, C.outline);
-    px(-2 + tx, 22 + ty, 4, 4, C.skin);
-    // 頭
-    const hx = tx + (o.headX ?? 0), hy = ty + (o.headY ?? 0);
-    px(-5 + hx, 10 + hy, 10, 11, C.skin);
-    px(-6 + hx, 7 + hy, 12, 5, C.hair); px(-6 + hx, 7 + hy, 3, 9, C.hair);
-    px(-6 + hx, 12 + hy, 12, 2, pal.band);
-    const tail = Math.sin((o.t ?? 0) * 10) > 0 ? 1 : 0;
-    px(-11 + hx, 12 + hy + tail, 5, 2, pal.band); px(-14 + hx, 13 + hy - tail, 3, 2, pal.band);
-    if (o.eyes === "x") { px(1 + hx, 15 + hy, 1, 1, "eye"); px(3 + hx, 15 + hy, 1, 1, "eye"); px(2 + hx, 16 + hy, 1, 1, "eye"); px(1 + hx, 17 + hy, 1, 1, "eye"); px(3 + hx, 17 + hy, 1, 1, "eye"); }
-    else if (o.eyes === "shut") px(1 + hx, 16 + hy, 3, 1, "eye");
-    else px(2 + hx, 15 + hy, 2, 2, "eye");
-    if (o.mouth) px(1 + hx, 19 + hy, 3, 1, "eye");
-    return { tx, ty };
-  }
-  // 手臂：從肩膀往前伸 reach 格
-  function arm(pal, tx, ty, reach, dy = 0) { px(5 + tx, 24 + ty + dy, Math.max(3, reach), 4, pal.gi); px(5 + tx + Math.max(3, reach), 24 + ty + dy, 4, 4, C.skin); return { hx: 5 + tx + Math.max(3, reach) + 2, hy: 26 + ty + dy }; }
-
-  function hammer(hx, hy, raised) {
-    if (raised) { px(hx - 1, hy - 18, 3, 18, C.wood); px(hx - 7, hy - 30, 15, 13, C.stoneDark); px(hx - 6, hy - 29, 13, 11, C.stone); px(hx - 5, hy - 28, 5, 3, C.stoneHi); px(hx + 2, hy - 23, 3, 3, C.stoneDark); }
-    else { px(hx, hy - 1, 14, 3, C.wood); px(hx + 12, hy - 9, 13, 15, C.stoneDark); px(hx + 13, hy - 8, 11, 13, C.stone); px(hx + 14, hy - 7, 4, 4, C.stoneHi); px(hx + 19, hy, 3, 3, C.stoneDark); }
-  }
-  function blades(hx, hy, open) {
-    const sp = open ? 4 : 2;
-    px(hx, hy - sp - 1, 3, 3, C.wood); px(hx + 3, hy - sp - 1, 18, 2, C.blade); px(hx + 3, hy - sp + 1, 18, 1, C.bladeDark); px(hx + 21, hy - sp, 3, 1, C.blade);
-    px(hx, hy + sp - 1, 3, 3, C.wood); px(hx + 3, hy + sp - 1, 16, 2, C.blade); px(hx + 3, hy + sp + 1, 16, 1, C.bladeDark); px(hx + 19, hy + sp, 3, 1, C.blade);
-  }
-  function palm(hx, hy, t, strong) {
-    px(hx, hy - 4, 5, 9, C.skin); px(hx + 5, hy - 5, 2, 3, C.skin); px(hx + 5, hy - 1, 2, 2, C.skin); px(hx + 5, hy + 2, 2, 2, C.skin);
-    // 掌風前搖：三道風弧往前推
-    if (SIL) return;
-    const ph = (t * 6) % 1;
-    for (let i = 0; i < (strong ? 4 : 3); i++) {
-      const d = 9 + i * 6 + ph * 6, a = 1 - (i * 0.22 + ph * 0.2);
-      g.globalAlpha = Math.max(0, a) * 0.85;
-      px(hx + d, hy - 6 + i, 2, 12 - i * 2, C.wind); px(hx + d + 2, hy - 4 + i, 1, 8 - i * 2, "#e6fdff");
-      g.globalAlpha = 1;
+  const A = ART.spriteAtlas, F = PAL.fighters;
+  const sheets = [null, null];
+  ["p1", "p2"].forEach((p, i) => {                          // 正式圖檔存在就自動接上
+    const img = new Image();
+    img.onload = () => { if (img.naturalWidth === A.imageWidth && img.naturalHeight === A.imageHeight) sheets[i] = img; };
+    img.onerror = () => {};
+    img.src = A.imageByPlayer[p];
+  });
+  // 照 playback 算第幾格
+  function frameOf(state, t, f) {
+    const an = A.animations[state];
+    if (!an) return 0;
+    const n = Math.floor(t * an.fps);
+    if (an.playback === "loop") return n % an.frames;
+    if (an.playback === "hold_last") return Math.min(n, an.frames - 1);
+    if (an.playback === "tail_loop") return n < an.frames ? n : an.loopStartFrame + ((n - an.loopStartFrame) % (an.frames - an.loopStartFrame));
+    // event_driven：終結技 0–7 格對應判定窗、第 8 格在命中事件上；其他動作從接觸格開始（事件發生時才切進這個動作）
+    if (state === "finisher_blue" || state === "finisher_red") {
+      if (!f.fin) { const k = Game.phase === PH.FINISHER ? clamp(Game.t / Game.dur, 0, 0.999) : 0; return Math.floor(k * (an.keyFrames.windupLast + 1)); }
+      return Math.min(an.frames - 1, an.keyFrames.contact + Math.floor(t * an.fps * 0.5));
     }
+    const c = an.keyFrames.contact ?? 0;
+    return Math.min(an.frames - 1, c + n);
   }
-  function aura(color, t, strength = 1) {
-    if (SIL) return;
-    const a = 0.25 + 0.2 * Math.sin(t * 20);
-    g.globalAlpha = a * strength; g.fillStyle = color;
-    g.fillRect(Math.round(OX - 16), Math.round(OY - 50), 32, 50);
-    g.globalAlpha = 1;
-  }
-  function sweat(t) { if (SIL) return; const y = ((t * 30) % 10); px(-4, 6 + y, 2, 3, "#7fd0ff"); px(7, 9 + ((y + 5) % 10), 2, 2, "#7fd0ff"); }
 
-  // ---- 各狀態的畫法 ----
-  const STATES = {
-    idle(p, f, t) { const b = body(p, { bob: Math.round(Math.sin(t * 4)), t }); const h = arm(p, b.tx, b.ty, 4, 2); },
-    step(p, f, t) { const b = body(p, { spread: 3, lean: 2, t }); arm(p, b.tx, b.ty, 5, 1); },
-    exhausted(p, f, t) { const b = body(p, { crouch: 3, lean: 3, headY: 2, eyes: "shut", mouth: true, bob: Math.round(Math.sin(t * 9)), t }); arm(p, b.tx, b.ty, 2, 6); sweat(t); },
-    stance_rock(p, f, t) { const b = body(p, { spread: 2, lean: -1, t }); const h = arm(p, b.tx, b.ty, 2, -2); hammer(h.hx - 2, h.hy, true); },
-    stance_scissors(p, f, t) { const b = body(p, { spread: 3, lean: 1, t }); const h = arm(p, b.tx, b.ty, 6, 0); blades(h.hx, h.hy, Math.sin(t * 8) > 0); },
-    stance_paper(p, f, t) { const b = body(p, { spread: 2, lean: 2, t }); const h = arm(p, b.tx, b.ty, 7, -1); palm(h.hx, h.hy, t, false); },
-    stance_hidden(p, f, t) { SIL = true; const b = body(p, { spread: 2, bob: Math.round(Math.sin(t * 4)), t }); arm(p, b.tx, b.ty, 4, 1); px(-10, 20, 4, 18, "#08070d"); SIL = false; },
-    clash(p, f, t) { const b = body(p, { spread: 4, lean: -3, eyes: "shut", t }); const h = arm(p, b.tx, b.ty, 9, -1); weapon(f, h, t); },
-    combo_1(p, f, t) { const b = body(p, { spread: 5, lean: 4, t }); const h = arm(p, b.tx, b.ty, 12, 0); weapon(f, h, t, true); speed(t); },
-    combo_2(p, f, t) { const b = body(p, { spread: 6, lean: 5, crouch: 1, t }); const h = arm(p, b.tx, b.ty, 14, -2); weapon(f, h, t, true); speed(t); },
-    finisher_blue(p, f, t) { aura(C.blue, t); const b = body(p, { spread: 5, lean: 3, t }); const h = arm(p, b.tx, b.ty, 10, -3); weapon(f, h, t, true); },
-    finisher_red(p, f, t) { aura(C.red, t, 1.3); const b = body(p, { spread: 6, lean: -2, crouch: 2, t }); const h = arm(p, b.tx, b.ty, 3, -6); hammer(h.hx - 2, h.hy, true); },
-    parry_success(p, f, t) { aura("#ffffff", t, 1.2); const b = body(p, { spread: 4, lean: 3, t }); const h = arm(p, b.tx, b.ty, 11, -2); px(h.hx, h.hy - 5, 4, 10, "#ffffff"); },
-    roll(p, f, t) { // 縮成一團翻滾
-      g.save(); g.translate(OX, OY - 14); g.rotate(f.face * t * 22); g.translate(-OX, -(OY - 14));
-      const s = SIL; px(-9, 26, 18, 18, p.gi); px(-7, 28, 14, 14, p.giDark); px(-4, 30, 8, 7, C.skin); px(-5, 29, 10, 3, C.hair); px(-6, 32, 12, 2, p.band);
-      g.restore(); void s;
-    },
-    hitstun(p, f, t) { const b = body(p, { lean: -4, headX: -2, headY: 1, eyes: "x", mouth: true, t }); arm(p, b.tx, b.ty, 2, 4); },
-    knockback(p, f, t) {
-      g.save(); g.translate(OX, OY - 24); g.rotate(-f.face * (f.rot || t * 10)); g.translate(-OX, -(OY - 24));
-      const b = body(p, { spread: 6, lean: -4, eyes: "x", mouth: true, t }); arm(p, b.tx, b.ty, 8, -6);
-      g.restore();
-    },
-  };
-  function weapon(f, h, t, strike) {
-    const st = f.stance ?? "rock";
-    if (st === "rock") hammer(h.hx - 1, h.hy, false);
-    else if (st === "scissors") blades(h.hx, h.hy, !!strike);
-    else palm(h.hx, h.hy, t, !!strike);
+  // ---- 程式繪製 ----
+  let g, OX, OY, FACE, parts;
+  const P = (x, y, w, h, c) => parts.push([x, y, w, h, c]);
+  function flush(colors, outline) {
+    const wx = (x, w) => (FACE > 0 ? OX + (x - 24) : OX - (x - 24) - w);
+    const wy = y => OY + (y - 40);
+    if (outline) { g.fillStyle = outline; for (const [x, y, w, h, c] of parts) if (c !== "fx") g.fillRect(Math.round(wx(x, w) - 1), Math.round(wy(y) - 1), w + 2, h + 2); }
+    for (const [x, y, w, h, c] of parts) { g.fillStyle = colors[c] ?? c; g.fillRect(Math.round(wx(x, w)), Math.round(wy(y)), w, h); }
+    parts = [];
   }
-  function speed(t) { if (SIL) return; g.globalAlpha = 0.5; for (let i = 0; i < 3; i++) px(-22 - i * 5, 20 + i * 6, 10, 1, "#ffffff"); g.globalAlpha = 1; }
+  // 身體：主身約 18×26（頭 y12–21、身 y21–32、腿 y32–40）；P1 方肩厚＋奶白腰帶、P2 斜肩＋薄荷領巾＋雙尾短披
+  function body(i, o = {}) {
+    const dx = o.dx ?? 0, dy = o.dy ?? 0, sp = o.spread ?? 0, hx = dx + (o.hx ?? 0), hy = dy + (o.hy ?? 0);
+    if (i === 1) { P(13 + dx, 23 + dy, 3, 9, "S"); P(10 + dx, 25 + dy, 3, 7, "W"); }          // P2 雙尾披片（在背後）
+    P(18 - sp, 32, 5, 8, "S"); P(25 + sp, 32, 5, 8, "S");                                      // 腿
+    P(17 - sp, 38, 6, 2, "O"); P(25 + sp, 38, 7, 2, "O");                                      // 鞋
+    P(17 + dx, 21 + dy, 13, 12, "P"); P(17 + dx, 21 + dy, 3, 12, "S");                       // 身
+    P(17 + dx, 29 + dy, 13, 2, i === 0 ? "W" : "S");                                          // 腰帶（P1 亮）
+    if (i === 0) P(15 + dx, 20 + dy, 8, 4, "W");                                              // P1 方肩甲
+    else { P(19 + dx, 20 + dy, 10, 2, "W"); P(17 + dx, 22 + dy, 3, 2, "W"); }                 // P2 領巾、斜肩
+    P(19 + hx, 12 + hy, 9, 9, "K");                                                           // 臉
+    if (i === 0) { P(17 + hx, 11 + hy, 13, 2, "S"); P(19 + hx, 8 + hy, 9, 3, "S"); }          // P1 平頂帽緣
+    else { P(18 + hx, 10 + hy, 10, 3, "S"); P(20 + hx, 7 + hy, 4, 3, "S"); }                  // P2 髮髻
+    if (o.eyes === "x") { P(25 + hx, 15 + hy, 1, 1, "O"); P(27 + hx, 15 + hy, 1, 1, "O"); P(26 + hx, 16 + hy, 1, 1, "O"); P(25 + hx, 17 + hy, 1, 1, "O"); P(27 + hx, 17 + hy, 1, 1, "O"); }
+    else if (o.eyes === "shut") P(25 + hx, 16 + hy, 3, 1, "O");
+    else P(26 + hx, 15 + hy, 1, 2, "O");
+    if (o.mouth) P(25 + hx, 19 + hy, 2, 1, "O");
+    return { dx, dy };
+  }
+  // 武器（剪影要點：石＝高方錘、剪＝低雙尖、布＝寬雙掌）
+  const W = {
+    rockHigh(dx, dy) {                                     // 雙手舉方錘頭 11×8 在頭頂前側，錘柄斜過肩
+      P(26 + dx, 13 + dy, 3, 9, "P"); P(21 + dx, 14 + dy, 3, 8, "S"); P(24 + dx, 11 + dy, 5, 3, "K");
+      P(23 + dx, 13 + dy, 2, 2, "B"); P(21 + dx, 15 + dy, 2, 2, "B"); P(19 + dx, 17 + dy, 2, 2, "B");
+      P(25 + dx, 2 + dy, 11, 8, "M"); P(26 + dx, 3 + dy, 9, 1, "H"); P(25 + dx, 9 + dy, 11, 1, "B");
+    },
+    rockSwing(dx, dy, reach) {                             // 錘向前掄出
+      P(28 + dx, 23 + dy, 4 + reach, 3, "P"); P(31 + dx + reach, 22 + dy, 3, 4, "K");
+      P(34 + dx + reach, 23 + dy, 4, 2, "B"); P(37 + dx + reach, 18 + dy, 9, 10, "M"); P(38 + dx + reach, 19 + dy, 7, 1, "H");
+    },
+    blades(dx, dy, reach) {                                // 兩把短刃朝前，刀尖高低差 5px、中間留 3px
+      P(29 + dx, 24 + dy, 5 + reach, 3, "P"); P(29 + dx, 28 + dy, 4 + reach, 3, "S");
+      P(33 + dx + reach, 24 + dy, 2, 3, "K"); P(32 + dx + reach, 28 + dy, 2, 3, "K");
+      P(35 + dx + reach, 23 + dy, 9, 2, "M"); P(35 + dx + reach, 23 + dy, 9, 1, "H"); P(44 + dx + reach, 24 + dy, 1, 1, "M");
+      P(34 + dx + reach, 28 + dy, 8, 2, "M"); P(34 + dx + reach, 28 + dy, 8, 1, "H"); P(42 + dx + reach, 29 + dy, 1, 1, "M");
+    },
+    palms(dx, dy, reach) {                                 // 雙肘外張，一掌前上、一掌前下，中間留開放框形
+      P(28 + dx, 18 + dy, 4 + reach, 3, "P"); P(32 + dx + reach, 13 + dy, 5, 7, "K"); P(37 + dx + reach, 14 + dy, 1, 5, "K");
+      P(28 + dx, 29 + dy, 4 + reach, 3, "S"); P(32 + dx + reach, 29 + dy, 5, 7, "K"); P(37 + dx + reach, 30 + dy, 1, 5, "K");
+    },
+    armDown(dx, dy) { P(26 + dx, 23 + dy, 3, 8, "P"); P(26 + dx, 31 + dy, 3, 2, "K"); },
+  };
+  function weaponOf(st, dx, dy, reach) { if (st === "scissors") W.blades(dx, dy, reach); else if (st === "paper") W.palms(dx, dy, reach); else W.rockSwing(dx, dy, reach); }
+
+  const STATES = {
+    idle(f, n) { const b = body(f.i, { dy: n === 3 ? 1 : 0 }); W.armDown(b.dx, b.dy); },
+    step(f, n) { const b = body(f.i, { spread: n >= 1 && n <= 3 ? 3 : 1, dx: 1 }); W.armDown(b.dx, b.dy); },
+    exhausted(f, n) { const b = body(f.i, { dy: 3, dx: 2, hx: 2, hy: n === 2 ? 2 : 1, eyes: "shut", mouth: true }); P(27 + b.dx, 25 + b.dy, 3, 8, "P"); P(27 + b.dx, 33 + b.dy, 3, 2, "K"); sweat(f); },
+    stance_rock(f, n) { const b = body(f.i, { spread: 2, dy: n % 2 }); W.rockHigh(b.dx, b.dy); },
+    stance_scissors(f, n) { const b = body(f.i, { spread: 3, dx: 2, dy: 3 }); W.blades(b.dx, b.dy + (n % 2), 1); },
+    stance_paper(f, n) { const b = body(f.i, { spread: 2, dx: 1 }); W.palms(b.dx, b.dy + (n === 2 ? 1 : 0), 0); },
+    stance_hidden(f, n) { const b = body(f.i, { spread: 1, dy: n === 1 ? 1 : 0 }); P(24 + b.dx, 24 + b.dy, 6, 5, "P"); },
+    clash(f, n) { const b = body(f.i, { spread: 3, dx: -2, eyes: "shut" }); weaponOf(f.stance, b.dx + 1, b.dy, 2); },
+    combo_1(f, n) { const b = body(f.i, { spread: 4, dx: 3 }); weaponOf(f.stance, b.dx, b.dy, 5); },
+    combo_2(f, n) { const b = body(f.i, { spread: 5, dx: 5, dy: 1 }); weaponOf(f.stance, b.dx, b.dy, 7); },
+    finisher_blue(f, n) {
+      if (!f.fin) { const b = body(f.i, { spread: 3, dx: -2 }); weaponOf(f.stance, b.dx - 6, b.dy - 2, 0); }   // 蓄力：武器往後收
+      else { const b = body(f.i, { spread: 5, dx: 5 }); weaponOf(f.stance, b.dx, b.dy, 8); }                 // 揮出
+    },
+    finisher_red(f, n) {
+      if (!f.fin) { const b = body(f.i, { spread: 4, dy: 3 }); W.rockHigh(b.dx, b.dy - 2); rim(f); }        // 壓身、舉起重錘、紅色邊光
+      else { const b = body(f.i, { spread: 6, dx: 3, dy: 4 }); P(28 + b.dx, 27 + b.dy, 6, 3, "P"); P(33 + b.dx, 29 + b.dy, 12, 10, "M"); P(34 + b.dx, 30 + b.dy, 10, 1, "H"); }
+    },
+    parry_success(f, n) { const b = body(f.i, { spread: 4, dx: 2 }); P(29 + b.dx, 17 + b.dy, 3, 12, "P"); P(30 + b.dx, 15 + b.dy, 4, 3, "K"); },
+    roll(f, n) { P(15, 24, 18, 16, "P"); P(17, 26, 14, 12, "S"); P(22, 28, 7, 6, "K"); P(21, 26, 9, 2, f.i === 0 ? "W" : "S"); },
+    hitstun(f, n) { const b = body(f.i, { dx: -3, hx: -2, hy: 1, eyes: "x", mouth: true }); P(20 + b.dx, 23 + b.dy, 3, 7, "P"); },
+    knockback(f, n) { const b = body(f.i, { spread: 5, dx: -3, eyes: "x", mouth: true }); P(14 + b.dx, 18 + b.dy, 6, 3, "P"); P(28 + b.dx, 16 + b.dy, 6, 3, "P"); },
+  };
+  function sweat(f) { const y = Math.floor((f.anim.t * 24) % 8); P(14, 10 + y, 1, 2, "fx"); P(32, 12 + ((y + 4) % 8), 1, 2, "fx"); }
+  function rim(f) { P(24, 1, 13, 1, "R"); P(36, 2, 1, 8, "R"); P(15, 19, 1, 5, "R"); }
+
+  function colorsFor(f, mode) {
+    const p = F["p" + (f.i + 1)];
+    if (mode === "hidden") return { P: F.hiddenFill, S: F.hiddenFill, W: f.i === 0 ? p.secondary : p.secondary, H: F.hiddenFill, K: F.hiddenFill, M: F.hiddenFill, B: F.hiddenFill, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
+    if (mode === "white") { const w = PAL.fx.impact.core; return { P: w, S: w, W: w, H: w, K: w, M: w, B: w, O: w, R: w, fx: w }; }
+    return { P: p.primary, S: p.shadow, W: p.secondary, H: p.highlight, K: CONFIG.skin, M: F.neutralSteel, B: PAL.platform.oxidizedBronze, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
+  }
 
   return {
-    STATES: Object.keys(STATES),
-    useSheet(state, image, opt) { sheets[state] = { image, frames: opt.frames ?? 1, fps: opt.fps ?? 10, w: opt.w ?? 48, h: opt.h ?? 48 }; },
-    drawFighter(ctx, f, state, t, x, y, face, alpha = 1) {
-      g = ctx;
-      const pal = CONFIG.colors.p[f.i];
-      const sh = sheets[state];
-      g.globalAlpha = alpha;
-      if (sh) {                                             // 換成 Sprite Sheet 的地方
-        const fr = Math.floor(t * sh.fps) % sh.frames;
-        g.save(); g.translate(Math.round(x), Math.round(y)); if (face < 0) g.scale(-1, 1);
-        g.drawImage(sh.image, fr * sh.w, 0, sh.w, sh.h, -sh.w / 2, -sh.h, sh.w, sh.h); g.restore();
+    STATES: Object.keys(STATES), frameOf, hasSheet: i => !!sheets[i],
+    useSheet(i, img) { sheets[i] = img; },                 // 手動接圖：Renderer.useSheet(0, image)
+    drawFighter(ctx, f, state, t, x, y, face, opt = {}) {
+      g = ctx; OX = Math.round(x); OY = Math.round(y); FACE = face;
+      const n = frameOf(state, t, f);
+      const rot = state === "knockback" ? (f.rot || t * 10) : state === "roll" ? face * t * 22 : 0;
+      g.save();
+      if (opt.alpha !== undefined) g.globalAlpha = opt.alpha;
+      if (rot) { g.translate(OX, OY - 14); g.rotate(-face * rot * (state === "roll" ? -1 : 1)); g.translate(-OX, -(OY - 14)); }
+      const sh = sheets[f.i];
+      if (sh && !opt.white) {
+        const an = A.animations[state];
+        const sx = A.originX + A.strideX * n, sy = A.originY + A.strideY * an.row;
+        g.translate(OX, OY); if (face < 0) g.scale(-1, 1);
+        g.drawImage(sh, sx, sy, A.frameWidth, A.frameHeight, -A.pivot.x, -A.pivot.y, A.frameWidth, A.frameHeight);
       } else {
-        OX = x; OY = y; FACE = face; SIL = false;
-        (STATES[state] ?? STATES.idle)(pal, f, t);
+        parts = [];
+        (STATES[state] ?? STATES.idle)(f, n);
+        const mode = opt.white ? "white" : state === "stance_hidden" ? "hidden" : "normal";
+        flush(colorsFor(f, mode), opt.rim ? PAL.fx.impact.core : mode === "white" ? null : F.outline);
       }
-      g.globalAlpha = 1;
+      g.restore();
     },
   };
 })();
 
-// ===================== 畫面 =====================
+// ===================== 畫面（繪製順序：背景 → 平台 → 紅區填色與斜紋 → 殘影 → 角色 → 命中粒子與 KO → 紅格邊線、藍框、方向箭頭 → HUD） =====================
 const screen = document.getElementById("screen");
 const sctx = screen.getContext("2d");
 const buf = document.createElement("canvas");
 buf.width = CONFIG.W; buf.height = CONFIG.H;
 const ctx = buf.getContext("2d");
-ctx.imageSmoothingEnabled = false;
 let scale = 1;
-const stars = Array.from({ length: 70 }, () => ({ x: Math.random() * CONFIG.W, y: Math.random() * 150, s: Math.random() < 0.15 ? 2 : 1, tw: Math.random() * 6 }));
+const stars = Array.from({ length: 46 }, () => ({ x: (Math.random() * CONFIG.W) | 0, y: (Math.random() * 110) | 0, tw: Math.random() * 6 }));
 
 function resize() {
   const w = innerWidth, h = innerHeight - 52, dpr = window.devicePixelRatio || 1;
-  scale = Math.max(0.5, Math.min(w / CONFIG.W, h / CONFIG.H));
-  if (scale >= 1) scale = Math.floor(scale * 2) / 2;       // 盡量用整數或半格倍率，像素才乾淨
+  const fit = Math.min(w / CONFIG.W, h / CONFIG.H);
+  scale = fit >= 1 ? Math.floor(fit) : fit;                  // 整數倍率放大，剩下的空間留邊
   screen.style.width = `${Math.round(CONFIG.W * scale)}px`; screen.style.height = `${Math.round(CONFIG.H * scale)}px`;
   screen.width = Math.round(CONFIG.W * scale * dpr); screen.height = Math.round(CONFIG.H * scale * dpr);
   screen.dpr = dpr;
+  ctx.imageSmoothingEnabled = false; sctx.imageSmoothingEnabled = false;   // 每次重設尺寸後重新套用
 }
 addEventListener("resize", resize); resize();
 
+const B = PAL.background, PF = PAL.platform;
 function drawBackground(time) {
-  const C = CONFIG.colors, grd = ctx.createLinearGradient(0, 0, 0, CONFIG.H);
-  grd.addColorStop(0, C.sky1); grd.addColorStop(1, C.sky2);
-  ctx.fillStyle = grd; ctx.fillRect(0, 0, CONFIG.W, CONFIG.H);
-  for (const s of stars) { ctx.globalAlpha = 0.4 + 0.4 * Math.sin(time * 2 + s.tw); ctx.fillStyle = C.star; ctx.fillRect(s.x | 0, s.y | 0, s.s, s.s); }
-  ctx.globalAlpha = 1;
-  // 遠山剪影
-  ctx.fillStyle = "#1b1530";
-  for (let x = 0; x < CONFIG.W; x += 4) { const h = 30 + Math.sin(x * 0.02) * 14 + Math.sin(x * 0.07) * 6; ctx.fillRect(x, 230 - h, 4, h + 40); }
-}
-
-function drawStage(time) {
-  const C = CONFIG.colors, L = CONFIG.stageX, Y = CONFIG.floorY;
-  // 深淵
-  ctx.fillStyle = C.abyss; ctx.globalAlpha = 0.5; ctx.fillRect(-200, Y + 30, CONFIG.W + 400, 200); ctx.globalAlpha = 1;
-  // 浮空擂台：7 格
-  const r = Game.round, red = Game.phase === PH.FINISHER && r && r.type === "red" ? r.zone : [];
-  for (let i = 1; i <= CONFIG.cells; i++) {
-    const x = L + (i - 1) * CONFIG.cellW;
-    ctx.fillStyle = C.tileEdge; ctx.fillRect(x, Y, CONFIG.cellW, 16);
-    ctx.fillStyle = C.tile; ctx.fillRect(x + 1, Y + 1, CONFIG.cellW - 2, 12);
-    ctx.fillStyle = C.tileTop; ctx.fillRect(x + 1, Y, CONFIG.cellW - 2, 3);
-    if (red.includes(i)) { ctx.globalAlpha = 0.45 + 0.35 * Math.sin(time * 18); ctx.fillStyle = C.redZone; ctx.fillRect(x + 1, Y - 3, CONFIG.cellW - 2, 16); ctx.globalAlpha = 1; }
-    ctx.fillStyle = C.tileNum; ctx.font = "bold 7px monospace"; ctx.textAlign = "center"; ctx.fillText(String(i), x + CONFIG.cellW / 2, Y + 11);
+  // 夜空：低對比像素色帶
+  const bands = 10;
+  for (let i = 0; i < bands; i++) {
+    const k = i / (bands - 1), c = mix(B.skyTop, B.skyHorizon, k);
+    ctx.fillStyle = c; ctx.fillRect(0, Math.floor(i * 160 / bands), CONFIG.W, Math.ceil(160 / bands) + 1);
   }
-  // 崖邊標記與台底
-  ctx.fillStyle = "#2a2019";
-  for (let i = 0; i < CONFIG.cells * CONFIG.cellW; i += 8) ctx.fillRect(L + i + 2, Y + 16, 6, 6 + ((i / 8) % 3) * 4);
-  ctx.fillStyle = "#e05a4a"; ctx.fillRect(L - 2, Y - 2, 2, 18); ctx.fillRect(L + CONFIG.cells * CONFIG.cellW, Y - 2, 2, 18);
-}
-
-function drawFx() {
-  for (const p of Game.fx) {
-    const a = clamp(p.life / p.max, 0, 1);
-    if (p.k === "spark") { ctx.globalAlpha = a; ctx.fillStyle = p.color; ctx.fillRect(p.x | 0, p.y | 0, 2, 2); }
-    else if (p.k === "ring") { ctx.globalAlpha = a; ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, (1 - a) * 40 + 4, 0, Math.PI * 2); ctx.stroke(); }
-    else if (p.k === "zone") { ctx.globalAlpha = a; ctx.fillStyle = CONFIG.colors.redZone; ctx.fillRect(cellX(p.c) - CONFIG.cellW / 2, CONFIG.floorY - 60 * a, CONFIG.cellW, 60 * a + 4); }
-    else if (p.k === "pillar") {                         // 場外擊落光柱
-      const w = 10 + (1 - a) * 30;
-      ctx.globalAlpha = a; ctx.fillStyle = p.color; ctx.fillRect(p.x - w / 2, 0, w, CONFIG.H);
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(p.x - w / 6, 0, w / 3, CONFIG.H);
-    }
-  }
+  ctx.fillStyle = B.skyHorizon; ctx.fillRect(0, 160, CONFIG.W, CONFIG.H - 160);
+  for (const s of stars) { ctx.globalAlpha = 0.25 + 0.2 * Math.sin(time * 1.5 + s.tw); ctx.fillStyle = PAL.hud.muted; ctx.fillRect(s.x, s.y, 1, 1); }
   ctx.globalAlpha = 1;
+  // 遠崖剪影
+  ctx.fillStyle = B.distantCliffs;
+  for (let x = 0; x < CONFIG.W; x += 2) { const h = 34 + Math.round(Math.sin(x * 0.021) * 12 + Math.sin(x * 0.067) * 5 + (x % 46 < 6 ? 6 : 0)); ctx.fillRect(x, 200 - h, 2, h + 70); }
+  // 霧帶（在地台後）
+  ctx.fillStyle = B.mist;
+  for (let i = 0; i < 3; i++) { const y = 150 + i * 14, off = Math.round((time * (4 + i * 2)) % 64); for (let x = -64 + off; x < CONFIG.W; x += 64) ctx.fillRect(x, y, 40 - i * 6, 2); }
+  // 深淵：往下逐步加深
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = mix(B.mist, B.abyss, (i + 1) / 4); ctx.fillRect(0, 214 + i * 8, CONFIG.W, 8); }
+  ctx.fillStyle = B.abyss; ctx.fillRect(0, 246, CONFIG.W, CONFIG.H - 246);
+}
+function mix(a, b, k) {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return "#" + pa.map((v, i) => Math.round(v + (pb[i] - v) * k).toString(16).padStart(2, "0")).join("");
 }
 
-function drawFighters(time) {
-  const r = Game.round;
+function drawStage() {
+  const L = CONFIG.stageX, R = ART.stage.rightXExclusive, Y = CONFIG.floorY, W = CONFIG.cellW;
+  // 台底：往深淵收窄
+  for (let i = 0; i < 6; i++) { const inset = 4 + i * 6, y = Y + 16 + i * 4; ctx.fillStyle = PF.outline; ctx.fillRect(L + inset - 1, y, R - L - inset * 2 + 2, 5); ctx.fillStyle = i % 2 ? PF.stoneShadow : mix(PF.stoneShadow, PF.outline, 0.3); ctx.fillRect(L + inset, y, R - L - inset * 2, 4); }
+  ctx.fillStyle = PF.outline; ctx.fillRect(L - 1, Y - 1, R - L + 2, 18);
+  for (let i = 0; i < CONFIG.cells; i++) {
+    const x = L + i * W;
+    ctx.fillStyle = PF.stoneMid; ctx.fillRect(x, Y, W, 12);
+    ctx.fillStyle = PF.stoneShadow; ctx.fillRect(x, Y + 12, W, 4);
+    ctx.fillStyle = PF.topEdge; ctx.fillRect(x, Y, W, 2);
+    ctx.fillStyle = PF.oxidizedBronze; ctx.fillRect(x + W / 2 - 3, Y + 7, 2, 2); ctx.fillRect(x + W / 2 + 1, Y + 7, 2, 2);
+    if (i > 0) { ctx.fillStyle = PF.tileSeam; ctx.fillRect(x, Y, 1, 16); }
+  }
+  // 腳下輪廓最亮：角色腳下石緣加亮
+  for (const f of Game.f) if (!f.out && !f.air) { const c = clamp(Math.floor((f.x - L) / W), 0, CONFIG.cells - 1); ctx.fillStyle = PAL.fighters["p" + (f.i + 1)].highlight; ctx.globalAlpha = 0.35; ctx.fillRect(L + c * W + 1, Y, W - 2, 1); ctx.globalAlpha = 1; }
+}
+
+// 紅區：每格整段填色＋上緣 6px 斜紋帶（斜紋 80ms 一步慢移；減少動態時不動）
+function drawHazardFill(time) {
+  const cue = Game.cue();
+  if (!cue || cue.kind !== "red") return;
+  const T = ART.telegraphs.redRoll, Y = CONFIG.floorY, W = CONFIG.cellW, band = ART.stage.dangerTopBandHeightPx;
+  const step = REDUCED ? 0 : Math.floor((cue.now - cue.cueAt) * 1000 / T.hazardHatchStepMs);
+  for (const c of cue.dangerTiles) {
+    const x = CONFIG.stageX + (c - 1) * W;
+    ctx.globalAlpha = T.hazardFillOpacity; ctx.fillStyle = PAL.fx.red.floorFill; ctx.fillRect(x, Y, W, 16); ctx.globalAlpha = 1;
+    ctx.fillStyle = PAL.fx.red.outline; ctx.fillRect(x, Y, W, band);
+    ctx.fillStyle = PAL.fx.red.hatch;
+    const per = T.hazardHatchPeriodPx;
+    for (let yy = 0; yy < band; yy++) for (let xx = 0; xx < W; xx++) if (((xx + yy + step) % per) < 2) ctx.fillRect(x + xx, Y + yy, 1, 1);
+  }
+}
+function drawHazardEdges() {
+  const cue = Game.cue();
+  if (!cue || cue.kind !== "red" || !cue.dangerTiles.length) return;
+  const Y = CONFIG.floorY, W = CONFIG.cellW, a = Math.min(...cue.dangerTiles), b = Math.max(...cue.dangerTiles);
+  const x0 = CONFIG.stageX + (a - 1) * W, x1 = CONFIG.stageX + b * W;
+  ctx.fillStyle = PAL.fx.red.outline; ctx.fillRect(x0 - 1, Y - 2, x1 - x0 + 2, 1); ctx.fillRect(x0 - 1, Y + 16, x1 - x0 + 2, 1);
+  ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(x0, Y - 1, x1 - x0, 1); ctx.fillRect(x0, Y + 15, x1 - x0, 1); ctx.fillRect(x0, Y - 1, 1, 17); ctx.fillRect(x1 - 1, Y - 1, 1, 17);
+}
+
+function drawTrails() {
+  const al = FX.motionTrail.alphaNewestToOldest;
+  for (const f of Game.f) f.trail.forEach((s, i) => Renderer.drawFighter(ctx, f, s.state, s.t, s.x, s.y, s.face, { alpha: al[i] ?? 0.1 }));
+}
+function drawFighters() {
   for (const f of Game.f) {
-    for (const s of f.trail) Renderer.drawFighter(ctx, f, s.state, s.t, s.x, s.y, s.face, 0.35 * (s.life / s.max));   // 像素殘影
     if (f.out) continue;
     let x = f.x + f.offX, y = f.y;
-    if (f.wobble > 0) { const k = f.wobble / CONFIG.move.wobbleTime; x += Math.sin(k * 30) * 2 * k + (f.wobbleDir || 0) * 3 * k; }
-    // 陰影
-    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect((x - 11) | 0, CONFIG.floorY - 1, 22, 3);
-    Renderer.drawFighter(ctx, f, f.anim.state, f.anim.t, x, y, f.face);
-    if (f.deny > 0) { ctx.globalAlpha = f.deny * 2; ctx.fillStyle = "#ff5a5a"; ctx.fillRect((x - 12) | 0, (y - 52) | 0, 24, 2); ctx.globalAlpha = 1; }
+    if (f.wobble > 0) { const k = f.wobble / CONFIG.move.wobbleTime; x += Math.round(Math.sin(k * 30) * 2 * k + (f.wobbleDir || 0) * 2 * k); }
+    ctx.fillStyle = "rgba(10,15,26,.55)"; ctx.fillRect(Math.round(x) - 10, CONFIG.floorY, 20, 2);       // 腳下陰影
+    const flash = f.flashT > 0 && !REDUCED;
+    Renderer.drawFighter(ctx, f, f.anim.state, f.anim.t, x, y, f.face, { rim: f.rimT > 0 && !REDUCED });
+    if (flash) Renderer.drawFighter(ctx, f, f.anim.state, f.anim.t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity });
+    if (f.deny > 0) { ctx.globalAlpha = Math.min(1, f.deny * 3); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 8, Math.round(y) - 46, 16, 1); ctx.globalAlpha = 1; }
   }
-  // 終結判定窗：攻方頭上的藍框手勢、守方腳下的翻滾方向
-  if (Game.phase === PH.FINISHER && r) {
-    const att = Game.f[r.att], def = Game.f[r.def];
-    if (r.type === "blue") {
-      const bx = att.x - 9, by = CONFIG.floorY - 78;
-      ctx.fillStyle = "#0b1b33"; ctx.fillRect(bx, by, 18, 18);
-      ctx.strokeStyle = CONFIG.colors.blue; ctx.lineWidth = 2; ctx.strokeRect(bx + 1, by + 1, 16, 16);
-    } else {
-      for (const d of r.dirs) {
-        const ax = def.x + d * 16, ay = CONFIG.floorY + 6;
-        ctx.fillStyle = "#9ff3ff"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(time * 20);
-        for (let k = 0; k < 6; k++) ctx.fillRect(ax + (d > 0 ? k : -k) - (d > 0 ? 3 : -3), ay - k, 1, k * 2 + 1);
-        ctx.globalAlpha = 1;
-      }
+}
+function drawFx() {
+  for (const p of Game.fx) {
+    const a = p.life !== undefined ? clamp(p.life / p.max, 0, 1) : 1;
+    if (p.k === "spark") { ctx.globalAlpha = a; ctx.fillStyle = p.color; ctx.fillRect(Math.round(p.x), Math.round(p.y), p.sz, p.sz); }
+    else if (p.k === "debris") { ctx.globalAlpha = a; ctx.fillStyle = PF.stoneMid; ctx.fillRect(Math.round(p.x), Math.round(p.y), 3, 2); ctx.fillStyle = PF.topEdge; ctx.fillRect(Math.round(p.x), Math.round(p.y), 3, 1); }
+    else if (p.k === "crack") { ctx.globalAlpha = a; ctx.fillStyle = PAL.fx.red.core; const x = CONFIG.stageX + (p.c - 1) * CONFIG.cellW; for (let i = 0; i < 6; i++) ctx.fillRect(x + 6 + i * 7, CONFIG.floorY + 2 + (i % 3) * 3, 4, 1); }
+    else if (p.k === "ring") {                            // 彈反：接觸點往外擴的輪廓環
+      const r = Math.round((1 - a) * 22 + 4);
+      ctx.globalAlpha = a; ctx.fillStyle = p.color;
+      for (let ang = 0; ang < 24; ang++) { const t = ang / 24 * Math.PI * 2; ctx.fillRect(Math.round(p.x + Math.cos(t) * r), Math.round(p.y + Math.sin(t) * r), 1, 1); }
+    } else if (p.k === "beam") drawBeam(p);
+  }
+  ctx.globalAlpha = 1;
+}
+// KO 光柱：40ms 細升 → 90ms 亮芯 → 250ms 淡出；峰值 22px，從 y=224 往上
+function drawBeam(p) {
+  const K = FX.koBlast, t = p.age * 1000, bottom = ART.stage.koBeamBottomY;
+  let w, h, a;
+  if (t < K.chargeMs) { w = 2; h = bottom * (t / K.chargeMs); a = 1; }
+  else if (t < K.chargeMs + K.coreMs) { w = K.beamMaxWidthPx; h = bottom; a = 1; }
+  else { const k = (t - K.chargeMs - K.coreMs) / K.fadeMs; w = Math.max(2, Math.round(K.beamMaxWidthPx * (1 - k * 0.6))); h = bottom; a = 1 - k; }
+  ctx.globalAlpha = clamp(a, 0, 1);
+  const x = p.x, top = bottom - h;
+  ctx.fillStyle = PAL.fx.ko.outer; ctx.fillRect(Math.round(x - w / 2), top, Math.round(w), h);
+  ctx.fillStyle = PAL.fx.ko.rim; ctx.fillRect(Math.round(x - w * 0.32), top, Math.max(1, Math.round(w * 0.64)), h);
+  ctx.fillStyle = PAL.fx.ko.core; ctx.fillRect(Math.round(x - w * 0.14), top, Math.max(1, Math.round(w * 0.28)), h);
+  ctx.globalAlpha = 1;
+}
+// 藍框（攻方腳底上方 55px、24×24 圓角方框、14×14 手勢、周邊倒數）與紅招方向箭頭（防方腳邊 ±14、−7；下方橫向倒數）
+function drawTelegraphs(time) {
+  const cue = Game.cue();
+  if (!cue) return;
+  const left = clamp((cue.deadlineAt - cue.now) / CONFIG.finisher.dur, 0, 1);
+  const urgent = (cue.deadlineAt - cue.now) <= CONFIG.countdown.urgentSec;
+  const blink = urgent && Math.floor(time * 20) % 2 === 0;
+  if (cue.kind === "blue") {
+    const att = Game.f[cue.attackerId], T = ART.telegraphs.blueParry;
+    const cx = Math.round(att.x), cy = CONFIG.floorY + T.offsetPx[1];   // 錨在腳底座標，不跟頭部動畫抖
+    const S = T.frameSizePx[0], x = cx - S / 2, y = cy - S / 2;
+    const C = PAL.fx.blue;
+    roundRect(x - 1, y - 1, S + 2, S + 2, C.outline);
+    roundRect(x, y, S, S, "#0E2747");
+    perimeter(x, y, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2);   // 周邊由滿退去（最後一段閃）
+    drawBitmap(ctx, GLYPH[cue.gesture], x + 5, y + 5, C.core, C.outline);
+  } else {
+    const def = Game.f[cue.defenderId], T = ART.telegraphs.redRoll;
+    for (const d of cue.safeDirs) {
+      const ax = Math.round(def.x + d * T.safeArrowOffsetAbsPx[0] - T.safeArrowSizePx[0] / 2), ay = Math.round(CONFIG.floorY + T.safeArrowOffsetAbsPx[1] - T.safeArrowSizePx[1] / 2);
+      drawBitmap(ctx, d < 0 ? GLYPH.left : GLYPH.right, ax, ay - 2, blink ? PAL.fx.red.rim : PAL.fx.safeArrow.fill, PAL.fx.safeArrow.outline);
+      // 箭頭下方橫向倒數
+      const bw = 16, bx = ax - 2, by = ay + 11;
+      ctx.fillStyle = PAL.fx.safeArrow.outline; ctx.fillRect(bx - 1, by - 1, bw + 2, 4);
+      ctx.fillStyle = blink ? PAL.fx.red.rim : PAL.fx.safeArrow.fill; ctx.fillRect(bx, by, Math.round(bw * left), 2);
     }
   }
 }
+function roundRect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x + 2, y, w - 4, h); ctx.fillRect(x, y + 2, w, h - 4); ctx.fillRect(x + 1, y + 1, w - 2, h - 2); }
+// 方框周邊倒數：從頂邊中央順時針走一圈，只畫剩下 k 的長度（線寬 th，轉角留圓角）
+function perimeter(x, y, S, k, color, th) {
+  const pts = [], a = S - 4;
+  for (let i = 0; i < a; i++) pts.push([x + 2 + i, y]);                 // 上：左→右
+  for (let i = 0; i < a; i++) pts.push([x + S - th, y + 2 + i]);        // 右：上→下
+  for (let i = 0; i < a; i++) pts.push([x + S - 3 - i, y + S - th]);    // 下：右→左
+  for (let i = 0; i < a; i++) pts.push([x, y + S - 3 - i]);             // 左：下→上
+  const start = Math.floor(a / 2), n = Math.round(pts.length * k);
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i++) { const [px, py] = pts[(start + i) % pts.length]; ctx.fillRect(px, py, th, th); }
+}
 
-// HUD（高解析度、在縮放後的畫面上直接畫字，中文才清楚）
-function drawHud(g, time) {
-  const C = CONFIG.colors, ph = Game.phase, r = Game.round;
-  g.textBaseline = "alphabetic";
-  // 雙方資訊
-  for (const f of Game.f) {
-    const right = f.i === 1, pal = C.p[f.i], x = right ? CONFIG.W - 8 : 8;
-    g.textAlign = right ? "right" : "left";
-    g.fillStyle = pal.band; g.font = "bold 9px sans-serif"; g.fillText(pal.name, x, 14);
-    const dm = f.damage, dc = dm < 50 ? "#ffffff" : dm < 100 ? "#ffcf6b" : "#ff6b5a";
-    g.fillStyle = dc; g.font = "bold 20px sans-serif"; g.fillText(`${dm}%`, x, 36);
-    // 命
-    for (let i = 0; i < CONFIG.stocks; i++) { g.fillStyle = i < f.stocks ? pal.band : "#3a3450"; const sx = right ? x - 6 - i * 9 : x + i * 9; g.fillRect(sx, 41, 6, 6); }
-    // 力量
-    g.font = "bold 7px sans-serif"; g.fillStyle = "#cfc6ff"; g.fillText("力量", right ? x - 30 : x + 30, 47);
-    for (let i = 0; i < CONFIG.powerMax; i++) {
-      const sx = right ? x - 6 - i * 9 : x + i * 9, on = i < f.power;
-      g.fillStyle = on ? C.gold : "#2e2944"; g.fillRect(sx, 51, 7, 4);
+// ---------- HUD（不跟著震動） ----------
+function damageColor(d) { return PAL.damageBands.find(b => d >= b.minInclusive && (b.maxInclusive === null || d <= b.maxInclusive)); }
+function drawDigits(text, x, y, band, alignRight) {
+  const scale = 4, cwOf = ch => (DIGIT[ch]?.[0].length ?? 4) * scale + 3;     // 固定字寬（% 比較寬）
+  const w = [...text].reduce((s, ch) => s + cwOf(ch), 0) - 3;
+  let cx = alignRight ? x - w : x;
+  for (const ch of text) {
+    const rows = DIGIT[ch];
+    if (rows) {
+      drawBitmap(ctx, rows, cx, y, band.fill, PAL.fighters.outline, scale);
+      if (band.topRim) { ctx.fillStyle = band.topRim; rows.forEach((r, ri) => [...r].forEach((c, ci) => { if (c === "#" && (ri === 0 || rows[ri - 1][ci] !== "#")) ctx.fillRect(cx + ci * scale, y + ri * scale, scale, 1); })); }
     }
-    if (f.stun > 0) { g.fillStyle = "#7fd0ff"; g.font = "bold 8px sans-serif"; g.fillText(`硬直 ${f.stun.toFixed(1)}s`, x, 66); }
+    cx += cwOf(ch);
   }
-  // 階段與計時條
-  g.textAlign = "center";
-  const label = PH_LABEL[ph] + (ph === PH.RPS && Game.t >= CONFIG.rps.reveal ? "・藏招" : "") + (ph === PH.FINISHER && r ? (r.type === "red" ? "・紅招（不可彈反）" : "・藍光（可彈反）") : "");
-  g.fillStyle = ph === PH.FINISHER ? (r?.type === "red" ? C.red : C.blue) : "#ffffff"; g.font = "bold 11px sans-serif";
-  g.fillText(label, CONFIG.W / 2, 16);
-  if (Game.dur > 0 && ph !== PH.RESOLVE && ph !== PH.GAMEOVER) {
-    const k = clamp(1 - Game.t / Game.dur, 0, 1);
-    g.fillStyle = "#2e2944"; g.fillRect(CONFIG.W / 2 - 50, 21, 100, 4);
-    g.fillStyle = ph === PH.RPS && Game.t >= CONFIG.rps.reveal ? "#8a7fb0" : C.gold; g.fillRect(CONFIG.W / 2 - 50, 21, 100 * k, 4);
-    if (ph === PH.RPS) { g.fillStyle = "#ffffff"; g.fillRect(CONFIG.W / 2 - 50 + 100 * (CONFIG.rps.reveal / CONFIG.rps.dur), 20, 1, 6); }
-  }
-  // 終結手勢圖示（字）
-  if (ph === PH.FINISHER && r && r.type === "blue") {
-    const att = Game.f[r.att];
-    const sx = (att.x - Game.cam.x) * Game.cam.zoom + CONFIG.W / 2, sy = (CONFIG.floorY - 69 - Game.cam.y) * Game.cam.zoom + CONFIG.H / 2;
-    g.fillStyle = "#ffffff"; g.font = `bold ${Math.round(12 * Game.cam.zoom)}px sans-serif`; g.fillText(GLABEL[r.gesture], sx, sy + 4);
-  }
-  // 按鍵提示（依階段）
-  g.font = "bold 8px sans-serif";
+  return { x0: alignRight ? x - w : x, w };
+}
+function drawHudPixels(time) {
+  const H = ART.hud.playerPanels;
   for (const f of Game.f) {
-    const right = f.i === 1, K = CONFIG.keyLabel[f.i];
-    let tip = "";
-    if (ph === PH.MOVE) tip = f.locked ? "已鎖定" : f.steps >= CONFIG.move.maxSteps ? "步數用完" : `${K.L}◀ ${K.M}鎖定 ${K.R}▶（每步 1 氣，最多 2 步）`;
-    else if (ph === PH.RPS) tip = f.stun > 0 ? "硬直中：按鍵鎖死" : `${K.L}石 ${K.M}剪 ${K.R}布`;
-    else if (ph === PH.COMBO && r) tip = f.i === r.att ? (f.power >= CONFIG.combo.redCost ? `短按選終結手勢｜長按 ${K[r.winKey]} 0.35s＝紅招` : "短按選終結手勢（力量不足紅招）") : "被連轟中…";
-    else if (ph === PH.FINISHER && r) tip = f.i === r.def ? (r.type === "blue" ? `按克制手勢彈反！（只有一次）` : `往 ${r.dirs.map(d => (d < 0 ? K.L + "◀" : K.R + "▶")).join(" 或 ")} 翻滾！`) : "";
-    else if (ph === PH.GAMEOVER) tip = "空白鍵或下方按鈕重開";
-    g.textAlign = right ? "right" : "left"; g.fillStyle = (ph === PH.RPS && f.stun > 0) ? "#6b6585" : "#d8d0f0";
-    g.fillText(tip, right ? CONFIG.W - 8 : 8, CONFIG.H - 8);
+    const right = f.i === 1, ax = right ? H.p2.anchorX : H.p1.anchorX, ay = H.p1.anchorY;
+    const band = damageColor(f.damage);
+    const box = drawDigits(`${Math.min(999, f.damage)}%`, ax, ay, band, right);
+    // 100% 以上：數字外側飄最多三顆煙點
+    if (band.smoke && !REDUCED) {
+      const S = FX.damageSmoke;
+      for (let i = 0; i < S.maxPuffsPerPlayer; i++) {
+        const k = ((time * 0.8 + i / S.maxPuffsPerPlayer) % 1);
+        ctx.globalAlpha = S.maxOpacity * (1 - k); ctx.fillStyle = band.smokeColor;
+        const sx = right ? box.x0 - 6 - i * 3 : box.x0 + box.w + 4 + i * 3;
+        ctx.fillRect(sx, ay + 6 - Math.round(k * S.maxHeightPx), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    // 命：8×8，實心＝還在、空心＝沒了
+    const [sw, sh] = H.stockSizePx, gap = H.iconGapPx, team = PAL.fighters["p" + (f.i + 1)];
+    for (let i = 0; i < H.stockCount; i++) {
+      const sx = right ? ax - sw - i * (sw + gap) : ax + i * (sw + gap), sy = ay + 28;
+      ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(sx - 1, sy - 1, sw + 2, sh + 2);
+      if (i < f.stocks) { ctx.fillStyle = team.primary; ctx.fillRect(sx, sy, sw, sh); ctx.fillStyle = team.highlight; ctx.fillRect(sx, sy, sw, 1); }
+      else { ctx.fillStyle = team.shadow; ctx.fillRect(sx, sy, sw, 1); ctx.fillRect(sx, sy + sh - 1, sw, 1); ctx.fillRect(sx, sy, 1, sh); ctx.fillRect(sx + sw - 1, sy, 1, sh); }
+    }
+    // 力量：11×5 短橫槓，實心填色＝有、空格外框＝沒有
+    const [pw, ph] = H.powerSizePx;
+    for (let i = 0; i < H.powerCount; i++) {
+      const px = right ? ax - pw - i * (pw + gap) : ax + i * (pw + gap), py = ay + 40;
+      if (i < f.power) { ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(px - 1, py - 1, pw + 2, ph + 2); ctx.fillStyle = PAL.hud.powerFill; ctx.fillRect(px, py, pw, ph); }
+      else { ctx.fillStyle = PAL.hud.powerEmpty; ctx.fillRect(px, py, pw, 1); ctx.fillRect(px, py + ph - 1, pw, 1); ctx.fillRect(px, py, 1, ph); ctx.fillRect(px + pw - 1, py, 1, ph); }
+    }
   }
-  // 大字幕
+  drawPhaseBar(time);
+  drawKeyRow(time);
+}
+// 頂部中央的階段倒數條（比規格再明顯：終結判定時放大、最後 0.15s 變紅閃）
+function drawPhaseBar(time) {
+  const ph = Game.phase;
+  if (Game.dur <= 0 || ph === PH.RESOLVE || ph === PH.GAMEOVER || ph === PH.CLASH) return;
+  const left = clamp(Game.dur - Game.t, 0, Game.dur), k = left / Game.dur;
+  const fin = ph === PH.FINISHER, cue = Game.cue();
+  const W = fin ? CONFIG.countdown.bigBarW : 120, H = fin ? 7 : 5, x = Math.round(CONFIG.W / 2 - W / 2), y = 26;
+  const urgent = fin ? left <= CONFIG.countdown.urgentSec : (ph === PH.MOVE || ph === PH.RPS) && left <= CONFIG.countdown.phaseTickLast;
+  const blink = urgent && Math.floor(time * 20) % 2 === 0;
+  let color = PAL.hud.powerFill;
+  if (fin) color = cue && cue.kind === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim;
+  if (ph === PH.RPS && Game.t >= CONFIG.rps.reveal) color = PAL.hud.muted;
+  if (urgent) color = blink ? PAL.fx.red.rim : PAL.hud.focusOutline;
+  ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(x - 2, y - 2, W + 4, H + 4);
+  ctx.fillStyle = PAL.hud.plate; ctx.fillRect(x - 1, y - 1, W + 2, H + 2);
+  ctx.fillStyle = color; ctx.fillRect(x, y, Math.round(W * k), H);
+  // 每 0.1 秒一個刻度
+  ctx.fillStyle = PAL.hud.plate;
+  for (let s = 0.1; s < Game.dur - 1e-6; s += 0.1) ctx.fillRect(x + Math.round(W * (s / Game.dur)), y, 1, H);
+  if (ph === PH.RPS) { ctx.fillStyle = PAL.hud.focusOutline; ctx.fillRect(x + Math.round(W * (1 - CONFIG.rps.reveal / CONFIG.rps.dur)), y - 3, 1, H + 6); }   // 亮招→藏招的分界
+}
+// 底部三鍵：依階段切圖示；按下內框下壓 1px 並亮一次；不能操作的格淡出
+function keyIcons() {
+  const ph = Game.phase, r = Game.round, I = ART.hud.keyRow.iconsByPhase;
+  if (ph === PH.MOVE) return { set: I.step, mid: "lock" };
+  if (ph === PH.RPS) return { set: Game.t >= CONFIG.rps.reveal ? I.hidden_commit : I.standoff };
+  if (ph === PH.COMBO) return { set: I.finisher_select };
+  if (ph === PH.FINISHER && r) return r.type === "red" ? { set: I.red_roll, lit: r.dirs } : { set: I.blue_parry };
+  return { set: I.resolution };
+}
+function drawKeyRow(time) {
+  const K = ART.hud.keyRow, [kw, kh] = K.keySizePx, total = kw * 3 + K.gapPx * 2, x0 = K.centerX - total / 2, y0 = K.topY;
+  const { set, mid, lit } = keyIcons();
+  const btns = ["L", "M", "R"];
+  set.forEach((icon, i) => {
+    const x = x0 + i * (kw + K.gapPx), active = icon !== "inactive" || (i === 1 && mid === "lock");
+    const dirOk = !lit || (icon === "left_arrow" ? lit.includes(-1) : icon === "right_arrow" ? lit.includes(1) : true);
+    const pressed = Game.keyFlash[btns[i]] > 0 && !(Game.phase === PH.RPS && Game.t >= CONFIG.rps.reveal);   // 藏招時不從共用按鍵列洩露手勢
+    const dy = pressed ? 1 : 0;
+    ctx.globalAlpha = active && dirOk ? 1 : 0.35;
+    ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(x - 1, y0 - 1, kw + 2, kh + 2);
+    ctx.fillStyle = PAL.hud.plate; ctx.fillRect(x, y0, kw, kh);
+    ctx.fillStyle = pressed ? PAL.hud.focusOutline : active && dirOk ? PAL.hud.muted : PAL.hud.powerEmpty;
+    ctx.fillRect(x + 1, y0 + 1 + dy, kw - 2, 1); ctx.fillRect(x + 1, y0 + kh - 2 + dy, kw - 2, 1); ctx.fillRect(x + 1, y0 + 1 + dy, 1, kh - 3); ctx.fillRect(x + kw - 2, y0 + 1 + dy, 1, kh - 3);
+    const glyph = icon === "left_arrow" ? GLYPH.left : icon === "right_arrow" ? GLYPH.right : GLYPH[icon];
+    if (glyph) { const gw = glyph[0].length, gh = glyph.length; drawBitmap(ctx, glyph, x + Math.round((kw - gw) / 2), y0 + 2 + dy + Math.round((kh - 10 - gh) / 2), active && dirOk ? PAL.hud.label : PAL.hud.muted, PAL.fighters.outline); }
+    else if (mid === "lock" && i === 1) { ctx.fillStyle = PAL.hud.muted; ctx.fillRect(x + 11, y0 + 7 + dy, 8, 6); ctx.fillRect(x + 12, y0 + 4 + dy, 1, 3); ctx.fillRect(x + 17, y0 + 4 + dy, 1, 3); ctx.fillRect(x + 12, y0 + 4 + dy, 6, 1); }
+    ctx.globalAlpha = 1;
+  });
+}
+
+// ---------- 高解析度文字層（中文才清楚） ----------
+function drawHudText(g, time) {
+  const ph = Game.phase, r = Game.round, cam = Game.cam;
+  const toScreen = (x, y) => [(x - cam.x) * cam.zoom + CONFIG.W / 2, (y - cam.y) * cam.zoom + CONFIG.H / 2];
+  g.textBaseline = "alphabetic";
+  // 名字（在力量格旁）
+  g.font = "bold 7px sans-serif";
+  for (const f of Game.f) {
+    const right = f.i === 1, team = PAL.fighters["p" + (f.i + 1)];
+    g.textAlign = right ? "right" : "left"; g.fillStyle = team.secondary;
+    g.fillText(CONFIG.names[f.i], right ? 464 : 16, 66);
+    if (f.stun > 0) { g.fillStyle = "#9CD8FF"; g.fillText(`硬直 ${f.stun.toFixed(1)}s`, right ? 464 : 16, 76); }
+  }
+  // 階段標題＋剩餘秒數（終結判定放大）
+  g.textAlign = "center";
+  const cue = Game.cue(), fin = ph === PH.FINISHER;
+  const left = Math.max(0, Game.dur - Game.t);
+  let label = PH_LABEL[ph];
+  if (ph === PH.RPS) label += Game.t >= CONFIG.rps.reveal ? "・藏招" : "・亮招";
+  if (fin && r) label = r.type === "red" ? "翻滾！紅招不可彈反" : "彈反！按克制手勢";
+  g.font = `bold ${fin ? 12 : 10}px sans-serif`;
+  g.fillStyle = fin ? (r?.type === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim) : PAL.hud.label;
+  g.fillText(label, CONFIG.W / 2, 20);
+  if (Game.dur > 0 && ph !== PH.RESOLVE && ph !== PH.GAMEOVER && ph !== PH.CLASH) {
+    const urgent = fin ? left <= CONFIG.countdown.urgentSec : (ph === PH.MOVE || ph === PH.RPS) && left <= CONFIG.countdown.phaseTickLast;
+    g.font = `bold ${fin ? 13 : 9}px monospace`;
+    g.fillStyle = urgent ? (Math.floor(time * 20) % 2 ? PAL.fx.red.rim : PAL.hud.focusOutline) : PAL.hud.label;
+    g.fillText(left.toFixed(fin ? 2 : 1), CONFIG.W / 2, fin ? 48 : 43);
+  }
+  // 底部按鍵小字：兩位玩家的鍵
+  const K = ART.hud.keyRow, [kw, kh] = K.keySizePx, x0 = K.centerX - (kw * 3 + K.gapPx * 2) / 2;
+  g.font = "bold 6px monospace"; g.fillStyle = PAL.hud.muted;
+  ["L", "M", "R"].forEach((b, i) => g.fillText(`${CONFIG.keyLabel[0][b]}·${CONFIG.keyLabel[1][b]}`, x0 + i * (kw + K.gapPx) + kw / 2, K.topY + kh - 2));
+  // 兩側提示：誰該做什麼
+  g.font = "bold 7px sans-serif";
+  for (const f of Game.f) {
+    const right = f.i === 1, Kl = CONFIG.keyLabel[f.i];
+    let tip = "";
+    if (ph === PH.MOVE) tip = f.locked ? "已鎖定" : f.steps >= CONFIG.move.maxSteps ? "步數用完" : `${Kl.L}◀ ${Kl.M}鎖定 ${Kl.R}▶ 每步1氣`;
+    else if (ph === PH.RPS) tip = f.stun > 0 ? "硬直中：按鍵鎖死" : Game.committed[f.i] ? "已出招" : `${Kl.L}石 ${Kl.M}剪 ${Kl.R}布`;
+    else if (ph === PH.COMBO && r) tip = f.i === r.att ? (f.power >= CONFIG.combo.redCost ? `選終結手勢｜長按${Kl[r.winKey]}=紅招` : "選終結手勢") : "被連轟中…";
+    else if (ph === PH.FINISHER && r) tip = f.i === r.def ? (r.type === "blue" ? "按克制手勢！只有一次" : `往 ${r.dirs.map(d => (d < 0 ? Kl.L + "◀" : Kl.R + "▶")).join(" 或 ")} 翻滾！`) : "";
+    else if (ph === PH.GAMEOVER) tip = "空白鍵重開";
+    g.textAlign = right ? "right" : "left"; g.fillStyle = f.i === (r?.def ?? -1) && fin ? PAL.hud.focusOutline : PAL.hud.label;
+    g.fillText(tip, right ? 464 : 16, 252);
+  }
+  // 浮字與字幕
   for (const p of Game.fx) {
-    const a = clamp(p.life / p.max, 0, 1);
     if (p.k === "text") {
-      const sx = (p.x - Game.cam.x) * Game.cam.zoom + CONFIG.W / 2, sy = (p.y - Game.cam.y) * Game.cam.zoom + CONFIG.H / 2;
+      const a = clamp(p.life / p.max, 0, 1), [sx, sy] = toScreen(p.x, p.y);
       g.globalAlpha = a; g.textAlign = "center"; g.font = `bold ${p.size}px sans-serif`;
-      g.fillStyle = "#0b0a12"; g.fillText(p.text, sx + 1, sy + 1); g.fillStyle = p.color; g.fillText(p.text, sx, sy);
+      g.fillStyle = PAL.fighters.outline; g.fillText(p.text, sx + 1, sy + 1); g.fillStyle = p.color; g.fillText(p.text, sx, sy);
     } else if (p.k === "banner") {
-      g.globalAlpha = Math.min(1, a * 2); g.textAlign = "center"; g.font = "bold 18px sans-serif";
-      g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect(0, 112, CONFIG.W, 30);
-      g.fillStyle = p.color; g.fillText(p.text, CONFIG.W / 2, 133);
+      const a = clamp(p.life / p.max, 0, 1);
+      g.globalAlpha = Math.min(1, a * 2); g.textAlign = "center"; g.font = "bold 16px sans-serif";
+      g.fillStyle = "rgba(16,24,39,.8)"; g.fillRect(0, 104, CONFIG.W, 28);
+      g.fillStyle = p.color; g.fillText(p.text, CONFIG.W / 2, 124);
     }
   }
   g.globalAlpha = 1;
   if (ph === PH.GAMEOVER) {
-    g.fillStyle = "rgba(0,0,0,.6)"; g.fillRect(0, 100, CONFIG.W, 56);
-    g.textAlign = "center"; g.fillStyle = C.p[Game.winner].band; g.font = "bold 22px sans-serif";
-    g.fillText(`${C.p[Game.winner].name} 勝利！`, CONFIG.W / 2, 128);
-    g.fillStyle = "#d8d0f0"; g.font = "bold 9px sans-serif"; g.fillText("按空白鍵或下方場景按鈕再來一場", CONFIG.W / 2, 146);
+    const team = PAL.fighters["p" + (Game.winner + 1)];
+    g.fillStyle = "rgba(16,24,39,.85)"; g.fillRect(0, 96, CONFIG.W, 56);
+    g.textAlign = "center"; g.fillStyle = team.primary; g.font = "bold 22px sans-serif";
+    g.fillText(`${CONFIG.names[Game.winner]} 勝利！`, CONFIG.W / 2, 124);
+    g.fillStyle = PAL.hud.label; g.font = "bold 9px sans-serif"; g.fillText("按空白鍵或下方場景按鈕再來一場", CONFIG.W / 2, 142);
   }
   if (Game.debug) {
-    g.textAlign = "left"; g.font = "8px monospace"; g.fillStyle = "rgba(0,0,0,.7)"; g.fillRect(4, 70, 230, 150);
+    g.textAlign = "left"; g.font = "7px monospace"; g.fillStyle = "rgba(10,15,26,.85)"; g.fillRect(4, 72, 236, 150);
     g.fillStyle = "#9fffa8";
-    const lines = [`phase ${ph} t=${Game.t.toFixed(2)}/${Game.dur} freeze=${Game.freeze.toFixed(2)}`,
-      ...Game.f.map(f => `P${f.i + 1} pos${f.pos} pw${f.power} dmg${f.damage} st${f.stocks} stun${f.stun.toFixed(2)} steps${f.steps} ${f.stance ?? "-"} ${f.anim.state}`),
+    const cuev = Game.cue();
+    const lines = [`phase ${ph} t=${Game.t.toFixed(2)}/${Game.dur} freeze=${(Game.freeze * 1000).toFixed(0)}ms`,
+      ...Game.f.map(f => `P${f.i + 1} pos${f.pos} pw${f.power} dmg${f.damage} st${f.stocks} stun${f.stun.toFixed(2)} steps${f.steps} ${f.stance ?? "-"} ${f.anim.state}#${Renderer.frameOf(f.anim.state, f.anim.t, f)}`),
       ...[0, 1].map(p => `P${p + 1} keys L:${Input.raw(p, "L")} M:${Input.raw(p, "M")} R:${Input.raw(p, "R")}`),
       r ? `round att=P${r.att + 1} win=${r.winGesture} gest=${r.gesture} red=${r.red} chg=${r.charging}` : "",
-      ...Game.log.slice(-8)];
-    lines.forEach((l, i) => g.fillText(l, 8, 80 + i * 10));
+      cuev ? `cue ${cuev.kind} left=${((cuev.deadlineAt - cuev.now) * 1000).toFixed(0)}ms tiles=${cuev.dangerTiles} safe=${cuev.safeDirs}` : "",
+      `sprite p1=${Renderer.hasSheet(0) ? "PNG" : "程式繪製"} p2=${Renderer.hasSheet(1) ? "PNG" : "程式繪製"} reduced=${REDUCED}`,
+      ...Game.log.slice(-7)];
+    lines.forEach((l, i) => g.fillText(l, 8, 82 + i * 9));
   }
 }
 
@@ -890,29 +1224,35 @@ function render(time) {
   const cam = Game.cam;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   drawBackground(time);
-  const sx = (Math.random() * 2 - 1) * Game.shake, sy = (Math.random() * 2 - 1) * Game.shake;
-  ctx.setTransform(cam.zoom, 0, 0, cam.zoom, CONFIG.W / 2 - cam.x * cam.zoom + sx, CONFIG.H / 2 - cam.y * cam.zoom + sy);
-  drawStage(time);
-  drawFighters(time);
+  // 世界層：震動用整數像素位移；平台與警示同一投影
+  const amp = Game.shake.t > 0 ? Game.shake.amp : 0;
+  const sx = amp ? Math.round((Math.random() * 2 - 1) * amp) : 0, sy = amp ? Math.round((Math.random() * 2 - 1) * amp) : 0;
+  const z = cam.zoom;
+  ctx.setTransform(z, 0, 0, z, Math.round(CONFIG.W / 2 - cam.x * z) + sx, Math.round(CONFIG.H / 2 - cam.y * z) + sy);
+  drawStage();
+  drawHazardFill(time);
+  drawTrails();
+  drawFighters();
   drawFx();
+  drawHazardEdges();
+  drawTelegraphs(time);
+  // HUD 不跟著震動
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  // 慢動作特寫：四周暗角
-  if (Game.phase === PH.FINISHER) { ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, 0, CONFIG.W, 18); ctx.fillRect(0, CONFIG.H - 18, CONFIG.W, 18); }
-  if (Game.flash > 0) { ctx.globalAlpha = Math.min(1, Game.flash); ctx.fillStyle = Game.flashColor; ctx.fillRect(0, 0, CONFIG.W, CONFIG.H); ctx.globalAlpha = 1; }
-  // 放大到螢幕
+  drawHudPixels(time);
+  // 放大到螢幕（整數倍率）
   const s = scale * (screen.dpr || 1);
   sctx.setTransform(1, 0, 0, 1, 0, 0);
   sctx.imageSmoothingEnabled = false;
   sctx.drawImage(buf, 0, 0, screen.width, screen.height);
   sctx.setTransform(s, 0, 0, s, 0, 0);
-  drawHud(sctx, time);
+  drawHudText(sctx, time);
 }
 
 // ===================== 主迴圈（固定步長 1/120 秒） =====================
 const STEP = 1 / 120;
 let acc = 0, last = performance.now();
 function frame(now) {
-  let dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
   acc += dt;
   while (acc >= STEP) { Game.update(STEP); acc -= STEP; }
   render(now / 1000);
@@ -922,7 +1262,7 @@ document.querySelectorAll("#bar button").forEach(b => b.addEventListener("click"
 Game.loadScenario(0);
 requestAnimationFrame(frame);
 // 驗收／除錯用
-window.__fist = { Game, CONFIG, Input, Renderer };
+window.__fist = { Game, CONFIG, ART, Input, Renderer };
 </script>
 </body>
 </html>
