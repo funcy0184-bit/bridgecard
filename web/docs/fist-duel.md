@@ -66,3 +66,12 @@
 
 ### 待人工驗收
 - 真手機：震動手感（Android）、iPhone 是否真的有觸感、加速後最快 0.4 秒判定窗人手來不來得及
+
+## 上線：併入「來打橋牌」主站（/fist/）
+- 網址：`https://bridgecard.funcy0184.workers.dev/fist/`；首頁「經典橋牌／梭了啦」下面新增整列「拳刃交鋒」入口，遊戲選單有「← 回來打橋牌」
+- 主站 Worker：新 Durable Object `GameRoom`（綁定 `FIST_ROOMS`、migration v3，正式與 staging 都加）；`/fist/api/*`、`/fist/ws/*` 交給 `src/server/fist/route.js`；開房共用主站 Limiter（create）
+- 伺服器程式搬到 `web/src/server/fist/`（gameRoom.js、route.js），獨立的 fist-online 共用同一份
+- `web/public/.assetsignore`：美術規格文件不公開
+- 修正：倒數 3 秒／斷線 15 秒在時鐘估計差幾 ms 時會閃出「4」「16」
+- L3 回歸（部署前）：typecheck、vitest 255、主站 e2e 25 支全過（feel-check 長任務 103ms 一次、重跑 84ms 通過；lsai-gate 用正式建置模式 LS_AI=dev 通過）；拳刃交鋒 engine／online 45／app 57／touch 38／proto 全過
+  - layout-check 在第 6 個尺寸逾時：正式版 8447325 同一處也逾時，非本次造成，另案處理

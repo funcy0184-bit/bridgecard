@@ -1,4 +1,4 @@
-// worker/gameRoom.js — 一個 4 碼房號 = 一個 GameRoom Durable Object
+// gameRoom.js（拳刃交鋒）— 一個 4 碼房號 = 一個 GameRoom Durable Object
 //   · 權威伺服器：跑跟前端同一份 engine.js；瀏覽器只送按鍵，所有判定（猜拳、連打、彈反、翻滾、擊飛）都在這裡算
 //   · 時間軸：房內計時器固定 1/120 秒推進引擎，六個階段的切換都由伺服器時鐘決定；
 //            每則 state 附 serverTime 與 phaseEndTime，前端依此對齊倒數條
@@ -21,8 +21,8 @@
 //     → { t: "settings", guide }（只有房主）    ← lobby.settings
 //   暱稱：join 時帶 name，伺服器清掉控制字元／零寬字元、最多 8 個字
 import { DurableObject } from "cloudflare:workers";
-import { Engine, PH, mulberry32 } from "../../web/public/fist/src/engine.js";
-import { CONFIG } from "../../web/public/fist/src/config.js";
+import { Engine, PH, mulberry32 } from "../../../public/fist/src/engine.js";
+import { CONFIG } from "../../../public/fist/src/config.js";
 
 const N = CONFIG.net, STEP = 1 / N.tickHz;
 const TICK_MS = 1000 / 60, BROADCAST_MS = 1000 / N.broadcastHz;

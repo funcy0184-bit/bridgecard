@@ -18,6 +18,7 @@
   .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #10121B; }
   .btn b { font-size: 16px; } .btn small { color: var(--muted); font-size: 12px; }
   .btn.hot { border-color: var(--gold); } .btn.hot b::after { content: "　新手推薦"; color: var(--gold); font-size: 12px; }
+  a.back { text-decoration: none; font-size: 14px; }
   .back { align-self: flex-start; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; padding: 4px 0; }
   .row { display: flex; gap: 8px; }
   input.code { flex: 1; font: 700 22px/1 monospace; letter-spacing: .4em; text-transform: uppercase; text-align: center; color: var(--ink); background: var(--plate); border: 2px solid var(--edge); border-radius: 4px; padding: 10px; }
@@ -75,6 +76,7 @@
   <!-- 主選單 -->
   <section class="screen" id="menu" hidden>
     <div class="panel">
+      <a class="back" id="homeLink" href="/">← 回來打橋牌</a>
       <h1>拳刃交鋒</h1>
       <p class="sub">七格浮空擂台・猜拳讀心・連打收頭</p>
       <button class="btn hot" data-go="tutorial"><b>互動教學道場</b><small>四關微教學：走位、讀心、連打彈反、閃紅招</small></button>

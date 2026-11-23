@@ -221,9 +221,9 @@ function tickRoomUi() {
   const L = net?.lobby;
   if (!L || !transport?.serverNow) return;
   const now = transport.serverNow();
-  if (L.status === "countdown") $("countdown").textContent = String(Math.max(1, Math.ceil((L.countdownEnd - now) / 1000)));
+  if (L.status === "countdown") $("countdown").textContent = String(Math.min(CONFIG.net.readyCountdownSec, Math.max(1, Math.ceil((L.countdownEnd - now) / 1000))));   // 時鐘估計差幾 ms 也不會閃出「4」
   if (L.status === "paused") {
-    const sec = Math.max(0, Math.ceil((L.pauseUntil - now) / 1000));
+    const sec = Math.min(CONFIG.net.reconnectSec, Math.max(0, Math.ceil((L.pauseUntil - now) / 1000)));   // 同上：不會閃出「16 秒」
     $("pauseBox").textContent = L.pauseSeat === net.seat ? `重新連線中… ${sec} 秒` : `對手斷線，等待重連 ${sec} 秒...`;
   }
 }
@@ -343,6 +343,9 @@ function joinRoom(code) {
   $("roomError").textContent = "";
   setRoomUrl(code); startMode("online", { room: code });
 }
+
+// 放在「來打橋牌」主站 /fist/ 底下才顯示「回來打橋牌」（獨立部署時根目錄就是遊戲本身）
+$("homeLink").hidden = !location.pathname.startsWith("/fist");
 
 // 網址帶 ?room=XXXX：直接進那個房間
 const qRoom = new URLSearchParams(location.search).get("room")?.toUpperCase();

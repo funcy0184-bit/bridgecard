@@ -3,11 +3,14 @@
 //   GET  /api/rooms/:code      查房間在不在、有沒有空位、開打了沒（不含任何私人資料）
 //   GET  /api/rooms/:code/ws   WebSocket，進到那個房間（私人座位憑證在連上之後才送，不放網址）
 // 同一個來源 10 分鐘內查不到房間太多次、或開房太多次，先擋一下（防猜房號）
+// 拳刃交鋒（/fist/）：POST /fist/api/rooms 開房、GET /fist/ws/:code WebSocket（見 src/server/fist/）
 import { CODE_ALPHABET, CODE_LENGTH, LIMITS, isValidCode, normalizeCode, type ServerMsg } from "./protocol";
 import { Env, Room } from "./room";
 import { Limiter } from "./limiter";
+import { GameRoom } from "./fist/gameRoom.js";
+import { handleFist } from "./fist/route.js";
 
-export { Room, Limiter };
+export { Room, Limiter, GameRoom };
 
 function newCode(): string {
   // 用拒絕取樣避免取餘數造成的偏差
@@ -36,6 +39,10 @@ export default {
     const url = new URL(req.url);
     const parts = url.pathname.split("/").filter(Boolean);   // ["api","rooms",code,"ws"]
 
+    if (parts[0] === "fist" && (parts[1] === "api" || parts[1] === "ws")) {
+      const res = await handleFist(req, env.FIST_ROOMS, { allowCreate: () => limiter(env, req).hit("create", LIMITS.creates, LIMITS.windowMs) });
+      return res ?? Response.json({ error: "not found" }, { status: 404 });
+    }
     if (parts[0] !== "api") return env.ASSETS.fetch(req);
 
     if (parts[1] === "rooms" && parts.length === 2 && req.method === "POST") {

@@ -1,0 +1,5 @@
+# 不公開的檔案（拳刃交鋒的美術規格文件；遊戲用 config.js 內嵌的那份）
+fist/ART_BIBLE.md
+fist/art_spec.json
+fist/.assetsignore
+.assetsignore

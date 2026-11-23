@@ -1160,6 +1160,21 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   color: #3A0D14; background: var(--shuo-gold); box-shadow: 0 1px 2px rgba(0,0,0,.35); transform: rotate(-5deg); }
 .cv-mode:active { transform: translateY(1px) scale(.98); }
 @media (hover: hover) and (pointer: fine) { .cv-mode:hover { transform: translateY(-2px); } }
+/* 首頁：另一款遊戲「拳刃交鋒」入口（兩個牌局玩法下面整列；配色取自遊戲本身的夜空藍＋金） */
+.cv-game { position: relative; z-index: 2; flex: none; display: flex; align-items: center; gap: 10px; margin: 12px 6px 18px; min-height: 58px; padding: 8px 14px 8px 11px;
+  border-radius: 10px; text-decoration: none; color: #F4F3EE; -webkit-tap-highlight-color: transparent;
+  background: radial-gradient(130% 160% at 18% 0%, #2B3D53 0%, #1C2B41 38%, #101625 75%, #0A0F1A 100%);
+  box-shadow: inset 0 0 0 1px #F4D58C, inset 0 0 0 3px #101625, inset 0 0 0 3.6px rgba(244,213,140,.45), 0 3px 10px rgba(10,15,26,.35); transition: transform .12s; }
+.cv-game .gcard { flex: none; width: 28px; height: 40px; border-radius: 4px; display: grid; place-items: center; font: 700 16px var(--display); font-style: normal;
+  color: #F4D58C; background: linear-gradient(160deg, #1C2B41, #0A0F1A); box-shadow: inset 0 0 0 1px #F4D58C, 0 1px 2px rgba(0,0,0,.5); }
+.cv-game > span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.cv-game b { font: 500 16px/1.25 var(--display); letter-spacing: .14em; color: #FFF5D8; white-space: nowrap; }
+.cv-game small { margin-top: 2px; font-size: 11px; letter-spacing: .06em; color: #A9B6C8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-game .chev { font-style: normal; font-size: 22px; line-height: 1; color: #F4D58C; }
+.cv-game .newtag { position: absolute; left: 4px; top: -7px; font-style: normal; font-size: 10px; line-height: 15px; letter-spacing: .08em; padding: 0 5px; border-radius: 3px;
+  color: #10121B; background: #F4D58C; box-shadow: 0 1px 2px rgba(0,0,0,.35); transform: rotate(-5deg); }
+.cv-game:active { transform: translateY(1px) scale(.99); }
+@media (hover: hover) and (pointer: fine) { .cv-game:hover { transform: translateY(-2px); } }
 @media (max-width: 360px) { .cv-mode .mcard { display: none; } .cv-mode { padding-left: 10px; } }
 
 /* 梭了啦！這局賭什麼？：新玩法的選單（酒紅、暗金） */

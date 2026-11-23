@@ -22,6 +22,7 @@ import type { Limiter } from "./limiter";
 export interface Env {
   ROOMS: DurableObjectNamespace<Room>;
   LIMITER: DurableObjectNamespace<Limiter>;
+  FIST_ROOMS: DurableObjectNamespace;                  // 拳刃交鋒：一個 4 碼房號一個 GameRoom（src/server/fist/）
   ASSETS: Fetcher;
   // 只給本機測試用：把斷線時間軸縮短（正式環境不設定，用 protocol.ts 的預設值）
   NOTICE_MS?: string; CHOICE_MS?: string; FORFEIT_MS?: string; SEAT_HOLD_MS?: string; RESUME_KEEP_MS?: string; RECORD_KEEP_MS?: string;

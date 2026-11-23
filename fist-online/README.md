@@ -2,11 +2,13 @@
 
 獨立的 Cloudflare Worker，跟「來打橋牌」主站（`web/wrangler.jsonc`）完全分開，主站的自動部署不會帶到這裡。
 
+> **正式版已內建在「來打橋牌」主站：`https://bridgecard.funcy0184.workers.dev/fist/`**（主站 Worker 的 `/fist/api/*`、`/fist/ws/*`）。
+> 這個資料夾是「獨立部署」備案，跟主站共用同一份伺服器程式。
+
 ```
 fist-online/
 ├── wrangler.toml        Worker 設定：靜態檔指向 ../web/public/fist，/api/* 與 /ws/* 交給 Worker
-├── worker/index.js      入口：POST /api/rooms 建房（不重複 4 碼）、/ws/房號 轉給該房的 GameRoom
-└── worker/gameRoom.js   GameRoom Durable Object：權威狀態機（跑 web/public/fist/src/engine.js）＋ WebSocket 廣播
+└── worker/index.js      入口；房間伺服器與路由在 web/src/server/fist/（gameRoom.js、route.js，主站共用）
 ```
 
 前端串接在 `web/public/fist/src/transport.js` 的 `WebSocketTransport`，房間畫面在 `main.js`／`index.html`。

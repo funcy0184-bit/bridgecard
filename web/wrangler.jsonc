@@ -13,19 +13,22 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/fist/api/*", "/fist/ws/*"]
   },
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "Room" },
       // 頻率限制（每個來源一個，擋猜房號）
-      { "name": "LIMITER", "class_name": "Limiter" }
+      { "name": "LIMITER", "class_name": "Limiter" },
+      // 拳刃交鋒：一個 4 碼房號一個 GameRoom
+      { "name": "FIST_ROOMS", "class_name": "GameRoom" }
     ]
   },
   // 免費方案要用 SQLite 版的 Durable Object
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Room"] },
-    { "tag": "v2", "new_sqlite_classes": ["Limiter"] }
+    { "tag": "v2", "new_sqlite_classes": ["Limiter"] },
+    { "tag": "v3", "new_sqlite_classes": ["GameRoom"] }
   ],
   "observability": { "enabled": true },
   // 測試站（跟正式站完全隔離）：另一個 Worker 名字 = 另一套 Durable Object（房間、戰績、頻率限制都分開存）
@@ -39,12 +42,14 @@
       "durable_objects": {
         "bindings": [
           { "name": "ROOMS", "class_name": "Room" },
-          { "name": "LIMITER", "class_name": "Limiter" }
+          { "name": "LIMITER", "class_name": "Limiter" },
+          { "name": "FIST_ROOMS", "class_name": "GameRoom" }
         ]
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["Room"] },
-        { "tag": "v2", "new_sqlite_classes": ["Limiter"] }
+        { "tag": "v2", "new_sqlite_classes": ["Limiter"] },
+        { "tag": "v3", "new_sqlite_classes": ["GameRoom"] }
       ],
       "vars": { "STAGE": "staging" },
       "observability": { "enabled": true }
