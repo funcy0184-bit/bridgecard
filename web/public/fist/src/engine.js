@@ -41,6 +41,7 @@ export class Engine {
     this.rng = opts.rng ?? Math.random;
     this.flow = opts.flow ?? null;
     this.windowGrace = opts.windowGrace ?? 0;
+    this.speedUp = opts.speedUp ?? true;                                          // 越打越快（教學關掉）
     this.reset(opts.setup ?? DEFAULT_SETUP);
   }
 
@@ -48,6 +49,7 @@ export class Engine {
   reset(setup = DEFAULT_SETUP) {
     this.rt = 0; this.t = 0; this.dur = 0; this.phase = PH.IDLE;
     this.round = null; this.winner = -1; this.koTimer = null; this.lastRps = null;
+    this.rounds = setup.rounds ?? 0; this.speedLv = this.levelFor(this.rounds); this.reveal = CONFIG.rps.reveal;
     this.inbox = []; this.out = this.out ?? [];                                       // flow 在階段中途 reset：同一幀已發出的事件（例如 mash_end）不能丟
     this.keys = [0, 1].map(() => ({ L: { down: false, stale: false, at: 0 }, M: { down: false, stale: false, at: 0 }, R: { down: false, stale: false, at: 0 } }));
     this.f = [0, 1].map(i => {
@@ -63,6 +65,9 @@ export class Engine {
     this.go(setup.phase ?? PH.MOVE, setup.round ?? null, true);
   }
   emit(type, data = {}) { this.out.push({ type, ...data }); }
+  // ---- 速度等級：0（開局）～ maxLevel（最快）；各階段時間在開局值與 fast 值之間線性內插 ----
+  levelFor(rounds) { const S = CONFIG.speed; return this.speedUp ? Math.min(S.maxLevel, Math.floor(rounds / S.roundsPerLevel)) : 0; }
+  sp(base, fast) { return base + (fast - base) * (this.speedLv / CONFIG.speed.maxLevel); }
   other(f) { return this.f[1 - f.i]; }
   setAnim(f, st) { if (f.anim.state !== st) f.anim = { state: st, t: 0 }; }
 
@@ -82,10 +87,13 @@ export class Engine {
     this.inbox = this.inbox.filter(e => e.type === "up");                                                              // 上一階段沒處理的按下全部作廢
     const C = CONFIG, [a, b] = this.f;
     if (ph === PH.MOVE) {
-      this.dur = C.move.dur;
+      const lv = this.levelFor(this.rounds);
+      if (lv > this.speedLv) { this.speedLv = lv; this.emit("speed_up", { lv }); }
+      this.dur = this.sp(C.move.dur, C.speed.fast.move);
       for (const f of this.f) { f.steps = 0; f.locked = false; f.stance = null; f.redGlow = false; if (!f.move) this.setAnim(f, f.stun > 0 || f.power <= 0 ? "exhausted" : "idle"); }
     } else if (ph === PH.RPS) {
-      this.dur = C.rps.dur;
+      this.reveal = this.sp(C.rps.reveal, C.speed.fast.rpsReveal);
+      this.dur = this.reveal + this.sp(C.rps.dur - C.rps.reveal, C.speed.fast.rpsHidden);
       for (const f of this.f) { f.stance = null; f.picked = false; }
       this.hidSent = false;
     } else if (ph === PH.CLASH) {
@@ -94,18 +102,18 @@ export class Engine {
       this.emit("clash", { x: (a.x + b.x) / 2 });
       this.emit("hitstop", { ev: "clash" });
     } else if (ph === PH.MASH) {
-      this.dur = C.mash.dur;
+      this.dur = this.sp(C.mash.dur, C.speed.fast.mash);
       if (data) this.round = { att: data.att, def: 1 - data.att, winGesture: data.winGesture, winKey: KEY_OF[data.winGesture] };
       const r = this.round, att = this.f[r.att];
       Object.assign(r, { hits: 0, extra: 0, presses: 0, gesture: r.winGesture, red: false, charging: false, chargeStart: 0, result: null });
       att.stance = r.winGesture;
       this.setAnim(att, "mash_hit");
     } else if (ph === PH.SELECT) {
-      this.dur = C.select.dur;
+      this.dur = this.sp(C.select.dur, C.speed.fast.select);
       const r = this.round;
       r.gesture = r.winGesture; r.red = false; r.charging = false; r.chosen = false;
     } else if (ph === PH.WINDOW) {
-      this.dur = C.window.dur;
+      this.dur = this.sp(C.window.dur, C.speed.fast.window);
       if (data) {                                                         // 教學直接從判定窗開始
         this.round = { att: data.att, def: 1 - data.att, winGesture: data.gesture ?? "rock", gesture: data.gesture ?? "rock", red: !!data.red, extra: 0, hits: 0 };
         if (data.red) this.f[data.att].redGlow = true;
@@ -202,7 +210,7 @@ export class Engine {
 
   // ---------------- PHASE_RPS ----------------
   [`upd_${PH.RPS}`](dt, evs, ph) {
-    const hidden = this.t >= CONFIG.rps.reveal;
+    const hidden = this.t >= this.reveal;
     for (const e of evs) {
       if (this.phase !== ph) return;
       if (e.type !== "down") continue;
@@ -219,6 +227,7 @@ export class Engine {
       for (const f of this.f) this.setAnim(f, "stance_" + f.stance);
       const w = a.stance === b.stance ? -1 : BEATS[a.stance] === b.stance ? 0 : 1;
       this.lastRps = { stances: [a.stance, b.stance], random: [a.random, b.random], winner: w };
+      this.rounds++;
       this.emit("rps_result", this.lastRps);
       if (w < 0) { this.go(PH.CLASH); return; }
       this.round = { att: w, def: 1 - w, winGesture: this.f[w].stance, winKey: KEY_OF[this.f[w].stance] };
@@ -410,10 +419,11 @@ export class Engine {
   // ---------------- 給畫面、AI、網路的資料 ----------------
   //   seat = 0／1：那位玩家看得到的；seat = -1：同機雙人共用螢幕（兩邊的藏招都遮）
   viewFor(seat = -1) {
-    const r = this.round, hidden = this.phase === PH.RPS && this.t >= CONFIG.rps.reveal;
+    const r = this.round, hidden = this.phase === PH.RPS && this.t >= this.reveal;
     const showGesture = r && (this.phase === PH.WINDOW || this.phase === PH.RESOLVE || seat === r.att);
     return {
       phase: this.phase, t: this.t, dur: this.dur, rt: this.rt, winner: this.winner, seat,
+      reveal: this.reveal, speedLv: this.speedLv, rounds: this.rounds,
       fighters: this.f.map(f => ({
         i: f.i, pos: f.pos, x: f.x, y: f.y, rot: f.rot, face: f.face, out: f.out, air: f.air,
         power: f.power, damage: f.damage, stocks: f.stocks, stun: f.stun, steps: f.steps, locked: f.locked,

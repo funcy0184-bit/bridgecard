@@ -17,6 +17,9 @@
 //     → { t: "input", type, btn }             ← { t: "state", view, events, serverTime, phaseEndTime }
 //     → { t: "rematch" } / { t: "leave" }     ← { t: "error", code, msg }
 //     → { t: "ping", c }                      ← { t: "pong", c, s }
+//     → { t: "emote", i }                     ← { t: "emote", seat, i }（固定 8 個表情、每人 1.5 秒一次）
+//     → { t: "settings", guide }（只有房主）    ← lobby.settings
+//   暱稱：join 時帶 name，伺服器清掉控制字元／零寬字元、最多 8 個字
 import { DurableObject } from "cloudflare:workers";
 import { Engine, PH, mulberry32 } from "../../web/public/fist/src/engine.js";
 import { CONFIG } from "../../web/public/fist/src/config.js";
@@ -24,7 +27,13 @@ import { CONFIG } from "../../web/public/fist/src/config.js";
 const N = CONFIG.net, STEP = 1 / N.tickHz;
 const TICK_MS = 1000 / 60, BROADCAST_MS = 1000 / N.broadcastHz;
 const MAX_MSG = 512, MSG_PER_SEC = 120;
-const seatInit = () => ({ token: null, ws: null, ready: false, rematch: false, releaseTimer: null });
+const seatInit = () => ({ token: null, ws: null, ready: false, rematch: false, releaseTimer: null, name: "", lastEmote: 0 });
+// 暱稱清洗：去控制字元、零寬與方向控制字元，最多 nameMax 個字；空的就用預設名
+export function cleanName(raw, seat) {
+  const s = String(raw ?? "").normalize("NFC").replace(/[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF<>]/g, "").replace(/\s+/g, " ").trim();
+  const name = [...s].slice(0, CONFIG.profile.nameMax).join("").trim();
+  return name || CONFIG.names[seat];
+}
 
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
@@ -37,6 +46,7 @@ export class GameRoom extends DurableObject {
     this.countdownEnd = 0; this.countTimer = null;
     this.pauseSeat = -1; this.pauseUntil = 0; this.pauseTimer = null;
     this.winner = -1; this.reason = null;
+    this.settings = { guide: CONFIG.guide.default };   // 房主設定：新手引導（雙方預設值）
   }
 
   // ---------------- HTTP ----------------
@@ -94,7 +104,7 @@ export class GameRoom extends DurableObject {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m.t !== "string") return;
     if (m.t === "ping") { this.send(conn.ws, { t: "pong", c: m.c, s: Date.now() }); return; }
-    if (m.t === "join") { this.join(conn, typeof m.token === "string" ? m.token : null); return; }
+    if (m.t === "join") { this.join(conn, typeof m.token === "string" ? m.token : null, m.name); return; }
     const seat = conn.seat;
     if (seat < 0 || this.seats[seat].ws !== conn.ws) return;    // 還沒入座／已被同座位的新分頁取代
     if (m.t === "input") {
@@ -109,13 +119,22 @@ export class GameRoom extends DurableObject {
       if (this.status !== "over") return;
       this.seats[seat].rematch = true;
       this.lobbyChanged();
+    } else if (m.t === "emote") {
+      const s = this.seats[seat];
+      if (!Number.isInteger(m.i) || m.i < 0 || m.i >= CONFIG.emotes.length || now - s.lastEmote < CONFIG.emoteGapMs) return;   // 只認固定表情、限流
+      s.lastEmote = now;
+      this.broadcast({ t: "emote", seat, i: m.i });
+    } else if (m.t === "settings") {
+      if (seat !== 0 || (this.status !== "lobby" && this.status !== "over")) return;   // 只有房主、只能在待機／結算時改
+      if (typeof m.guide === "boolean") this.settings.guide = m.guide;
+      this.lobbyChanged();
     } else if (m.t === "leave") {
       this.leave(seat);
       try { conn.ws.close(1000, "leave"); } catch { /* 已關 */ }
     }
   }
 
-  join(conn, token) {
+  join(conn, token, name) {
     if (conn.seat >= 0) return;
     let seat = token ? this.seats.findIndex(s => s.token === token) : -1;
     if (seat >= 0) {                                             // 同一位玩家回來（重整、斷線重連）：舊連線讓位
@@ -127,6 +146,7 @@ export class GameRoom extends DurableObject {
       this.seats[seat].token = crypto.randomUUID();
     }
     const s = this.seats[seat];
+    s.name = cleanName(name, seat);
     clearTimeout(s.releaseTimer); s.releaseTimer = null;
     s.ws = conn.ws; conn.seat = seat;
     this.touch();
@@ -173,7 +193,8 @@ export class GameRoom extends DurableObject {
   lobbyMsg() {
     return {
       t: "lobby", status: this.status, room: this.meta?.code, serverTime: Date.now(),
-      seats: this.seats.map(s => ({ taken: !!s.token, online: !!s.ws, ready: s.ready, rematch: s.rematch })),
+      seats: this.seats.map((s, i) => ({ taken: !!s.token, online: !!s.ws, ready: s.ready, rematch: s.rematch, name: s.token ? s.name || CONFIG.names[i] : "" })),
+      settings: this.settings,
       countdownEnd: this.status === "countdown" ? this.countdownEnd : 0,
       winner: this.winner, reason: this.reason,
       pauseSeat: this.status === "paused" ? this.pauseSeat : -1, pauseUntil: this.status === "paused" ? this.pauseUntil : 0,

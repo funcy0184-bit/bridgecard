@@ -50,6 +50,21 @@
   #pauseBox { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); font-size: 18px; font-weight: 800; color: var(--focus); background: rgba(16,24,39,.94); border: 2px solid var(--red); border-radius: 6px; padding: 14px 20px; z-index: 3; text-align: center; }
   #debug { position: fixed; left: 8px; bottom: 8px; margin: 0; font: 11px/1.4 monospace; color: #9fffa8; background: rgba(10,15,26,.85); padding: 6px 8px; border-radius: 4px; z-index: 2; white-space: pre; }
   .keys { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0 0; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .field input { font: 700 18px/1.2 inherit; color: var(--ink); background: var(--plate); border: 2px solid var(--edge); border-radius: 4px; padding: 9px 10px; }
+  .pop { position: fixed; top: 44px; right: 10px; z-index: 5; display: flex; flex-direction: column; gap: 6px; background: rgba(16,24,39,.97); border: 1px solid var(--gold); border-radius: 6px; padding: 8px; }
+  .pop.tray { display: grid; grid-template-columns: repeat(4, 48px); }
+  .pop.tray[hidden], .pop[hidden] { display: none; }
+  .tray button { font-size: 24px; height: 48px; border-radius: 6px; border: 1px solid var(--edge); background: var(--plate); color: var(--ink); cursor: pointer; }
+  .tray button.txt { font: 900 16px/1 monospace; }
+  .tray button:disabled { opacity: .4; }
+  #coach { position: fixed; left: 50%; transform: translateX(-50%); max-width: calc(100% - 20px); z-index: 2; pointer-events: none; text-align: center;
+    font-size: 14px; font-weight: 800; color: var(--focus); background: rgba(16,24,39,.92); border: 1px solid var(--gold); border-radius: 999px; padding: 5px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.touch #coach { font-size: 13px; white-space: normal; border-radius: 10px; }
+  .rGuide { font-size: 13px; color: var(--muted); display: flex; justify-content: center; align-items: center; gap: 6px; }
+  .rGuide input { width: 18px; height: 18px; accent-color: var(--gold); }
+  #flowStrip { position: fixed; left: 50%; bottom: 18%; transform: translateX(-50%); z-index: 3; pointer-events: none; font-size: 15px; font-weight: 800; color: var(--focus); background: rgba(16,24,39,.92); border: 2px solid var(--gold); border-radius: 6px; padding: 8px 14px; text-align: center; max-width: calc(100% - 20px); }
   /* 觸控：遊戲畫面不捲動、不雙擊放大、不長按選字；選單按鈕維持一般點擊 */
   body.touch #game, body.touch canvas#screen { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   body.touch .tiny { padding: 10px 12px; font-size: 13px; }
@@ -66,7 +81,7 @@
       <button class="btn" data-go="difficulty"><b>單人對戰 AI</b><small>新手木樁／道場師兄／讀心宗師</small></button>
       <button class="btn" data-go="local2p"><b>同機雙人（Local 2P）</b><small>P1 A／S／D　P2 J／K／L</small></button>
       <button class="btn" data-go="online"><b>線上對戰</b><small>建立房間，或輸入 4 碼房號加入</small></button>
-      <button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button>
+      <div class="toggles"><button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button><button class="tiny hint" data-go="guide" aria-pressed="true">新手引導：開</button><button class="tiny hint" data-go="haptics" aria-pressed="true">震動：開</button></div>
       <p class="keys">左鍵＝石頭／往左　中鍵＝剪刀／原地　右鍵＝布／往右　｜　Esc 回大廳　` 除錯資訊</p>
     </div>
   </section>
@@ -85,6 +100,7 @@
   <section class="screen" id="online" hidden>
     <div class="panel">
       <button class="back" data-go="menu">← 回大廳</button>
+      <label class="field">你的暱稱<input id="nameInput" maxlength="16" placeholder="最多 8 個字" autocomplete="nickname" enterkeyhint="done"></label>
       <button class="btn" data-go="create"><b>建立房間</b><small>產生 4 碼房號，把網址傳給朋友</small></button>
       <div class="row"><input class="code" id="roomInput" maxlength="4" placeholder="房號" autocomplete="off" aria-label="4 碼房號"><button class="btn" data-go="join" style="flex:none"><b>加入</b></button></div>
       <p class="err" id="roomError"></p>
@@ -98,9 +114,17 @@
     <canvas id="screen" aria-label="拳刃交鋒 遊戲畫面"></canvas>
     <div class="bar">
       <span class="tag" id="modeTag"></span>
-      <span class="row"><span class="tag" id="ping" hidden title="來回延遲（每 15 秒心跳）">-- ms</span><button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button><button class="tiny" id="skipTut" data-go="skip" hidden>跳過教學</button><button class="tiny" data-go="menu">回大廳</button></span>
+      <span class="row"><span class="tag" id="ping" hidden title="來回延遲（每 15 秒心跳）">-- ms</span><button class="tiny" id="emoteBtn" data-go="emotes" hidden aria-label="表情">😀</button><button class="tiny" id="gearBtn" data-go="settings" aria-label="設定">⚙️</button><button class="tiny" id="skipTut" data-go="skip" hidden>跳過教學</button><button class="tiny" data-go="menu">回大廳</button></span>
     </div>
+    <div id="settingsPop" class="pop" hidden>
+      <button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button>
+      <button class="tiny hint" data-go="guide" aria-pressed="true">新手引導：開</button>
+      <button class="tiny hint" data-go="haptics" aria-pressed="true">震動：開</button>
+      <button class="tiny hint" data-go="hideEmotes" aria-pressed="true" id="hideEmotesBtn" hidden>對手表情：顯示</button>
+    </div>
+    <div id="emoteTray" class="pop tray" hidden></div>
     <div id="objective" hidden></div>
+    <div id="coach" hidden></div>
     <div id="keybar" aria-label="鍵位提示"></div>
     <!-- 線上房間：待機（READY）／結算（Rematch、離開） -->
     <div id="room" class="overlay" hidden>
@@ -110,6 +134,7 @@
         <button class="tiny copy" id="rcCopy" data-go="copy">📋 一鍵複製邀請連結</button>
         <p class="link" id="rcLink"></p>
         <div class="seats"><div class="seat" id="seat0"></div><div class="seat" id="seat1"></div></div>
+        <div class="rGuide" id="rcGuide"></div>
         <button class="btn ready" id="rcReady" data-go="ready" hidden><b>READY</b><small>雙方都準備好後倒數 3 秒開戰</small></button>
         <div class="row" id="rcOver" hidden><button class="btn" id="rcRematch" data-go="rematch"><b>再來一局（Rematch）</b><small>雙方都按就原地重開</small></button></div>
         <button class="back" data-go="leave">離開房間</button>
@@ -117,6 +142,7 @@
       </div>
     </div>
     <div id="countdown" class="bigCount" hidden>3</div>
+    <div id="flowStrip" hidden></div>
     <div id="pauseBox" hidden></div>
     <pre id="debug" hidden></pre>
   </section>

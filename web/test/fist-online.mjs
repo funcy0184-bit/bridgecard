@@ -13,20 +13,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function createRoom() { const r = await fetch(new URL("api/rooms", BASE), { method: "POST" }); return (await r.json()).room; }
 
 // 一位玩家：收下所有訊息、提供等待工具
-function player(room, token) {
+function player(room, token, name) {
   const p = { msgs: [], seat: -1, token, lobby: null, view: null, events: [], closed: false, err: null };
   p.ws = new WebSocket(`${WS}ws/${room}`);
   p.ready = new Promise((res, rej) => { p.ws.onopen = res; p.ws.onerror = rej; });
+  p.emotes = [];
   p.ws.onmessage = ev => {
     const m = JSON.parse(ev.data); m._at = Date.now(); p.msgs.push(m);
     if (m.t === "welcome") { p.seat = m.seat; p.token = m.token; }
     if (m.t === "lobby") p.lobby = m;
     if (m.t === "state") { p.view = m.view; p.events.push(...m.events.map(e => ({ ...e, _phase: m.view.phase, _t: m.view.t }))); }
     if (m.t === "error") p.err = m;
+    if (m.t === "emote") p.emotes.push(m);
   };
   p.ws.onclose = ev => { p.closed = true; p.closeCode = ev.code; };
   p.send = o => p.ws.send(JSON.stringify(o));
-  p.join = async () => { await p.ready; p.send({ t: "join", token: p.token }); await until(() => p.seat >= 0 || p.err); };
+  p.join = async () => { await p.ready; p.send({ t: "join", token: p.token, name }); await until(() => p.seat >= 0 || p.err); };
   p.tap = async (btn, hold = 30) => { p.send({ t: "input", type: "down", btn }); await sleep(hold); p.send({ t: "input", type: "up", btn }); };
   return p;
 }
@@ -44,7 +46,7 @@ console.log("房號不存在／房間已滿");
   ok(x.err?.code === "no_room", `不存在的房號：${x.err?.msg}`);
 }
 const room = await createRoom();
-const A = player(room), B = player(room);
+const A = player(room, null, "阿鋒"), B = player(room, null, "<b>翠嵐\u202E超長名字超長名字\u0000</b>");
 await A.join(); await B.join();
 ok(A.seat === 0 && B.seat === 1 && A.token && B.token, `房主入座 P1、朋友入座 P2（房號 ${room}）`);
 {
@@ -121,6 +123,21 @@ await until(() => B.events.some(e => ["parry", "timeout", "wrong"].includes(e.ty
 B.send({ t: "input", type: "up", btn: "M" });
 ok(B.events.some(e => e.type === "parry" && e.p === 1), "倒數歸零後 ~25ms 抵達的正確按鍵：伺服器寬容 80ms，判定彈反成功");
 ok(A.view.fighters[0].damage === 10 && B.view.fighters[1].damage === dmg, `反擊 +10%（P1 ${A.view.fighters[0].damage}%）`);
+
+console.log("暱稱、表情、房主設定");
+{
+  const names = A.lobby.seats.map(s => s.name);
+  ok(names[0] === "阿鋒", `P1 暱稱：${names[0]}`);
+  ok(names[1] === "b翠嵐超長名字超" && [...names[1]].length === 8 && !/[<>\u202E\u0000]/.test(names[1]), `P2 暱稱清洗：去掉 <> 與方向／控制字元、最多 8 個字（「${names[1]}」）`);
+  A.send({ t: "emote", i: 2 }); A.send({ t: "emote", i: 3 });            // 第二個在 1.5 秒內：丟掉
+  B.send({ t: "emote", i: 99 }); B.send({ t: "emote", i: "x" });
+  await sleep(200);
+  ok(B.emotes.length === 1 && B.emotes[0].seat === 0 && B.emotes[0].i === 2, "表情：轉給對手；1.5 秒內連發只算一次；不在清單上的丟掉");
+  ok(A.emotes.length === 1, "發的人自己也收到（畫面上自己頭頂也冒泡）");
+  const before = A.lobby.settings?.guide;
+  B.send({ t: "settings", guide: !before }); await sleep(120);
+  ok(A.lobby.settings.guide === before, "非房主不能改新手引導設定");
+}
 
 console.log("ping");
 A.send({ t: "ping", c: 123 });

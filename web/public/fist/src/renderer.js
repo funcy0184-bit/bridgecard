@@ -324,6 +324,7 @@ export class Renderer {
         case "land": this.spark(e.x, CONFIG.floorY, PAL.platform.topEdge, 4, 1.2); break;
         case "ko": this.fx.push({ k: "beam", x: e.x, at: now, max: ms(FX.koBlast.durationMs) }); this.kick(FX.cameraShakePx.ko, 0.2, now); this.popup(clamp(e.x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22); this.trails = [[], []]; break;
         case "round_end": this.popup(CONFIG.W / 2, 110, "雙方 +1 氣", PAL.hud.powerFill, 9); break;
+        case "speed_up": this.banner(`⚡ 加速！速度 Lv.${e.lv + 1}`, PAL.fx.red.rim); this.kick(1, 0.1, now); break;
         case "phase": if (e.phase === PH.MOVE) this.combo = null; break;
       }
     }
@@ -332,6 +333,7 @@ export class Renderer {
   spark(x, y, color, n, speed) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * speed * 50; this.fx.push({ k: "spark", x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 25, life: 0.18 + Math.random() * 0.18, max: 0.36, color }); } }
   ring(x, y, color) { this.fx.push({ k: "ring", x, y, life: 0.3, max: 0.3, color }); }
   popup(x, y, text, color, size) { this.fx.push({ k: "text", x, y, text, color, size, life: 0.9, max: 0.9 }); }
+  emote(seat, text) { this.fx = this.fx.filter(p => !(p.k === "emote" && p.seat === seat)); this.fx.push({ k: "emote", seat, text, life: CONFIG.emoteShowMs / 1000, max: CONFIG.emoteShowMs / 1000 }); }   // 表情泡泡：頭頂 2 秒
   banner(text, color = PAL.hud.focusOutline) { this.fx.push({ k: "banner", text, color, life: 1.6, max: 1.6 }); }
   zoneBlast(zone = []) { for (const c of zone) { this.fx.push({ k: "crack", c, life: 0.5, max: 0.5 }); for (let i = 0; i < 6; i++) this.fx.push({ k: "debris", x: cellX(c) + (Math.random() - 0.5) * 30, y: CONFIG.floorY, vx: (Math.random() - 0.5) * 160, vy: -80 - Math.random() * 120, life: 0.45, max: 0.45 }); } }
 
@@ -375,7 +377,7 @@ export class Renderer {
   updateFx(vdt, dt) {
     for (const p of this.fx) {
       if (p.k === "beam") continue;
-      if (p.k === "text" || p.k === "banner") { p.life -= dt; if (p.k === "text") p.y -= 18 * dt; continue; }
+      if (p.k === "text" || p.k === "banner" || p.k === "emote") { p.life -= dt; if (p.k === "text") p.y -= 18 * dt; continue; }
       p.life -= vdt;
       if (p.k === "spark" || p.k === "debris") { p.vy += 500 * vdt; p.x += p.vx * vdt; p.y += p.vy * vdt; }
     }
@@ -454,7 +456,7 @@ export class Renderer {
     ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(x0, Y - 1, x1 - x0, 1); ctx.fillRect(x0, Y + 15, x1 - x0, 1); ctx.fillRect(x0, Y - 1, 1, 17); ctx.fillRect(x1 - 1, Y - 1, 1, 17);
   }
   animTime(view, f) { return view.phase === PH.WINDOW ? f.anim.t * CONFIG.window.slowmo : f.anim.t; }   // 判定窗：慢動作（只影響畫面）
-  stateFor(view, f) { return view.phase === PH.RPS && view.t >= CONFIG.rps.reveal && f.anim.state.startsWith("stance_") ? "stance_hidden" : f.anim.state; }   // 藏招：雙方都回到收手黑影
+  stateFor(view, f) { return view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal) && f.anim.state.startsWith("stance_") ? "stance_hidden" : f.anim.state; }   // 藏招：雙方都回到收手黑影
   drawTrails(view) {
     const al = FX.motionTrail.alphaNewestToOldest;
     this.trails.forEach(tr => tr.forEach((s, i) => Fighter.draw(this.ctx, s.f, this.stateFor(view, s.f), this.animTime(view, s.f), s.f.x, s.f.y, s.f.face, { alpha: al[i] ?? 0.1, view })));
@@ -523,7 +525,7 @@ export class Renderer {
   // 架式氣泡（showHints）：亮招期顯示各自已擺的拳種、藏招期雙方都變 ❓；位置固定在腳底上 55px，靠太近時 P2 往上錯開
   drawStanceBubbles(view, now) {
     if (!this.showHints || view.phase !== PH.RPS) return;
-    const hidden = view.t >= CONFIG.rps.reveal, [W] = SB.sizePx, O = SB.onFighterOverlap;
+    const hidden = view.t >= (view.reveal ?? CONFIG.rps.reveal), [W] = SB.sizePx, O = SB.onFighterOverlap;
     const items = view.fighters.map(f => ({ f, key: hidden ? "hidden" : ["rock", "scissors", "paper"].includes(f.stance) ? f.stance : null })).filter(o => o.key && !o.f.out);
     const close = items.length === 2 && Math.abs(items[0].f.x - items[1].f.x) < O.minCenterGapPx;
     for (const { f, key } of items) {
@@ -644,14 +646,14 @@ export class Renderer {
     if (fin) color = view.round?.type === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim;
     if (ph === PH.MASH) color = PAL.fx.impact.spark;
     if (ph === PH.SELECT) color = view.round?.charging ? PAL.fx.red.rim : PAL.fx.blue.rim;
-    if (ph === PH.RPS && view.t >= CONFIG.rps.reveal) color = PAL.hud.muted;
+    if (ph === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal)) color = PAL.hud.muted;
     if (urgent) color = blink ? PAL.fx.red.rim : PAL.hud.focusOutline;
     ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(x - 2, y - 2, W + 4, H + 4);
     ctx.fillStyle = PAL.hud.plate; ctx.fillRect(x - 1, y - 1, W + 2, H + 2);
     ctx.fillStyle = color; ctx.fillRect(x, y, Math.round(W * k), H);
     ctx.fillStyle = PAL.hud.plate;
     for (let s = 0.1; s < view.dur - 1e-6; s += 0.1) ctx.fillRect(x + Math.round(W * (s / view.dur)), y, 1, H);
-    if (ph === PH.RPS) { ctx.fillStyle = PAL.hud.focusOutline; ctx.fillRect(x + Math.round(W * (1 - CONFIG.rps.reveal / CONFIG.rps.dur)), y - 3, 1, H + 6); }
+    if (ph === PH.RPS) { ctx.fillStyle = PAL.hud.focusOutline; ctx.fillRect(x + Math.round(W * (1 - (view.reveal ?? CONFIG.rps.reveal) / view.dur)), y - 3, 1, H + 6); }
   }
   // ---- 耐受度狀態字（% 數字下方；四級樣式依 ART.palette.damageBands，動態依 CONFIG.status） ----
   //   穩如泰山：靜止｜腳步微晃：受擊彈跳縮放｜搖搖欲墜！：持續 ±1px 低頻抖動＋微弱火花｜瀕死！！：±2px 高頻震動＋紅白閃爍＋黑煙
@@ -701,7 +703,7 @@ export class Renderer {
     const fin = ph === PH.WINDOW, left = Math.max(0, view.dur - view.t);
     let label = PH_LABEL[ph] ?? "";
     const deathmatch = view.fighters.some(f => this.shownDamage(f) >= PAL.damageBands[PAL.damageBands.length - 1].minInclusive);
-    if (ph === PH.RPS) label = (deathmatch ? CONFIG.deathmatchTitle : label) + (view.t >= CONFIG.rps.reveal ? "・藏招" : "・亮招");
+    if (ph === PH.RPS) label = (deathmatch ? CONFIG.deathmatchTitle : label) + (view.t >= (view.reveal ?? CONFIG.rps.reveal) ? "・藏招" : "・亮招");
     if (fin && r?.type) label = r.type === "red" ? "翻滾！紅招不可彈反" : "彈反！按克制手勢";
     if (ph === PH.SELECT && r) label = "終結擇：短按選手勢｜長按贏拳鍵＝紅光";
     g.font = `bold ${fin || (deathmatch && ph === PH.RPS) ? 12 : 10}px sans-serif`;
@@ -712,6 +714,7 @@ export class Renderer {
       g.font = `bold ${fin ? 13 : 9}px monospace`;
       g.fillStyle = urgent ? (Math.floor(now * 20) % 2 ? PAL.fx.red.rim : PAL.hud.focusOutline) : PAL.hud.label;
       g.fillText(left.toFixed(fin ? 2 : 1), CONFIG.W / 2, fin ? 48 : 43);
+      if (view.speedLv > 0) { g.font = "bold 8px sans-serif"; g.fillStyle = PAL.fx.red.rim; g.fillText(`⚡ Lv.${view.speedLv + 1}`, CONFIG.W / 2 + 74, 33); g.font = `bold ${fin ? 13 : 9}px monospace`; }   // 速度等級
     }
     // 連打 HIT COMBO 計數
     if (this.combo && (ph === PH.MASH || ph === PH.SELECT || now - this.combo.at < 0.8)) {
@@ -726,6 +729,16 @@ export class Renderer {
         const a = clamp(p.life / p.max, 0, 1), [sx, sy] = toScreen(p.x, p.y);
         g.globalAlpha = a; g.textAlign = "center"; g.font = `bold ${p.size}px sans-serif`;
         g.fillStyle = PAL.fighters.outline; g.fillText(p.text, sx + 1, sy + 1); g.fillStyle = p.color; g.fillText(p.text, sx, sy);
+      } else if (p.k === "emote") {
+        const f = view.fighters[p.seat]; if (!f || f.out) continue;
+        const a = clamp(p.life / p.max * 4, 0, 1), pop = Math.max(0, 1 - (p.max - p.life) * 8), [sx, sy] = toScreen(f.x, CONFIG.floorY - 84);
+        const big = p.text.length <= 2 && !/^[A-Z]+$/.test(p.text);
+        g.save(); g.globalAlpha = a; g.translate(Math.round(sx), Math.round(sy - pop * 4)); g.scale(1 + pop * 0.3, 1 + pop * 0.3);
+        g.font = `bold ${big ? 16 : 11}px sans-serif`; const w = Math.max(24, g.measureText(p.text).width + 10);
+        g.fillStyle = "rgba(244,243,238,.95)"; g.fillRect(-w / 2, -16, w, 20); g.beginPath(); g.moveTo(-3, 4); g.lineTo(3, 4); g.lineTo(0, 8); g.fill();
+        g.strokeStyle = PAL.fighters["p" + (p.seat + 1)].primary; g.lineWidth = 1.5; g.strokeRect(-w / 2, -16, w, 20);
+        g.fillStyle = "#10121B"; g.textAlign = "center"; g.fillText(p.text, 0, big ? 1 : -2);
+        g.restore();
       } else if (p.k === "banner") {
         if (ph === PH.MASH && this.combo?.n) p.life = Math.min(p.life, 0.2);   // 連打開打：標題讓位給 HIT COMBO
         const a = clamp(p.life / p.max, 0, 1);

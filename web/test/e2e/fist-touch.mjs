@@ -90,6 +90,42 @@ for (const [name, dev] of [["iPhone 13 直拿", devices["iPhone 13"]], ["iPhone 
   await ctx.close();
 }
 
+console.log("震動（模擬 Android，記錄 navigator.vibrate 的震法）");
+{
+  const ctx = await browser.newContext({ ...devices["Pixel 7"] });
+  await ctx.addInitScript(() => { window.__vib = []; navigator.vibrate = p => { window.__vib.push(p); return true; }; });
+  const P = await ctx.newPage(); P.on("pageerror", e => errors.push(String(e)));
+  await P.goto(BASE); await P.tap('[data-go="difficulty"]'); await P.tap('[data-go="ai:easy"]');
+  await P.waitForFunction(() => __fist.view, null, { timeout: 5000 });
+  const H = await P.evaluate(() => __fist.CONFIG.haptics);
+  const vib = () => P.evaluate(() => window.__vib.splice(0).filter(p => p !== 6));      // 6ms 是按鍵小回饋，先濾掉
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // 我打人：連打
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_MASH", round: { att: 0, winGesture: "rock" } }));
+  await vib();
+  for (let i = 0; i < 6; i++) await tapCard(P, mash(0), 1, 15);
+  await waitPh(P, "PHASE_FINISHER_SELECT", 3000);
+  const deal = await vib();
+  ok(deal.some(p => same(p, H.dealBase)) && deal.some(p => same(p, H.dealExtra)), `打到對手：保底拳 ${H.dealBase}ms、追加拳 ${H.dealExtra}ms（實際 ${JSON.stringify(deal)}）`);
+  // 我被打：藍光終結沒接住
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
+  await vib(); await sleep(700);
+  const take = await vib();
+  ok(take.some(p => same(p, H.takeFinisher)), `被終結技打到：重震 ${JSON.stringify(H.takeFinisher)}（實際 ${JSON.stringify(take)}）`);
+  // 完美彈反
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
+  await vib(); await tapCard(P, card(0, "R")); await sleep(120);
+  const parry = await vib();
+  ok(parry.length === 1 && same(parry[0], H.parryMe), `完美彈反：噠噠 ${JSON.stringify(H.parryMe)}（實際 ${JSON.stringify(parry)}）`);
+  // 關掉震動
+  await P.tap("#gearBtn"); await P.tap('#settingsPop [data-go="haptics"]'); await P.tap("#gearBtn");
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
+  await vib(); await sleep(700);
+  ok((await vib()).length === 0 && !(await P.evaluate(() => __fist.Haptics.on)), "⚙️ 震動：關 → 被打也不震");
+  await P.evaluate(() => __fist.Haptics.set(true));
+  await ctx.close();
+}
+
 console.log("互動教學（觸控說法）");
 {
   const ctx = await browser.newContext({ ...devices["iPhone 13"] });

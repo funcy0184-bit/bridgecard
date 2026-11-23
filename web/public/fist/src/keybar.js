@@ -116,7 +116,7 @@ export class KeyBar {
   press(seat, btn, view) {
     const g = this.groups.find(x => x.seat === seat);
     if (!g) return;
-    const shared = view && view.seat < 0 && view.phase === PH.RPS && view.t >= CONFIG.rps.reveal;   // 同機藏招：整組閃，不說是哪顆
+    const shared = view && view.seat < 0 && view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal);   // 同機藏招：整組閃，不說是哪顆
     const el = shared ? null : g.mash.hidden ? g.cards[btn] : g.mash;
     const target = el ?? g.el, cls = el ? "pressed" : "pulse";
     target.classList.remove(cls); void target.offsetWidth; target.classList.add(cls);

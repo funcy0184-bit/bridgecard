@@ -61,14 +61,14 @@ export class AIPlayer {
   [`on_${PH.RPS}`](v, seen) {
     const P = this.plan, me = this.me(v), C = CONFIG.rps;
     if (me.stun > 0) return;                                             // 硬直中按了也沒用
-    const oppSeen = seen.phase === PH.RPS && seen.t < C.reveal ? this.opp(seen).stance : null;
+    const oppSeen = seen.phase === PH.RPS && seen.t < (seen.reveal ?? C.reveal) ? this.opp(seen).stance : null;
     const read = () => (oppSeen && oppSeen !== "hidden" && this.rng() < this.cfg.counterRead ? COUNTER[oppSeen] : this.pick(GESTURES));
     const ready = seen.phase === PH.RPS;                                  // 反應延遲過了
     if (!P.first && ready) { P.first = true; P.g = this.cfg.feint ? this.pick(GESTURES) : read(); this.press(KEY_OF[P.g]); return; }
     if (!P.first) return;
     if (this.level === "mid" && !P.second && v.t >= 1.0) { P.second = true; const g = read(); if (g !== P.g) { P.g = g; this.press(KEY_OF[g]); } }
     if (this.cfg.feint && !P.feint && v.t >= 0.75) { P.feint = true; const g = this.pick(GESTURES.filter(x => x !== P.g)); P.g = g; this.press(KEY_OF[g]); }   // 前 1.3s 故意切招騙人
-    if (this.cfg.hiddenSwitch && !P.final && v.t >= C.reveal + 0.12 + this.rng() * 0.15) {                                                                  // 最後 0.5s 藏招變拳
+    if (this.cfg.hiddenSwitch && !P.final && v.t >= (v.reveal ?? C.reveal) + 0.12 + this.rng() * 0.15) {                                                                  // 最後 0.5s 藏招變拳
       P.final = true;
       const g = this.lastOppStance && this.rng() < this.cfg.counterRead ? COUNTER[this.lastOppStance] : this.pick(GESTURES);
       if (g !== P.g) { P.g = g; this.press(KEY_OF[g]); }

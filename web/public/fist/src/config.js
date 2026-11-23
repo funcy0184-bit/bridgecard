@@ -1472,7 +1472,10 @@ export const CONFIG = {
 
   // ---- 六階段（秒） ----
   move: { dur: 1.2, maxSteps: 2, stepTime: 0.16, bumpTime: 0.22, secondStepStun: 1.0, wobbleTime: 0.3 },
-  rps: { dur: 1.8, reveal: 1.3 },                  // 前 1.3s 亮招、後 0.5s 藏招
+  rps: { dur: 1.8, reveal: 1.3 },
+  // 越打越快：整場每 3 回合（一次猜拳結算＝一回合）升一級，第 10 回合起最快；教學道場不加速
+  //   各階段時間 = 開局值 →（線性）→ fast 值；終結擇不低於 0.4 秒（長按紅光要 0.3 秒）、判定窗不低於 0.4 秒
+  speed: { roundsPerLevel: 3, maxLevel: 3, fast: { move: 0.85, rpsReveal: 0.9, rpsHidden: 0.4, mash: 0.5, select: 0.4, window: 0.4 } },                  // 前 1.3s 亮招、後 0.5s 藏招
   clash: { dur: 0.75 },
   mash: { dur: 0.65, baseHits: [0.12, 0.36], baseDamage: 7, pressesPerExtra: 2, extraDamage: 1.5, maxExtra: 4 },
   select: { dur: 0.45, chargeTime: 0.3, redCost: 2 },
@@ -1523,6 +1526,17 @@ export const CONFIG = {
   hints: { default: true, storageKey: "fist.showHints" },
   // ---- 耐受度狀態字（分級、顏色、粒子讀 ART.palette.damageBands） ----
   status: { criticalAlt: "一擊必飛！！", altEverySec: 0.9, flashEverySec: 1.3, flashMs: 90, popMs: 220, jitter: { teetering: { px: 1, hz: 6 }, critical: { px: 2, hz: 22 } } },
+  // ---- 線上：暱稱、表情（固定 8 個，不開放自由打字）、新手引導（房主預設） ----
+  profile: { nameMax: 8, storageKey: "fist.name" },
+  emotes: ["😂", "😡", "👍", "🔥", "😱", "🙏", "🤡", "GG"], emoteGapMs: 1500, emoteShowMs: 2000,
+  guide: { default: true, storageKey: "fist.guide" },
+  // ---- 震動（Android Chrome 的 navigator.vibrate；iPhone Safari 不開放，只能退而求其次給一下系統觸感） ----
+  haptics: {
+    storageKey: "fist.haptics", minGapMs: 35,
+    dealBase: 18, dealExtra: 10, takeBase: 32, takeExtra: 14,
+    dealFinisher: 30, takeFinisher: [45, 30, 70], takeRed: [80, 40, 110], dealRed: 45,
+    parryMe: [15, 45, 15], gotParried: 60, clash: 25, roll: 12, koMe: 160, koThem: [30, 40, 30],
+  },
   deathmatchTitle: "⚡ 絕命對峙！",
   // ---- 底部鍵位卡文字 ----
   cards: {

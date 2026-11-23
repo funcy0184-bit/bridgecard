@@ -69,7 +69,7 @@ export class Tutorial {
     if (i >= LESSONS.length) { this.finished = true; this.transport = null; this.onDone(); return; }
     const L = LESSONS[i];
     this.lesson = i; this.goal = 0; this.waitLeft = 0; this.say = null;
-    this.transport = new LocalTransport({ setup: L.setup, viewer: 0, bots: [new ScriptBot(1, L.script)], flow: (from, to, e) => L.flow?.(from, to, e, L) });
+    this.transport = new LocalTransport({ setup: L.setup, viewer: 0, speedUp: false, bots: [new ScriptBot(1, L.script)], flow: (from, to, e) => L.flow?.(from, to, e, L) });
     this.transport.onStateUpdate(msg => this.watch(msg));
     this.onTransport(this.transport, L);
     this.emitObjective();

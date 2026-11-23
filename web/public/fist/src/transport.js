@@ -28,9 +28,9 @@ export class LocalTransport extends Transport {
    * @param {number} [o.viewer]  畫面以誰的角度看（-1＝同機雙人共用螢幕）
    * @param {Array} [o.bots]     本機電腦玩家（AIPlayer 或教學腳本），每個都有 seat、attach(port)、update(dt)
    */
-  constructor({ setup, flow, viewer = -1, rng, bots = [] } = {}) {
+  constructor({ setup, flow, viewer = -1, rng, bots = [], speedUp = true } = {}) {
     super();
-    this.engine = new Engine({ setup, flow, rng });
+    this.engine = new Engine({ setup, flow, rng, speedUp });
     this.viewer = viewer; this.seat = viewer; this.bots = bots; this.acc = 0; this.paused = false;
     for (const bot of bots) bot.attach({ view: () => this.engine.viewFor(bot.seat), input: (type, btn) => this.engine.input(bot.seat, type, btn) });
   }
@@ -78,9 +78,9 @@ export async function createRoom() {
 export function inviteLink(room) { const u = new URL(location.href); u.search = ""; u.hash = ""; u.searchParams.set("room", room); return u.href; }
 
 export class WebSocketTransport extends Transport {
-  constructor({ room, url } = {}) {
+  constructor({ room, url, name = "" } = {}) {
     super();
-    this.room = room;
+    this.room = room; this.name = name;
     const u = new URL(CONFIG.net.wsPath + encodeURIComponent(room), location.href);
     u.protocol = location.protocol === "https:" ? "wss:" : "ws:";
     this.url = url ?? u.href;
@@ -95,7 +95,7 @@ export class WebSocketTransport extends Transport {
     let ws;
     try { ws = new WebSocket(this.url); } catch { this.status({ state: "error", msg: "無法建立連線" }); return; }
     this.ws = ws;
-    ws.onopen = () => { this.open = true; this.retry = 0; this.raw({ t: "join", token: this.token }); this.ping(); setTimeout(() => this.ping(), 300); };
+    ws.onopen = () => { this.open = true; this.retry = 0; this.raw({ t: "join", token: this.token, name: this.name }); this.ping(); setTimeout(() => this.ping(), 300); };
     ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch { return; } this.onMsg(msg); };
     ws.onerror = () => {};
     ws.onclose = ev => {
@@ -133,6 +133,8 @@ export class WebSocketTransport extends Transport {
       this.target = m.view; this.targetAt = m.serverTime; this.phaseEndTime = m.phaseEndTime;
       if (!this.disp || m.view.phase !== this.disp.phase) this.disp = structuredClone(m.view);
       this.queue.push(...(m.events ?? []));
+    } else if (m.t === "emote") {
+      this.status({ state: "emote", seat: m.seat, i: m.i });
     } else if (m.t === "error") {
       if (m.code === "no_room" || m.code === "full") this.fatal = true;
       this.status({ state: "error", code: m.code, msg: m.msg });
@@ -141,6 +143,8 @@ export class WebSocketTransport extends Transport {
   sendInput({ type, btn }) { this.raw({ t: "input", type, btn }); }
   setReady(on) { this.raw({ t: "ready", on }); }
   rematch() { this.raw({ t: "rematch" }); }
+  emote(i) { this.raw({ t: "emote", i }); }
+  setRoomGuide(on) { this.raw({ t: "settings", guide: on }); }
   leave() { this.raw({ t: "leave" }); this.closedByUser = true; setTimeout(() => this.close(), 50); }
   update(dt) {
     const T = this.target;

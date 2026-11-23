@@ -166,5 +166,29 @@ console.log("紅區永遠兩格、線上延遲寬容");
   ok(x.round.result === "hit" && has(x, "timeout"), "寬容期過了才逾時");
 }
 
+console.log("越打越快");
+{
+  const Sp = CONFIG.speed, e = make(S({ pos: 3, power: 2 }, { pos: 5, power: 2 }));
+  ok(e.speedLv === 0 && Math.abs(e.dur - CONFIG.move.dur) < 1e-9, `開局 Lv.1：走位 ${e.dur}s`);
+  const durs = [];
+  for (let k = 0; k < 12; k++) {                                         // 打 12 回合拼刀（同拳）→ 每回合都會回到走位
+    until(e, () => e.phase === PH.RPS); durs.push([e.speedLv, +e.dur.toFixed(3), +e.reveal.toFixed(3)]); run(e, 0.05); tap(e, 0, "M"); tap(e, 1, "M");
+    until(e, () => e.phase === PH.MOVE);
+  }
+  ok(durs[0][0] === 0 && durs[3][0] === 1 && durs[6][0] === 2 && durs[9][0] === 3 && durs[11][0] === 3, `每 3 回合升一級，第 10 回合起最快（等級 ${durs.map(d => d[0] + 1).join("")}）`);
+  ok(Math.abs(durs[0][2] - 1.3) < 1e-9 && Math.abs(durs[0][1] - 1.8) < 1e-9, "Lv.1 猜拳：亮招 1.3s＋藏招 0.5s");
+  ok(Math.abs(durs[9][2] - Sp.fast.rpsReveal) < 1e-9 && Math.abs(durs[9][1] - (Sp.fast.rpsReveal + Sp.fast.rpsHidden)) < 1e-9, `最快：亮招 ${Sp.fast.rpsReveal}s＋藏招 ${Sp.fast.rpsHidden}s`);
+  ok(Math.abs(e.dur - Sp.fast.move) < 1e-9 && has(e, "speed_up", x => x.lv === 3), `最快走位 ${e.dur}s，升級時有 speed_up 事件`);
+  // 最快等級的判定窗、終結擇仍守住下限，長按紅光照樣開得出來
+  const f = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.MASH, round: { att: 0, winGesture: "rock" }, rounds: 12 }), rng: () => 0.1 }); f.log = [];
+  ok(Math.abs(f.dur - Sp.fast.mash) < 1e-9, `最快連打 ${f.dur}s`);
+  until(f, () => f.phase === PH.SELECT); ok(Math.abs(f.dur - Sp.fast.select) < 1e-9 && f.dur >= CONFIG.select.chargeTime + 0.1, `最快終結擇 ${f.dur}s（≥ 長按 0.3s＋餘裕）`);
+  f.input(0, "down", "L"); run(f, 0.34);
+  ok(f.round.red, "最快等級仍開得出紅光");
+  until(f, () => f.phase === PH.WINDOW); ok(Math.abs(f.dur - Sp.fast.window) < 1e-9, `最快判定窗 ${f.dur}s`);
+  const t = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 5, power: 2 }, { rounds: 12 }), speedUp: false });
+  ok(t.speedLv === 0 && t.dur === CONFIG.move.dur, "教學（speedUp: false）不加速");
+}
+
 console.log(fails ? `\n✗ ${fails} 項沒過` : "\n全部通過");
 process.exit(fails ? 1 : 0);

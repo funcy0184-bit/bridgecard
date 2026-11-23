@@ -6,6 +6,8 @@ import { Renderer } from "./renderer.js";
 import { KeyBar } from "./keybar.js";
 import { LocalTransport, AITransport, WebSocketTransport, createRoom, inviteLink, isRoomCode } from "./transport.js";
 import { Tutorial } from "./tutorial.js";
+import { Haptics } from "./haptics.js";
+import { coachText, FLOW } from "./guide.js";
 
 const $ = id => document.getElementById(id);
 const screens = ["menu", "difficulty", "online", "game"];
@@ -13,12 +15,17 @@ function show(id) { for (const s of screens) $(s).hidden = s !== id; if (id === 
 
 const renderer = new Renderer($("screen"));
 const keybar = new KeyBar($("keybar"));
+let mode = null, transport = null, tutorial = null, unsub = null, latest = { view: null, events: [] }, keyMap = null, opts = {};
+let net = null;                                                    // 線上：{ seat, lobby, rtt, room }
 function fit() {
   const g = $("game"), pad = touch ? keybar.touchLayout(innerWidth, innerHeight).height : 0;
   const top = touch ? document.querySelector("#game .bar").offsetHeight : 0;   // 觸控：上排按鈕不蓋 HUD
   g.style.paddingBottom = `${pad}px`; g.style.paddingTop = `${top}px`;           // 觸控：畫布讓出按鍵區與上排按鈕
   renderer.resize(g.clientWidth, g.clientHeight - pad - top - 6);
   keybar.place($("screen"), renderer.scale);
+  // 新手引導那一行：觸控放在按鍵區正上方；桌機放在畫布底部鍵位卡上方
+  const c = $("coach"), r = $("screen").getBoundingClientRect();
+  c.style.top = ""; c.style.bottom = `${touch ? pad + 6 : Math.max(4, innerHeight - (r.top + 222 * renderer.scale))}px`;
 }
 addEventListener("resize", fit);
 
@@ -33,7 +40,7 @@ function setTouch(on) {
 addEventListener("pointerdown", e => { if (e.pointerType === "touch") setTouch(true); }, { capture: true });
 keybar.onInput = (seat, type, btn) => {
   Audio.unlock();
-  if (type === "down") { keybar.press(seat, btn, latest.view); try { navigator.vibrate?.(8); } catch { /* 不支援震動 */ } }
+  if (type === "down") { keybar.press(seat, btn, latest.view); Haptics.tap(); }
   sender()?.sendInput({ seat, type, btn });
 };
 // 比賽結束：點畫面再來一場（線上走房間面板的 Rematch）
@@ -50,10 +57,38 @@ function setHints(on) {
   try { localStorage.setItem(CONFIG.hints.storageKey, on ? "1" : "0"); } catch { /* 無痕模式 */ }
 }
 setHints(showHints);
+
+// ---------------- 暱稱、新手引導、震動、對手表情（存在這台瀏覽器） ----------------
+const store = { get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* 無痕模式 */ } } };
+const cleanName = v => [...String(v ?? "").replace(/[\u0000-\u001F\u007F<>]/g, "").trim()].slice(0, CONFIG.profile.nameMax).join("").trim();
+let myName = cleanName(store.get(CONFIG.profile.storageKey, ""));
+let guideStored = store.get(CONFIG.guide.storageKey, CONFIG.guide.default ? "1" : "0") === "1";
+let guideOverride = null;                                          // 這一場自己改過就以自己為準（線上：房主設預設）
+let hideOppEmotes = store.get("fist.hideEmotes", "0") === "1";
+function guideOn() {
+  if (mode === "tutorial" || !mode) return false;
+  if (guideOverride !== null) return guideOverride;
+  return mode === "online" ? net?.lobby?.settings?.guide ?? CONFIG.guide.default : guideStored;
+}
+function refreshToggles() {
+  const g = mode ? guideOn() : guideStored;
+  for (const b of document.querySelectorAll("[data-go=guide]")) { b.textContent = `新手引導：${g ? "開" : "關"}`; b.setAttribute("aria-pressed", String(g)); }
+  for (const b of document.querySelectorAll("[data-go=haptics]")) { b.textContent = Haptics.supported ? `震動：${Haptics.on ? "開" : "關"}` : "震動：此裝置不支援"; b.setAttribute("aria-pressed", String(Haptics.on)); b.disabled = !Haptics.supported; }
+  for (const b of document.querySelectorAll("[data-go=hideEmotes]")) { b.textContent = `對手表情：${hideOppEmotes ? "隱藏" : "顯示"}`; b.setAttribute("aria-pressed", String(!hideOppEmotes)); }
+}
+$("nameInput").value = myName;
+$("nameInput").addEventListener("input", e => { myName = cleanName(e.target.value); store.set(CONFIG.profile.storageKey, myName); });
+$("emoteTray").replaceChildren(...CONFIG.emotes.map((t, i) => { const b = document.createElement("button"); b.textContent = t; b.dataset.go = `emote:${i}`; if (/^[A-Z]+$/.test(t)) b.className = "txt"; b.title = `${t}（鍵盤 ${i + 1}）`; return b; }));
+let lastEmoteAt = 0;
+function sendEmote(i) {
+  if (mode !== "online" || !transport?.emote || performance.now() - lastEmoteAt < CONFIG.emoteGapMs) return;
+  lastEmoteAt = performance.now(); transport.emote(i); $("emoteTray").hidden = true;
+  for (const b of $("emoteTray").children) b.disabled = true;
+  setTimeout(() => { for (const b of $("emoteTray").children) b.disabled = false; }, CONFIG.emoteGapMs);
+}
+refreshToggles();
 if (typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) setTouch(true);
 
-let mode = null, transport = null, tutorial = null, unsub = null, latest = { view: null, events: [] }, keyMap = null, opts = {};
-let net = null;                                                    // 線上：{ seat, lobby, rtt, room }
 
 // ---------------- 模式 ----------------
 function bind(t) {
@@ -64,7 +99,9 @@ function bind(t) {
 function startMode(m, o = {}) {
   stopMode();
   mode = m; opts = o;
-  for (const id of ["objective", "skipTut", "room", "pauseBox", "countdown", "ping"]) $(id).hidden = true;
+  for (const id of ["objective", "skipTut", "room", "pauseBox", "countdown", "ping", "settingsPop", "emoteTray", "coach", "flowStrip"]) $(id).hidden = true;
+  guideOverride = null;
+  $("emoteBtn").hidden = m !== "online"; $("hideEmotesBtn").hidden = m !== "online";
   const solo = code => (CONFIG.keys.solo[code] ? { seat: mode === "online" ? net?.seat ?? -1 : 0, btn: CONFIG.keys.solo[code] } : null);
   if (m === "local2p") {
     keyMap = code => { for (const [seat, map] of CONFIG.keys.local2p.entries()) if (map[code]) return { seat, btn: map[code] }; return null; };
@@ -74,8 +111,8 @@ function startMode(m, o = {}) {
     $("modeTag").textContent = "同機雙人｜P1 A/S/D　P2 J/K/L";
   } else if (m === "ai") {
     keyMap = solo;
-    renderer.setNames(["玩家", CONFIG.ai[o.level].name]);
-    keybar.setup([{ seat: 0, keys: CONFIG.keyLabel[0], title: "你（A/S/D 或 ←↓→）", color: TEAM[0] }]);
+    renderer.setNames([myName || "玩家", CONFIG.ai[o.level].name]);
+    keybar.setup([{ seat: 0, keys: CONFIG.keyLabel[0], title: `${myName || "你"}（A/S/D 或 ←↓→）`, color: TEAM[0] }]);
     bind(new AITransport({ difficulty: o.level }));
     $("modeTag").textContent = `單人對戰：${CONFIG.ai[o.level].name}`;
   } else if (m === "tutorial") {
@@ -97,12 +134,13 @@ function startMode(m, o = {}) {
     keybar.setup([{ seat: -1, keys: CONFIG.keyLabel[0], title: "連線中…", color: "#8592A4" }]);
     $("rcCode").textContent = o.room; $("rcLink").textContent = inviteLink(o.room); $("rcMsg").textContent = "連線中…"; $("rcCopy").textContent = "📋 一鍵複製邀請連結";
     $("room").hidden = false; $("ping").hidden = false; $("ping").textContent = "-- ms"; $("rcReady").hidden = true;
-    const t = new WebSocketTransport({ room: o.room });
+    const t = new WebSocketTransport({ room: o.room, name: myName });
     t.onStatus(onNet);
     bind(t);
     $("modeTag").textContent = `線上對戰｜房號 ${o.room}`;
     renderRoom();
   }
+  refreshToggles();
   show("game");
 }
 function stopMode() {
@@ -126,7 +164,16 @@ function onNet(s) {
   else if (s.state === "joined") {
     net.seat = s.seat; $("rcMsg").textContent = "";
     keybar.setSeat(0, s.seat); keybar.setTitle(0, `你是 P${s.seat + 1}（A/S/D）`);
-  } else if (s.state === "lobby") { net.lobby = s.lobby; renderRoom(); }
+  } else if (s.state === "lobby") {
+    net.lobby = s.lobby;
+    const names = s.lobby.seats.map((x, i) => x.name || CONFIG.names[i]);
+    renderer.setNames(names);
+    if (net.seat >= 0) keybar.setTitle(0, `你是 P${net.seat + 1}・${names[net.seat]}（A/S/D）`);
+    renderRoom(); refreshToggles();
+  } else if (s.state === "emote") {
+    if (s.seat !== net.seat && hideOppEmotes) return;
+    renderer.emote(s.seat, CONFIG.emotes[s.i] ?? "");
+  }
   else if (s.state === "ping") { net.rtt = s.rtt; const p = $("ping"); p.textContent = `${s.rtt} ms`; p.dataset.q = s.rtt < 80 ? "good" : s.rtt < 160 ? "ok" : "bad"; }
   else if (s.state === "error") { $("rcMsg").textContent = s.msg; $("room").hidden = false; if (s.code === "no_room" || s.code === "full") $("rcReady").hidden = true; }
   else if (s.state === "closed") { $("rcMsg").textContent = s.code === 4000 ? "這個座位在別的分頁開啟了，這裡先斷線" : "連線已關閉"; $("room").hidden = false; }
@@ -142,12 +189,21 @@ function renderRoom() {
   L.seats.forEach((s, i) => {
     const el = $("seat" + i);
     el.className = `seat${s.online ? " on" : ""}${(st === "over" ? s.rematch : s.ready) ? " ready" : ""}`;
-    const who = `P${i + 1} ${CONFIG.names[i].replace(/^P\d\s*/, "")}${i === me ? "（你）" : ""}`;
+    const who = `P${i + 1} ${s.name || CONFIG.names[i].replace(/^P\d\s*/, "")}${i === me ? "（你）" : ""}`;
     const state = !s.taken ? "等待加入…" : !s.online ? "斷線中…" : st === "over" ? (s.rematch ? "想再來一局" : "結算中") : s.ready ? "READY ✔" : "準備中";
     const a = document.createElement("b"); a.textContent = who; const b = document.createElement("span"); b.textContent = state;
     el.replaceChildren(a, b);
   });
   const mine = me >= 0 ? L.seats[me] : null;
+  // 新手引導：房主決定雙方的預設；每個人在 ⚙️ 裡還能只改自己的
+  const gOn = L.settings?.guide ?? CONFIG.guide.default, rg = $("rcGuide");
+  if (me === 0) {
+    let cb = rg.querySelector("input");
+    if (!cb) { const lab = document.createElement("label"); cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "rcGuideBox"; cb.addEventListener("change", () => transport?.setRoomGuide?.(cb.checked)); lab.append(cb, document.createTextNode(" 新手引導（雙方預設：每個階段提示現在該按什麼）")); rg.replaceChildren(lab); }
+    cb.checked = gOn; cb.disabled = !(st === "lobby" || st === "over");
+  } else rg.textContent = me > 0 ? `房主設定：新手引導 ${gOn ? "開" : "關"}（可在 ⚙️ 只改自己的）` : "";
+  $("flowStrip").textContent = FLOW;
+  $("flowStrip").hidden = !(st === "countdown" && guideOn());
   $("rcReady").hidden = st !== "lobby" || me < 0;
   $("rcReady").querySelector("b").textContent = mine?.ready ? "取消準備" : "READY";
   $("rcReady").classList.toggle("on", !!mine?.ready);
@@ -192,6 +248,7 @@ addEventListener("keydown", e => {
     return;
   }
   if (mode && e.code === "Backquote") { $("debug").hidden = !$("debug").hidden; return; }
+  if (mode === "online" && /^Digit[1-8]$/.test(e.code)) { sendEmote(Number(e.code.slice(5)) - 1); return; }
   if (!mode || !keyMap) return;
   const k = keyMap(e.code);
   if (!k || k.seat < 0) return;
@@ -221,6 +278,10 @@ function frame(nowMs) {
   if (latest.view) {
     const evs = latest.events.splice(0);
     Audio.handle(evs, latest.view);
+    Haptics.handle(evs, mode === "local2p" ? null : Math.max(0, latest.view.seat));
+    const tip = guideOn() && $("room").hidden ? coachText(latest.view, mode === "local2p" ? -1 : latest.view.seat) : "";
+    if ($("coach").textContent !== tip) $("coach").textContent = tip;
+    $("coach").hidden = !tip;
     renderer.draw(latest.view, evs, nowMs / 1000, dt);
     keybar.update(latest.view);
     if (!$("debug").hidden) $("debug").textContent = debugText(latest.view);
@@ -253,6 +314,16 @@ document.addEventListener("click", e => {
   else if (go === "join") joinRoom($("roomInput").value);
   else if (go === "skip") tutorial?.skip();
   else if (go === "hints") { setHints(!showHints); b.blur(); }
+  else if (go === "guide") {                                         // 線上：只改自己這場（房主設的是預設）；本機：記在這台瀏覽器
+    const next = !(mode ? guideOn() : guideStored);
+    if (mode === "online") guideOverride = next; else { guideStored = next; guideOverride = null; store.set(CONFIG.guide.storageKey, next ? "1" : "0"); }
+    refreshToggles(); b.blur();
+  }
+  else if (go === "haptics") { Haptics.set(!Haptics.on); if (Haptics.on) Haptics.buzz(30, true); refreshToggles(); b.blur(); }
+  else if (go === "hideEmotes") { hideOppEmotes = !hideOppEmotes; store.set("fist.hideEmotes", hideOppEmotes ? "1" : "0"); refreshToggles(); b.blur(); }
+  else if (go === "settings") { $("settingsPop").hidden = !$("settingsPop").hidden; $("emoteTray").hidden = true; b.blur(); }
+  else if (go === "emotes") { $("emoteTray").hidden = !$("emoteTray").hidden; $("settingsPop").hidden = true; b.blur(); }
+  else if (go.startsWith("emote:")) sendEmote(Number(go.slice(6)));
   else if (go === "ready") { transport?.setReady?.(!net?.lobby?.seats[net.seat]?.ready); b.blur(); }
   else if (go === "rematch") { transport?.rematch?.(); b.blur(); }
   else if (go === "leave") backToMenu();
@@ -275,8 +346,12 @@ function joinRoom(code) {
 
 // 網址帶 ?room=XXXX：直接進那個房間
 const qRoom = new URLSearchParams(location.search).get("room")?.toUpperCase();
-if (qRoom && isRoomCode(qRoom)) { $("roomInput").value = qRoom; joinRoom(qRoom); }
+if (qRoom && isRoomCode(qRoom)) {
+  $("roomInput").value = qRoom;
+  if (myName) joinRoom(qRoom);
+  else { show("online"); $("roomError").textContent = `朋友邀你進房間 ${qRoom}：先取個暱稱，再按「加入」`; $("nameInput").focus(); }
+}
 else show("menu");
 
 // 驗收／除錯用
-globalThis.__fist = { get view() { return latest.view; }, get transport() { return tutorial?.transport ?? transport; }, get tutorial() { return tutorial; }, get net() { return net; }, get showHints() { return showHints; }, get touch() { return touch; }, setHints, setTouch, startMode, stopMode, renderer, keybar, CONFIG };
+globalThis.__fist = { get view() { return latest.view; }, get transport() { return tutorial?.transport ?? transport; }, get tutorial() { return tutorial; }, get net() { return net; }, get showHints() { return showHints; }, get touch() { return touch; }, get guide() { return guideOn(); }, Haptics, setHints, setTouch, startMode, stopMode, renderer, keybar, CONFIG };

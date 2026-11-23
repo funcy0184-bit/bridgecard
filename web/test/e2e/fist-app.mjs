@@ -98,10 +98,16 @@ await shot("local2p-mash");
 await waitPh("PHASE_FINISHER_WINDOW");
 let w1 = await cards(1);
 ok(w1.cards.map(c => c.label).join("|") === "✊ 石頭|✌️ 剪刀|🖐️ 布" && w1.cards[2].cls.includes("parry"), `藍招（石頭）：守方 P2 的克制鍵「🖐️ 布 / ${w1.cards[2].key}」發光`);
-await P.click('#game [data-go="hints"]');
+const coach2p = await P.textContent("#coach");
+ok(await P.isVisible("#coach") && coach2p.includes("P2") && coach2p.includes("彈反"), `新手引導（同機）：${coach2p}`);
+await P.click("#gearBtn");
+await P.click('#settingsPop [data-go="hints"]');
 await sleep(60); w1 = await cards(1);
-ok(!w1.cards.some(c => c.cls.includes("parry")) && (await P.textContent('#game [data-go="hints"]')).includes("關"), "出招提示：關 → 克制鍵不再發光");
-await P.click('#game [data-go="hints"]');
+ok(!w1.cards.some(c => c.cls.includes("parry")) && (await P.textContent('#settingsPop [data-go="hints"]')).includes("關"), "⚙️ 出招提示：關 → 克制鍵不再發光");
+await P.click('#settingsPop [data-go="hints"]');
+await P.click('#settingsPop [data-go="guide"]'); await sleep(60);
+ok(await P.isHidden("#coach"), "⚙️ 新手引導：關 → 提示那一行消失");
+await P.click('#settingsPop [data-go="guide"]'); await P.click("#gearBtn");
 ok(await P.evaluate(() => __fist.showHints && __fist.renderer.showHints), "再按一次：提示開回來（存在這台瀏覽器）");
 // 紅招：守方站崖邊只亮可翻滾的方向
 await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 6, power: 2 }, { pos: 7, power: 0, damage: 110 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 0, red: true } }));
@@ -125,6 +131,7 @@ ok((await P.textContent("#roomError")).includes("4 碼"), "房號格式錯誤有
 // P 的 WebSocket 收到的每一則訊息都記下來（檢查藏招期間有沒有偷漏）
 const framesP = [];
 P.on("websocket", ws => ws.on("framereceived", f => { try { framesP.push(JSON.parse(f.payload)); } catch {} }));
+await P.fill("#nameInput", "阿鋒");
 await P.click('[data-go="create"]');
 await P.waitForFunction(() => __fist.net?.seat === 0, null, { timeout: 8000 });
 const room = await P.textContent("#rcCode"), link = await P.textContent("#rcLink");
@@ -132,11 +139,20 @@ ok(/^[A-HJ-NP-Z2-9]{4}$/.test(room) && P.url().endsWith(`?room=${room}`) && link
 await P.click("#rcCopy");
 ok((await P.evaluate(() => navigator.clipboard.readText())) === link && (await P.textContent("#rcCopy")).includes("已複製"), "一鍵複製邀請連結");
 const P2 = await ctx.newPage(); P2.on("pageerror", e => errors.push(String(e)));
+await P2.addInitScript(() => localStorage.setItem("fist.name", "翠嵐"));      // 朋友自己的暱稱（同一個瀏覽器測試用）
 await P2.goto(link);
 await P2.waitForFunction(() => __fist.net?.seat === 1, null, { timeout: 8000 });
 ok(true, "朋友點開連結：自動帶入房號、直接加入成為 P2");
 await P.waitForFunction(() => document.getElementById("seat1").classList.contains("on"), null, { timeout: 4000 });
 ok((await P.textContent("#seat1")).includes("準備中") && (await P2.textContent("#seat1")).includes("（你）"), "雙方都看到 P1／P2 位置與連線狀態");
+await P.waitForFunction(() => document.getElementById("seat1").textContent.includes("翠嵐"), null, { timeout: 3000 }).catch(() => {});
+ok((await P.textContent("#seat0")).includes("阿鋒（你）") && (await P.textContent("#seat1")).includes("翠嵐") && (await P2.textContent("#seat0")).includes("阿鋒"), "雙方看到彼此暱稱：阿鋒 vs 翠嵐");
+ok(await P.isVisible("#rcGuideBox") && (await P2.textContent("#rcGuide")).includes("新手引導 開"), "房主看到新手引導勾選框、朋友看到「房主設定：新手引導 開」");
+await P.uncheck("#rcGuideBox");
+await P2.waitForFunction(() => document.getElementById("rcGuide").textContent.includes("新手引導 關"), null, { timeout: 3000 }).catch(() => {});
+ok((await P2.textContent("#rcGuide")).includes("新手引導 關"), "房主關掉引導：朋友那邊同步變「關」");
+await P2.click("#gearBtn"); await P2.click('#settingsPop [data-go="guide"]'); await P2.click("#gearBtn");
+ok(await P2.evaluate(() => __fist.guide) && !(await P.evaluate(() => __fist.guide)), "朋友在 ⚙️ 只把自己的引導打開（房主那邊維持關）");
 await P.waitForFunction(() => /\d+ ms/.test(document.getElementById("ping").textContent), null, { timeout: 4000 });
 ok(true, `角落顯示延遲：${await P.textContent("#ping")}`);
 await shot("online-lobby");
@@ -146,11 +162,22 @@ ok(true, "P1 按 READY：P2 畫面看到 READY ✔");
 await P2.click("#rcReady");
 await P.waitForFunction(() => !document.getElementById("countdown").hidden, null, { timeout: 3000 });
 ok(/^[123]$/.test(await P.textContent("#countdown")), `雙方 READY：倒數 ${await P.textContent("#countdown")}…`);
+await P2.waitForFunction(() => !document.getElementById("countdown").hidden, null, { timeout: 3000 });
+ok(await P2.isVisible("#flowStrip") && await P.isHidden("#flowStrip"), `倒數時：開引導的人看到流程「${await P2.textContent("#flowStrip")}」，關的人沒有`);
 await P.screenshot({ path: OUT ? `${OUT}/online-countdown.png` : "/dev/null" }).catch(() => {});
 await P.waitForFunction(() => __fist.view?.phase === "PHASE_MOVE", null, { timeout: 6000 });
 await P2.waitForFunction(() => __fist.view?.phase === "PHASE_MOVE", null, { timeout: 2000 });
 ok(await P.isHidden("#room") && await P.isHidden("#countdown"), "開戰：房間面板收起");
 ok((await P.textContent(".kcap")).includes("P1") && (await P2.textContent(".kcap")).includes("P2"), "鍵位卡標出自己是 P1／P2");
+await P2.waitForFunction(() => !document.getElementById("coach").hidden, null, { timeout: 3000 }).catch(() => {});
+ok((await P2.textContent("#coach")).includes("走位") && await P.isHidden("#coach"), `開戰：朋友看到引導「${await P2.textContent("#coach")}」、房主沒有`);
+await P2.click("#emoteBtn"); await P2.click('[data-go="emote:3"]');
+await P.waitForFunction(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 1 && p.text === "🔥"), null, { timeout: 3000 }).catch(() => {});
+ok(await P.evaluate(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 1 && p.text === "🔥")) && await P2.isHidden("#emoteTray"), "朋友點 😀 → 🔥：房主畫面上朋友頭頂冒出 🔥");
+await P.keyboard.press("Digit1");
+await P2.waitForFunction(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 0 && p.text === "😂"), null, { timeout: 3000 }).catch(() => {});
+ok(await P2.evaluate(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 0)), "鍵盤 1～8 也能發表情（房主按 1 → 😂）");
+await shot("online-emote");
 console.log("線上：藏招封包保密");
 await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.t > 0.15, null, { timeout: 4000, polling: 10 });
 await P2.keyboard.down("d"); await sleep(30); await P2.keyboard.up("d");                   // P2 亮布
@@ -182,6 +209,14 @@ await P2.click('#game [data-go="menu"]');
 await P.waitForFunction(() => !document.getElementById("room").hidden, null, { timeout: 4000 });
 ok((await P.textContent("#rcHead")).includes("對手離開") && (await P.textContent("#seat1")).includes("等待加入"), `對手離開：${await P.textContent("#rcHead")}`);
 ok(!P2.url().includes("room="), "離開的人回到大廳、網址清掉房號");
+{
+  const c2 = await browser.newContext({ viewport: { width: 1000, height: 600 } });
+  const G = await c2.newPage(); G.on("pageerror", e => errors.push(String(e)));
+  await G.goto(link);
+  await G.waitForFunction(() => !document.getElementById("online").hidden, null, { timeout: 4000 }).catch(() => {});
+  ok(await G.isVisible("#online") && (await G.textContent("#roomError")).includes("先取個暱稱") && (await G.inputValue("#roomInput")) === room, "沒填過暱稱的朋友點連結：先停在填暱稱畫面、房號已帶好");
+  await c2.close();
+}
 const P3 = await ctx.newPage(); P3.on("pageerror", e => errors.push(String(e)));
 await P3.goto(new URL("?room=ZZZZ", BASE).href);
 await P3.waitForFunction(() => document.getElementById("rcMsg").textContent.includes("找不到"), null, { timeout: 5000 });
