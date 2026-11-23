@@ -40,6 +40,18 @@ node web/test/e2e/fist-app.mjs http://127.0.0.1:8790/           # 瀏覽器驗�
 - 斷線：對戰中斷線 → 暫停 15 秒；帶同一個 token（存在分頁的 sessionStorage）回來就接續，超時判留在房內的人獲勝
 - 閒置 30 分鐘沒人在線：`alarm()` 清掉房間，房號釋出
 
-## 部署（尚未部署）
+## 部署（Cloudflare 後台一鍵連 GitHub，跟主站一樣）
 
-`npx wrangler deploy` 會建立 `fist-duel` Worker（`https://fist-duel.<帳戶子網域>.workers.dev`）。部署前需要專案負責人同意。
+1. Cloudflare 後台 → **Workers & Pages** → **Create** → **Import a repository** → 選 `funcy0184-bit/bridgecard`
+2. 設定：
+   - Project name：`fist-duel`（要跟 `wrangler.toml` 的 `name` 一樣）
+   - Production branch：`feature/fist-duel-proto`
+   - Root directory（Advanced settings → Path）：`fist-online`
+   - Build command：留空；Deploy command：`npx wrangler deploy`（預設值）
+3. 按 **Deploy**，約 1 分鐘後網址是 `https://fist-duel.<你的帳戶子網域>.workers.dev`
+4. 之後推到 `feature/fist-duel-proto` 就會自動重新部署
+
+或在自己的電腦：`cd fist-online && npm install && npx wrangler login && npx wrangler deploy`
+
+- 只上傳 `web/public/fist` 的遊戲檔；`ART_BIBLE.md`、`art_spec.json` 由 `web/public/fist/.assetsignore` 排除不公開
+- 跟「來打橋牌」主站（`bridgecard` Worker）完全分開：不同 Worker、不同 Durable Object、不影響主站

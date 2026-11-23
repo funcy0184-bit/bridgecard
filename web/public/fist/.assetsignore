@@ -1,0 +1,4 @@
+# 部署到 fist-duel 時不公開的檔案（美術規格文件；遊戲用 config.js 內嵌的那份）
+ART_BIBLE.md
+art_spec.json
+.assetsignore
