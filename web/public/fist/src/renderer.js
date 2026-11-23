@@ -739,7 +739,7 @@ export class Renderer {
       g.fillStyle = "rgba(16,24,39,.85)"; g.fillRect(0, 96, CONFIG.W, 56);
       g.textAlign = "center"; g.fillStyle = team.primary; g.font = "bold 22px sans-serif";
       g.fillText(`${this.names[view.winner]} 勝利！`, CONFIG.W / 2, 124);
-      g.fillStyle = PAL.hud.label; g.font = "bold 9px sans-serif"; g.fillText("空白鍵再來一場｜Esc 回大廳", CONFIG.W / 2, 142);
+      g.fillStyle = PAL.hud.label; g.font = "bold 9px sans-serif"; g.fillText(this.touch ? "點畫面再來一場｜右上角回大廳" : "空白鍵再來一場｜Esc 回大廳", CONFIG.W / 2, 142);
     }
   }
 }

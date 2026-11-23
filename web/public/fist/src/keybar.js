@@ -4,6 +4,9 @@
 //   · 卡片狀態與配色照 ART.hud.keyRow.cardStyle：normal／pressed（按下壓縮 85ms）／locked（斜紋、不能按）／parry_guide（藍招克制鍵發光）
 //   · parry_guide 只在「出招提示：開」時出現；藍框、紅區、箭頭、鍵位圖示和按下回饋永遠顯示
 //   · 藏招期間同機共用螢幕：按下只讓整組一起閃，不洩露按了哪一顆
+//   · 觸控（手機）：卡片本身就是按鍵。按住＝按住鍵（長按贏拳鍵 0.3s 開紅招也行），放開＝放開鍵；
+//     多指同時按互不干擾；連打大卡每一下輪流送左／中／右，手指連點才都算數
+//     觸控模式時鍵位卡移到畫布下方的獨立按鍵區、放大到拇指好按（main.js 依 touchHeight() 讓出空間）
 import { ART, CONFIG } from "./config.js";
 import { PH, COUNTER, KEY_OF } from "./engine.js";
 
@@ -43,12 +46,42 @@ function injectStyle() {
   .kgroup.pulse .kcard { transform: scale(.94); transition: none; }
   .kmash { background: #3A1E12; color: #FFE186; box-shadow: inset 0 0 0 calc(var(--u) * 1px) #F2AB52, 0 calc(var(--u) * 2px) 0 #1A0D08; ${REDUCED ? "" : "animation: kmash 160ms steps(2) infinite;"} }
   @keyframes kmash { 50% { filter: brightness(1.25); } }
-  .kgroup.out { opacity: .35; }`;
+  .kgroup.out { opacity: .35; }
+  #keybar.touch { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); box-sizing: border-box; background: linear-gradient(#0A0F1A00, #0A0F1A 18%); }
+  #keybar.touch .kcard, #keybar.touch .kmash { cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #keybar.touch .kk { display: none; }
+  #keybar.touch .kcard.locked { opacity: .55; }`;
   const el = document.createElement("style"); el.id = "keybarStyle"; el.textContent = css; document.head.appendChild(el);
 }
 
 export class KeyBar {
-  constructor(root) { this.root = root; this.groups = []; this.showHints = true; injectStyle(); }
+  constructor(root) {
+    this.root = root; this.groups = []; this.showHints = true; this.touch = false; this.onInput = null; this.active = new Map();
+    injectStyle();
+    root.addEventListener("contextmenu", e => e.preventDefault());              // 長按不跳選單
+  }
+  // 觸控按鍵：pointerdown＝按下、pointerup／cancel／失去捕捉＝放開（每根手指各自追蹤）
+  bindTouch(g, el, btnOf) {
+    el.addEventListener("pointerdown", e => {
+      if (!this.touch && e.pointerType === "mouse") return;                       // 桌機滑鼠不搶鍵盤的工作（觸控模式下才收）
+      e.preventDefault();
+      if (g.seat < 0 || this.active.has(e.pointerId)) return;
+      try { el.setPointerCapture(e.pointerId); } catch { /* 舊瀏覽器 */ }
+      const btn = btnOf();
+      this.active.set(e.pointerId, { seat: g.seat, btn });
+      this.onInput?.(g.seat, "down", btn);
+    });
+    const up = e => { const a = this.active.get(e.pointerId); if (!a) return; this.active.delete(e.pointerId); this.onInput?.(a.seat, "up", a.btn); };
+    for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(t, up);
+  }
+  releaseAll() { for (const [, a] of this.active) this.onInput?.(a.seat, "up", a.btn); this.active.clear(); }
+  setTouch(on) { this.touch = on; this.root.classList.toggle("touch", on); for (const g of this.groups) { g.sig = ""; this.caption(g); } }
+  // 觸控按鍵區高度（px）：卡片 33u ＋ 標題 ＋ 上下留白；最多佔畫面高度 34%
+  touchLayout(w, h) {
+    const n = Math.max(1, this.groups.length), cardsW = n * (46 * 3 + 4 * 2) + (n - 1) * 18 + 20;
+    const u = Math.max(1, Math.min(2.4, (w - 24) / cardsW, (h * (h > w ? 0.34 : 0.28) - 18) / 43));   // 橫拿少佔一點高度
+    return { u, height: Math.round(43 * u + 18) };
+  }
   /** @param {Array<{seat:number, keys:{L:string,M:string,R:string}, title:string, color?:string}>} groups */
   setup(groups) {
     this.root.innerHTML = ""; this.groups = [];
@@ -56,16 +89,26 @@ export class KeyBar {
     for (const g of groups) {
       const el = document.createElement("div"); el.className = "kgroup"; el.dataset.seat = g.seat;
       el.innerHTML = `<div class="kcap" style="--cap:${g.color ?? "#8592A4"}"></div><div class="kcards">${BTN.map(b => `<div class="kcard" data-btn="${b}"><span class="ksub"></span><span class="kl"></span><span class="kk">${g.keys[b]}</span></div>`).join("")}<div class="kmash" hidden><span class="kl"></span><span class="kk">${BTN.map(b => g.keys[b]).join(" ")} 任意鍵</span></div></div>`;
-      el.querySelector(".kcap").textContent = g.title;
       this.root.appendChild(el);
-      this.groups.push({ ...g, el, cards: Object.fromEntries(BTN.map(b => [b, el.querySelector(`.kcard[data-btn="${b}"]`)])), mash: el.querySelector(".kmash"), sig: "" });
+      const G = { ...g, el, cards: Object.fromEntries(BTN.map(b => [b, el.querySelector(`.kcard[data-btn="${b}"]`)])), mash: el.querySelector(".kmash"), sig: "", rot: 0 };
+      this.groups.push(G);
+      this.caption(G);
+      for (const b of BTN) this.bindTouch(G, G.cards[b], () => b);
+      this.bindTouch(G, G.mash, () => BTN[G.rot = (G.rot + 1) % 3]);              // 連打：每一下輪流送不同鍵
     }
   }
-  clear() { this.setup([]); }
+  clear() { this.releaseAll(); this.setup([]); }
   setSeat(i, seat) { const g = this.groups[i]; if (g) { g.seat = seat; g.el.dataset.seat = seat; g.sig = ""; } }
-  setTitle(i, title) { const g = this.groups[i]; if (g) g.el.querySelector(".kcap").textContent = title; }
+  setTitle(i, title) { const g = this.groups[i]; if (g) { g.title = title; this.caption(g); } }
+  caption(g) { g.el.querySelector(".kcap").textContent = this.touch ? g.title.replace(/（[^）]*）/g, "") : g.title; }   // 觸控時拿掉鍵盤說明
   // 疊在畫布底部那一條（邏輯座標 y=224～270），大小跟著畫布倍率
   place(canvas, scale) {
+    if (this.touch) {                                                             // 觸控：畫布下方獨立按鍵區
+      const { u, height } = this.touchLayout(innerWidth, innerHeight);
+      Object.assign(this.root.style, { left: "0px", top: "", bottom: "0px", width: "100%", height: `${height}px` });
+      this.root.style.setProperty("--u", String(u));
+      return;
+    }
     const r = canvas.getBoundingClientRect(), top = 224 * scale;
     Object.assign(this.root.style, { left: `${r.left}px`, top: `${r.top + top}px`, width: `${r.width}px`, height: `${r.height - top}px` });
     this.root.style.setProperty("--u", String(Math.max(0.75, scale)));

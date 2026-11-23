@@ -50,6 +50,10 @@
   #pauseBox { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); font-size: 18px; font-weight: 800; color: var(--focus); background: rgba(16,24,39,.94); border: 2px solid var(--red); border-radius: 6px; padding: 14px 20px; z-index: 3; text-align: center; }
   #debug { position: fixed; left: 8px; bottom: 8px; margin: 0; font: 11px/1.4 monospace; color: #9fffa8; background: rgba(10,15,26,.85); padding: 6px 8px; border-radius: 4px; z-index: 2; white-space: pre; }
   .keys { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0 0; }
+  /* 觸控：遊戲畫面不捲動、不雙擊放大、不長按選字；選單按鈕維持一般點擊 */
+  body.touch #game, body.touch canvas#screen { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  body.touch .tiny { padding: 10px 12px; font-size: 13px; }
+  body.touch .bar { padding-top: calc(6px + env(safe-area-inset-top)); }
 </style>
 </head>
 <body>

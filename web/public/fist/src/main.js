@@ -13,8 +13,32 @@ function show(id) { for (const s of screens) $(s).hidden = s !== id; if (id === 
 
 const renderer = new Renderer($("screen"));
 const keybar = new KeyBar($("keybar"));
-function fit() { const g = $("game"); renderer.resize(g.clientWidth, g.clientHeight - 6); keybar.place($("screen"), renderer.scale); }
+function fit() {
+  const g = $("game"), pad = touch ? keybar.touchLayout(innerWidth, innerHeight).height : 0;
+  const top = touch ? document.querySelector("#game .bar").offsetHeight : 0;   // 觸控：上排按鈕不蓋 HUD
+  g.style.paddingBottom = `${pad}px`; g.style.paddingTop = `${top}px`;           // 觸控：畫布讓出按鍵區與上排按鈕
+  renderer.resize(g.clientWidth, g.clientHeight - pad - top - 6);
+  keybar.place($("screen"), renderer.scale);
+}
 addEventListener("resize", fit);
+
+// ---------------- 觸控（手機）：鍵位卡變成按鍵 ----------------
+//   粗指標裝置（手機、平板）一開就是觸控模式；桌機用手指點到也會切過去
+let touch = false;
+function setTouch(on) {
+  if (touch === on) return;
+  touch = on; keybar.setTouch(on); renderer.touch = on; document.body.classList.toggle("touch", on);
+  if (!$("game").hidden) fit();
+}
+addEventListener("pointerdown", e => { if (e.pointerType === "touch") setTouch(true); }, { capture: true });
+keybar.onInput = (seat, type, btn) => {
+  Audio.unlock();
+  if (type === "down") { keybar.press(seat, btn, latest.view); try { navigator.vibrate?.(8); } catch { /* 不支援震動 */ } }
+  sender()?.sendInput({ seat, type, btn });
+};
+// 比賽結束：點畫面再來一場（線上走房間面板的 Rematch）
+$("screen").addEventListener("pointerdown", () => { if (mode && mode !== "online" && latest.view?.phase === PH.GAMEOVER) startMode(mode, opts); });
+const touchText = t => (touch ? t.replace(/A／S／D/g, "三顆鍵").replace(/按 A（◀）/g, "按 ◀ 左翻").replace(/按 A（石頭）/g, "按 ✊ 石頭").replace(/按 D 出『布』/g, "按 🖐️ 布").replace(/按 A 或 D/g, "按 ◀ 或 ▶") : t);
 const TEAM = ["#FFF0C3", "#C6F9D8"];
 
 // ---------------- 出招提示開關（存在這台瀏覽器；線上也只影響本機畫面） ----------------
@@ -26,6 +50,7 @@ function setHints(on) {
   try { localStorage.setItem(CONFIG.hints.storageKey, on ? "1" : "0"); } catch { /* 無痕模式 */ }
 }
 setHints(showHints);
+if (typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches) setTouch(true);
 
 let mode = null, transport = null, tutorial = null, unsub = null, latest = { view: null, events: [] }, keyMap = null, opts = {};
 let net = null;                                                    // 線上：{ seat, lobby, rtt, room }
@@ -61,7 +86,7 @@ function startMode(m, o = {}) {
     $("skipTut").hidden = false; $("objective").hidden = false;
     tutorial = new Tutorial({
       onTransport: t => { bind(t); renderer.banner(tutorial.current.name); },
-      onObjective: ob => { $("objective").textContent = `${ob.lesson + 1}/${ob.total}｜${ob.text}`; $("objective").classList.toggle("retry", ob.retry); },
+      onObjective: ob => { $("objective").textContent = `${ob.lesson + 1}/${ob.total}｜${touchText(ob.text)}`; $("objective").classList.toggle("retry", ob.retry); },
       onDone: skipped => { $("objective").textContent = skipped ? "已跳過教學" : "教學完成！去對戰 AI 試試身手"; setTimeout(() => { if (mode === "tutorial") { stopMode(); show("menu"); } }, skipped ? 300 : 1600); },
     });
     tutorial.start();
@@ -81,6 +106,7 @@ function startMode(m, o = {}) {
   show("game");
 }
 function stopMode() {
+  keybar.releaseAll();
   unsub?.(); unsub = null;
   transport?.close(); transport = null;
   tutorial?.transport?.close(); tutorial = null;
@@ -112,6 +138,7 @@ function renderRoom() {
   $("room").hidden = !(st === "lobby" || st === "over");
   $("countdown").hidden = st !== "countdown";
   $("pauseBox").hidden = st !== "paused";
+  tickRoomUi();                                                       // 倒數／斷線秒數：顯示的同一刻就填好文字，不留空白一幀
   L.seats.forEach((s, i) => {
     const el = $("seat" + i);
     el.className = `seat${s.online ? " on" : ""}${(st === "over" ? s.rematch : s.ready) ? " ready" : ""}`;
@@ -252,4 +279,4 @@ if (qRoom && isRoomCode(qRoom)) { $("roomInput").value = qRoom; joinRoom(qRoom);
 else show("menu");
 
 // 驗收／除錯用
-globalThis.__fist = { get view() { return latest.view; }, get transport() { return tutorial?.transport ?? transport; }, get tutorial() { return tutorial; }, get net() { return net; }, get showHints() { return showHints; }, setHints, startMode, stopMode, renderer, keybar, CONFIG };
+globalThis.__fist = { get view() { return latest.view; }, get transport() { return tutorial?.transport ?? transport; }, get tutorial() { return tutorial; }, get net() { return net; }, get showHints() { return showHints; }, get touch() { return touch; }, setHints, setTouch, startMode, stopMode, renderer, keybar, CONFIG };
