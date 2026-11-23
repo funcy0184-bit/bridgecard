@@ -5,6 +5,7 @@
 //         終結擇手勢保密、判定窗 80ms 寬容、斷線暫停與重連接續、超時判勝、Rematch、離開房間、ping
 const BASE = process.argv[2] ?? "http://127.0.0.1:8790/";
 const LONG = process.argv.includes("--long");
+const FEW = process.argv.includes("--few-rooms");             // 打正式站時用：不連開 12 間（開房有每 10 分鐘 30 間的頻率限制）
 const WS = BASE.replace(/^http/, "ws");
 let fails = 0;
 const ok = (c, m) => { console.log(`  ${c ? "✓" : "✗"} ${m}`); if (!c) fails++; };
@@ -36,9 +37,9 @@ async function until(cond, ms = 8000, step = 5) { const t0 = Date.now(); while (
 const phaseIs = (p, ph) => () => p.view?.phase === ph;
 
 console.log("建立房間");
-const codes = await Promise.all(Array.from({ length: 12 }, createRoom));
+const codes = await Promise.all(Array.from({ length: FEW ? 2 : 12 }, createRoom));
 ok(codes.every(c => /^[A-HJ-NP-Z2-9]{4}$/.test(c)), `房號都是 4 碼、不含 0/O/1/I（${codes.slice(0, 4).join(" ")} …）`);
-ok(new Set(codes).size === codes.length, "連開 12 間：房號不重複");
+ok(new Set(codes).size === codes.length, `連開 ${codes.length} 間：房號不重複`);
 
 console.log("房號不存在／房間已滿");
 {
@@ -122,6 +123,7 @@ B.send({ t: "input", type: "down", btn: "M" });                       // 剪刀�
 await until(() => B.events.some(e => ["parry", "timeout", "wrong"].includes(e.type)), 2000);
 B.send({ t: "input", type: "up", btn: "M" });
 ok(B.events.some(e => e.type === "parry" && e.p === 1), "倒數歸零後 ~25ms 抵達的正確按鍵：伺服器寬容 80ms，判定彈反成功");
+await until(() => A.view.fighters[0].damage === 10, 2000);                 // 原攻方的畫面隔一個網路延遲才到
 ok(A.view.fighters[0].damage === 10 && B.view.fighters[1].damage === dmg, `反擊 +10%（P1 ${A.view.fighters[0].damage}%）`);
 
 console.log("暱稱、表情、房主設定");
