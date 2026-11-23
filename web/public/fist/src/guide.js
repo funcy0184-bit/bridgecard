@@ -1,25 +1,29 @@
 // guide.js — 新手引導：每個階段告訴玩家「現在該按什麼」
 //   · 只說該做什麼、不說該出什麼（不會洩露對手藏招，也不是幫你作弊）
 //   · seat = 自己的座位；-1 = 同機雙人共用畫面
-import { PH, GLABEL } from "./engine.js";
+import { PH, GLABEL, GICON } from "./engine.js";
 
-export const FLOW = "👣 走位 → ✊ 猜拳 → 🔥 連打 → 🎯 終結技 → 🛡️ 彈反／🔴 翻滾";
+export const FLOW = "✊ 猜拳 → 👀 開牌 → 🔥 連打 → 🎯 終結技 → 🛡️ 彈反／🔴 翻滾（平手 ⚔️ 拼刀）";
 
 export function coachText(v, seat) {
   if (!v) return "";
   const r = v.round, ph = v.phase, me = seat >= 0 ? v.fighters[seat] : null, P = i => `P${i + 1}`;
   const hidden = ph === PH.RPS && v.t >= (v.reveal ?? 1.3);
   switch (ph) {
-    case PH.MOVE:
-      if (me?.stun > 0) return "😮‍💨 喘氣硬直中：這輪先別動（同一輪走 2 步會累）";
-      if (me?.locked) return "● 已站定，等猜拳開始";
-      if (me && me.power < 1) return "🪫 沒氣了走不動：按 ● 原地站定，打完這回合會回氣";
-      return me ? "👣 走位：點 ◀ ▶ 移動一格（每步 1 氣、最多 2 步）・● 原地站定" : "👣 走位：P1、P2 各自按 ◀ ▶ 移動（每步 1 氣）・不想動按中間";
-    case PH.RPS:
-      if (me?.stun > 0) return "😮‍💨 硬直中不能出拳：這回合會隨機出";
+    case PH.RPS: {
+      const op = seat >= 0 ? v.fighters[1 - seat] : null;
       if (hidden) return "🤫 藏招！最後機會換拳，對手看不到你換了什麼";
-      return me ? "✊ 猜拳：選一張拳！對手看得到你擺的架式，最後一下才藏招" : "✊ 猜拳：兩邊各選一張拳，最後一下會藏招";
-    case PH.CLASH: return "⚔️ 拼刀！同拳平手，回去走位";
+      if (me?.heat) return `✊ 猜拳：你的 ${GICON[me.heat]} ♨️ 過熱不能出，從另外兩招選${op?.heat ? `（對手禁用 ${GICON[op.heat]}）` : ""}`;
+      return me ? "✊ 猜拳：選一張拳！對手看得到你擺的架式，最後 0.6 秒才藏招" : "✊ 猜拳：兩邊各選一張拳（♨️ 過熱的那招不能出），最後一下會藏招";
+    }
+    case PH.REVEAL: return "👀 開牌！看清楚誰壓制誰";
+    case PH.CLASH_INPUT: {
+      const n = v.clash?.count?.[seat] ?? 0;
+      if (!me) return "⚔️ 拼刀！兩邊各在 3 秒內連按 3 下填滿劍格，先填完拿 ⚡ 先手";
+      return n >= 3 ? "⚔️ 填好了！等對手…" : `⚔️ 拼刀！3 秒內連按 3 下填滿劍格（${n}/3），先填完拿 ⚡ 先手`;
+    }
+    case PH.CLASH_ANIM: return "⚔️ 三刀對砍：贏刀多的重砍對手，平分看 ⚡ 先手";
+    case PH.CLASH: return "⚔️ 平手彈開，馬上下一輪";
     case PH.MASH:
       if (!r) return "";
       if (!me) return `🔥 ${P(r.att)} 贏拳！狂按任意鍵追加連擊（最多 4 拳）`;

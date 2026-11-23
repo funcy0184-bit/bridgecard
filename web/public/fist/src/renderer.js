@@ -5,7 +5,7 @@
 //   · 底部鍵位卡改由 keybar.js（DOM）負責；畫布只畫世界、提示與上方 HUD
 //   · 15 個角色動畫狀態（美術換皮接口，見 ANIM_STATES）；有 Sprite Sheet 就照 ART.spriteAtlas 切格，沒有就程式繪製
 import { ART, CONFIG } from "./config.js";
-import { PH, PH_LABEL, GLABEL, cellX } from "./engine.js";
+import { PH, PH_LABEL, GLABEL, GNAME, GICON, cellX } from "./engine.js";
 
 export const ANIM_STATES = [
   "idle", "step", "exhausted", "stance_rock", "stance_scissors", "stance_paper", "stance_hidden", "clash",
@@ -307,7 +307,7 @@ export class Renderer {
         case "lock": { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 58, "鎖定", PAL.hud.muted, 8); break; }
         case "deny": if (e.why === "power") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 58, "沒氣了", "#FFAA63", 8); } break;
         case "hide": this.trails = [[], []]; break;                                           // 藏招第一幀：清掉殘影
-        case "rps_result": view.fighters.forEach((f, i) => this.popup(f.x, CONFIG.floorY - 66, GLABEL[e.stances[i]] + (e.random[i] ? "（隨機）" : ""), PAL.fighters["p" + (i + 1)].secondary, 12)); break;
+        // （開牌結果改由畫面中央的大字顯示，不在頭上另外冒小字）
         case "clash": this.spark(e.x, CONFIG.floorY - 24, PAL.fx.impact.spark, 5, 2.2); this.popup(e.x, CONFIG.floorY - 64, "拼刀！", PAL.fx.impact.core, 14); break;
         case "hit": {
           this.flashT[e.p] = ms(FX.impactFrameFlash.durationMs);
@@ -325,7 +325,17 @@ export class Renderer {
         case "ko": this.fx.push({ k: "beam", x: e.x, at: now, max: ms(FX.koBlast.durationMs) }); this.kick(FX.cameraShakePx.ko, 0.2, now); this.popup(clamp(e.x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22); this.trails = [[], []]; break;
         case "round_end": this.popup(CONFIG.W / 2, 110, "雙方 +1 氣", PAL.hud.powerFill, 9); break;
         case "speed_up": this.banner(`⚡ 加速！速度 Lv.${e.lv + 1}`, PAL.fx.red.rim); this.kick(1, 0.1, now); break;
-        case "phase": if (e.phase === PH.MOVE) this.combo = null; break;
+        case "phase": if (e.phase === PH.RPS) this.combo = null; break;
+        case "deny": if (e.why === "heat") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 60, "♨️ 過熱！", "#FF9A62", 9); } break;
+        case "clash_start": this.cutText = { text: "⚔️ 平手！拼刀", at: now, color: PAL.fx.impact.spark, life: 0.9 }; this.kick(2, 0.12, now); break;
+        case "clash_first": this.kick(1, 0.08, now); this.firstAt = now; break;   // 「⚡ 先手」標記畫在劍格上方
+        case "clash_cut": {
+          this.spark(e.x, CONFIG.floorY - 26, e.winner < 0 ? PAL.platform.topEdge : PAL.fx.impact.spark, e.winner < 0 ? 5 : 10, 2.6);
+          const me = view.seat, res = e.winner < 0 ? "平" : me >= 0 ? (e.winner === me ? "勝" : "敗") : `P${e.winner + 1} 勝`;
+          this.cutText = { life: 0.42, text: `第${e.n}刀 ${res}`, at: now, color: e.winner < 0 ? PAL.hud.label : me >= 0 ? (e.winner === me ? PAL.hud.powerFill : PAL.fx.red.rim) : PAL.fighters["p" + (e.winner + 1)].secondary };
+          break;
+        }
+        case "clash_end": if (e.winner >= 0) { const f = view.fighters[1 - e.winner]; this.popup(f.x, CONFIG.floorY - 70, `拼刀重砍 +${e.damage}%`, PAL.fx.red.core, 12); } else this.popup(CONFIG.W / 2, 110, "平分無先手：各自彈開", PAL.hud.label, 10); break;
       }
     }
   }
@@ -361,6 +371,7 @@ export class Renderer {
     this.drawStage(world);
     this.drawHazardFill(view, now);
     this.drawTrails(world);
+    this.drawSpotlight(view);
     this.drawFighters(world);
     this.drawFx(now);
     this.drawHazardEdges(view);
@@ -455,18 +466,25 @@ export class Renderer {
     ctx.fillStyle = PAL.fx.red.outline; ctx.fillRect(x0 - 1, Y - 2, x1 - x0 + 2, 1); ctx.fillRect(x0 - 1, Y + 16, x1 - x0 + 2, 1);
     ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(x0, Y - 1, x1 - x0, 1); ctx.fillRect(x0, Y + 15, x1 - x0, 1); ctx.fillRect(x0, Y - 1, 1, 17); ctx.fillRect(x1 - 1, Y - 1, 1, 17);
   }
-  animTime(view, f) { return view.phase === PH.WINDOW ? f.anim.t * CONFIG.window.slowmo : f.anim.t; }   // 判定窗：慢動作（只影響畫面）
+  animTime(view, f) { return view.phase === PH.WINDOW || view.phase === PH.SELECT ? f.anim.t * CONFIG.window.slowmo : f.anim.t; }   // 終結擇起就進慢動作（只影響畫面）
   stateFor(view, f) { return view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal) && f.anim.state.startsWith("stance_") ? "stance_hidden" : f.anim.state; }   // 藏招：雙方都回到收手黑影
   drawTrails(view) {
     const al = FX.motionTrail.alphaNewestToOldest;
     this.trails.forEach(tr => tr.forEach((s, i) => Fighter.draw(this.ctx, s.f, this.stateFor(view, s.f), this.animTime(view, s.f), s.f.x, s.f.y, s.f.face, { alpha: al[i] ?? 0.1, view })));
+  }
+  // 拼刀：暗色聚光燈（兩人中間亮、四周暗）
+  drawSpotlight(view) {
+    if (view.phase !== PH.CLASH_INPUT && view.phase !== PH.CLASH_ANIM) return;
+    const ctx = this.ctx, [a, b] = view.fighters, mx = (a.x + b.x) / 2, k = Math.min(1, view.t / 0.25);
+    const gr = ctx.createRadialGradient(mx, CONFIG.floorY - 30, 30, mx, CONFIG.floorY - 30, 190);
+    gr.addColorStop(0, "rgba(5,8,15,0)"); gr.addColorStop(1, `rgba(5,8,15,${0.72 * k})`);
+    ctx.fillStyle = gr; ctx.fillRect(-40, -40, CONFIG.W + 80, CONFIG.H + 80);
   }
   drawFighters(view) {
     const ctx = this.ctx;
     for (const f of view.fighters) {
       if (f.out) continue;
       let x = f.x, y = f.y;
-      if (f.wobble > 0) { const k = f.wobble / CONFIG.move.wobbleTime; x += Math.round(Math.sin(k * 30) * 2 * k + (f.wobbleDir || 0) * 2 * k); }
       ctx.fillStyle = "rgba(10,15,26,.55)"; ctx.fillRect(Math.round(x) - 10, CONFIG.floorY, 20, 2);
       const state = this.stateFor(view, f), t = this.animTime(view, f);
       if (f.redGlow && !REDUCED) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(performance.now() / 50); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 14, Math.round(y) - 42, 28, 42); ctx.globalAlpha = 1; }   // 紅光強化：全身泛紅
@@ -635,8 +653,8 @@ export class Renderer {
     this.drawPhaseBar(view, now);
   }
   digitsWidth(text) { return [...text].reduce((s, ch) => s + (DIGIT[ch]?.[0].length ?? 4) * 4 + 3, 0) - 3; }
-  urgent(view) { const left = view.dur - view.t; return view.phase === PH.WINDOW ? left <= CONFIG.countdown.urgentSec : (view.phase === PH.MOVE || view.phase === PH.RPS) && left <= CONFIG.countdown.phaseTickLast; }
-  timed(view) { return view.dur > 0 && [PH.MOVE, PH.RPS, PH.MASH, PH.SELECT, PH.WINDOW].includes(view.phase); }
+  urgent(view) { const left = view.dur - view.t; return view.phase === PH.WINDOW ? left <= CONFIG.countdown.urgentSec : (view.phase === PH.RPS || view.phase === PH.CLASH_INPUT) && left <= CONFIG.countdown.phaseTickLast; }
+  timed(view) { return view.dur > 0 && [PH.RPS, PH.CLASH_INPUT, PH.MASH, PH.SELECT, PH.WINDOW].includes(view.phase); }
   drawPhaseBar(view, now) {
     if (!this.timed(view)) return;
     const ctx = this.ctx, ph = view.phase, fin = ph === PH.WINDOW, left = clamp(view.dur - view.t, 0, view.dur), k = left / view.dur;
@@ -697,7 +715,10 @@ export class Renderer {
       const right = f.i === 1, team = PAL.fighters["p" + (f.i + 1)];
       g.textAlign = right ? "right" : "left"; g.fillStyle = team.secondary;
       g.fillText(this.names[f.i] + (view.seat === f.i ? "（你）" : ""), right ? 464 : 16, 81);
-      if (f.stun > 0) { g.fillStyle = "#9CD8FF"; g.fillText(`硬直 ${f.stun.toFixed(1)}s`, right ? 464 : 16, 91); }
+      if (f.heat) {                                                     // 過熱公開：對手禁用哪招（2 選 1 讀心）
+        const who = view.seat < 0 ? `P${f.i + 1} 禁用` : f.i === view.seat ? "你禁用" : "對手禁用";
+        g.font = "bold 8px sans-serif"; g.fillStyle = "#FF9A62"; g.fillText(`♨️ ${who}：${GICON[f.heat]}`, right ? 464 : 16, 92); g.font = "bold 7px sans-serif";
+      }
     }
     g.textAlign = "center";
     const fin = ph === PH.WINDOW, left = Math.max(0, view.dur - view.t);
@@ -715,6 +736,45 @@ export class Renderer {
       g.fillStyle = urgent ? (Math.floor(now * 20) % 2 ? PAL.fx.red.rim : PAL.hud.focusOutline) : PAL.hud.label;
       g.fillText(left.toFixed(fin ? 2 : 1), CONFIG.W / 2, fin ? 48 : 43);
       if (view.speedLv > 0) { g.font = "bold 8px sans-serif"; g.fillStyle = PAL.fx.red.rim; g.fillText(`⚡ Lv.${view.speedLv + 1}`, CONFIG.W / 2 + 74, 33); g.font = `bold ${fin ? 13 : 9}px monospace`; }   // 速度等級
+    }
+    // 開牌停頓：中央放大結果（🖐️ 布 壓制 ✊ 石頭！）
+    if (ph === PH.REVEAL && view.rps) {
+      const [s0, s1] = view.rps.stances, w = view.rps.winner, pop = Math.max(0, 1 - view.t * 5);
+      const line = w < 0 ? `${GNAME[s0]} 平手 ${GNAME[s1]}` : `${GNAME[view.rps.stances[w]]} 壓制 ${GNAME[view.rps.stances[1 - w]]}！`;
+      const sub = w < 0 ? "⚔️ 平手 → 拼刀！" : view.seat < 0 ? `P${w + 1} 贏拳 → 連打` : w === view.seat ? "你贏拳！準備連打" : "對手贏拳：準備接招";
+      g.save(); g.translate(CONFIG.W / 2, 128); g.scale(1 + pop * 0.35, 1 + pop * 0.35);
+      g.fillStyle = "rgba(16,24,39,.86)"; g.fillRect(-150, -26, 300, 46);
+      g.strokeStyle = w < 0 ? PAL.hud.label : PAL.hud.powerFill; g.lineWidth = 1.5; g.strokeRect(-150, -26, 300, 46);
+      g.textAlign = "center"; g.font = "900 17px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(line, 1, 1);
+      g.fillStyle = w < 0 ? PAL.hud.label : PAL.hud.focusOutline; g.fillText(line, 0, 0);
+      g.font = "bold 9px sans-serif"; g.fillStyle = w < 0 ? PAL.fx.impact.spark : PAL.hud.powerFill; g.fillText(sub, 0, 14);
+      g.restore();
+    }
+    // 拼刀：雙方頭上三個劍格（自己看得到填了什麼，對手只看到格數；對砍時全公開）＋ ⚡ 先手
+    if (view.clash) {
+      const C = view.clash, N = CONFIG.clashMode.slots;
+      for (const f of view.fighters) {
+        if (f.out) continue;
+        const [sx, sy] = toScreen(cellX(f.pos), CONFIG.floorY - 74), w = 13, gap = 3, x0 = sx - (N * w + (N - 1) * gap) / 2;   // 固定在原本格子上方（對砍衝到中央時不會疊在一起）
+        for (let k = 0; k < N; k++) {
+          const x = x0 + k * (w + gap), g0 = C.seq[f.i]?.[k], filled = k < C.count[f.i], cur = view.phase === PH.CLASH_ANIM && C.cut === k + 1;
+          g.fillStyle = cur ? "rgba(255,245,216,.95)" : "rgba(16,24,39,.9)"; g.fillRect(x, sy - w, w, w);
+          g.strokeStyle = filled ? PAL.hud.powerFill : PAL.hud.muted; g.lineWidth = 1; g.strokeRect(x + 0.5, sy - w + 0.5, w - 1, w - 1);
+          g.textAlign = "center"; g.font = "9px sans-serif";
+          if (g0) g.fillText(GICON[g0], x + w / 2, sy - 3);
+          else if (filled) { g.fillStyle = PAL.hud.powerFill; g.fillRect(x + 4, sy - w + 4, w - 8, w - 8); }
+          else { g.fillStyle = PAL.hud.muted; g.fillText("_", x + w / 2, sy - 3); }
+          if (view.phase === PH.CLASH_ANIM && k < C.cut) { const r = C.cuts[k]; g.font = "bold 7px sans-serif"; g.fillStyle = r < 0 ? PAL.hud.muted : r === f.i ? PAL.hud.powerFill : PAL.fx.red.rim; g.fillText(r < 0 ? "平" : r === f.i ? "勝" : "敗", x + w / 2, sy + 8); }
+        }
+        if (C.first === f.i) { const pp = this.firstAt ? Math.max(0, 1 - (now - this.firstAt) * 5) : 0; g.font = `900 ${Math.round(9 + pp * 6)}px sans-serif`; g.textAlign = "center"; g.fillStyle = PAL.fighters.outline; g.fillText("⚡ 先手", sx + 1, sy - w - 3); g.fillStyle = PAL.hud.powerFill; g.fillText("⚡ 先手", sx, sy - w - 4); }
+      }
+      if (view.phase === PH.CLASH_ANIM) { g.textAlign = "center"; g.font = "bold 11px sans-serif"; g.fillStyle = PAL.hud.label; g.fillText(`${C.score[0]} : ${C.score[1]}`, CONFIG.W / 2, 82); }
+    }
+    if (this.cutText && now - this.cutText.at < this.cutText.life) {     // 第1刀 勝／敗／平（大字，放在劍格上方）
+      const a = 1 - (now - this.cutText.at) / this.cutText.life, pop = Math.max(0, 1 - (now - this.cutText.at) * 8);
+      g.save(); g.globalAlpha = Math.min(1, a * 2); g.translate(CONFIG.W / 2, 64); g.scale(1 + pop * 0.5, 1 + pop * 0.5);
+      g.textAlign = "center"; g.font = "900 20px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(this.cutText.text, 2, 2); g.fillStyle = this.cutText.color; g.fillText(this.cutText.text, 0, 0);
+      g.restore();
     }
     // 連打 HIT COMBO 計數
     if (this.combo && (ph === PH.MASH || ph === PH.SELECT || now - this.combo.at < 0.8)) {

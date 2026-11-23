@@ -46,13 +46,10 @@ for (const [name, dev] of [["iPhone 13 直拿", devices["iPhone 13"]], ["iPhone 
   ok(L.minW >= 44 && L.minH >= 40 && L.maxRight <= L.vw, `按鍵夠大（最小 ${Math.round(L.minW)}×${Math.round(L.minH)}px）、都在畫面內`);
   if (OUT) await P.screenshot({ path: `${OUT}/touch-${dev.viewport.width}x${dev.viewport.height}.png` });
 
-  // 走位：點 ▶ 右踏
-  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 6, power: 2 }], phase: "PHASE_MOVE" }));
-  await sleep(50); await tapCard(P, card(0, "R"));
-  await P.waitForFunction(() => __fist.view.fighters[0].pos === 4, null, { timeout: 2000 }).catch(() => {});
-  ok(await P.evaluate(() => __fist.view.fighters[0].pos === 4), "點「▶ 右踏」：往右走一格");
-  // 猜拳：點 ✊
-  await waitPh(P, "PHASE_RPS"); await sleep(80);
+  // 猜拳：點過熱的 🖐️ 會被鎖住、點 ✊ 擺出石頭
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 6, power: 1 }], phase: "PHASE_RPS" }));
+  await sleep(80); await tapCard(P, card(0, "R"));
+  ok(await P.evaluate(() => __fist.view.fighters[0].stance === null), "點過熱的「♨️ 過熱」卡：鎖住出不了");
   await tapCard(P, card(0, "L"));
   await sleep(60);
   ok(await P.evaluate(() => __fist.view.fighters[0].stance === "rock"), "點「✊ 石頭」：擺出石頭架式");
@@ -85,7 +82,7 @@ for (const [name, dev] of [["iPhone 13 直拿", devices["iPhone 13"]], ["iPhone 
   await ptr(P, card(0, "L"), "pointerdown", 11); await ptr(P, card(1, "M"), "pointerdown", 12);
   await sleep(50);
   await ptr(P, card(0, "L"), "pointerup", 11); await ptr(P, card(1, "M"), "pointerup", 12);
-  await waitPh(P, "PHASE_MASH", 3000);
+  await waitPh(P, "PHASE_MASH", 5000);                               // 猜拳 2.8s＋開牌停頓 0.55s
   ok(await P.evaluate(() => __fist.view.round.att === 0), "兩根手指同時按：P1 石頭、P2 剪刀都算數，P1 贏拳");
   await ctx.close();
 }
@@ -109,7 +106,7 @@ console.log("震動（模擬 Android，記錄 navigator.vibrate 的震法）");
   ok(deal.some(p => same(p, H.dealBase)) && deal.some(p => same(p, H.dealExtra)), `打到對手：保底拳 ${H.dealBase}ms、追加拳 ${H.dealExtra}ms（實際 ${JSON.stringify(deal)}）`);
   // 我被打：藍光終結沒接住
   await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
-  await vib(); await sleep(700);
+  await vib(); await sleep(1100);                                    // 判定窗 0.8s 逾時才吃招
   const take = await vib();
   ok(take.some(p => same(p, H.takeFinisher)), `被終結技打到：重震 ${JSON.stringify(H.takeFinisher)}（實際 ${JSON.stringify(take)}）`);
   // 完美彈反
@@ -120,7 +117,7 @@ console.log("震動（模擬 Android，記錄 navigator.vibrate 的震法）");
   // 關掉震動
   await P.tap("#gearBtn"); await P.tap('#settingsPop [data-go="haptics"]'); await P.tap("#gearBtn");
   await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
-  await vib(); await sleep(700);
+  await vib(); await sleep(1100);                                    // 判定窗 0.8s 逾時才吃招
   ok((await vib()).length === 0 && !(await P.evaluate(() => __fist.Haptics.on)), "⚙️ 震動：關 → 被打也不震");
   await P.evaluate(() => __fist.Haptics.set(true));
   await ctx.close();
@@ -132,9 +129,11 @@ console.log("互動教學（觸控說法）");
   const P = await ctx.newPage(); P.on("pageerror", e => errors.push(String(e)));
   await P.goto(BASE); await P.tap('[data-go="tutorial"]'); await sleep(200);
   const t = await P.textContent("#objective");
-  ok(t.includes("按 ◀ 或 ▶") && !/按 A/.test(t), `目標改成觸控說法：${t}`);
-  await tapCard(P, card(0, "R")); await sleep(300);
-  ok((await P.textContent("#objective")).includes("連走 2 步"), "點卡片就能過教學第一步");
+  ok(t.includes("點『🖐️ 布』") && !/按 [ASD]/.test(t), `目標改成觸控說法：${t}`);
+  await P.waitForFunction(() => __fist.view?.fighters[1].stance === "rock", null, { timeout: 4000 });
+  await tapCard(P, card(0, "R"));
+  await P.waitForFunction(() => document.getElementById("objective").textContent.includes("過熱"), null, { timeout: 5000 }).catch(() => {});
+  ok((await P.textContent("#objective")).includes("過熱"), `點卡片出布就能過教學第一步：${await P.textContent("#objective")}`);
   await ctx.close();
 }
 
@@ -143,13 +142,13 @@ console.log("桌機（滑鼠＋鍵盤）");
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 600 } });
   const P = await ctx.newPage(); P.on("pageerror", e => errors.push(String(e)));
   await P.goto(BASE); await P.click('[data-go="local2p"]');
-  await waitPh(P, "PHASE_MOVE");
+  await waitPh(P, "PHASE_RPS"); await sleep(100);
   const L = await layout(P);
   ok(!L.touch && Math.abs(L.kbBottom - L.cvBottom) < 2, "桌機不是觸控模式：鍵位卡照舊疊在畫布底部");
   await ptr(P, card(0, "R"), "pointerdown", 1, "mouse"); await ptr(P, card(0, "R"), "pointerup", 1, "mouse"); await sleep(300);   // 桌機卡片本來就不接滑鼠（pointer-events: none），直接送事件確認也不會誤觸
-  ok(await P.evaluate(() => __fist.view.fighters[0].steps === 0), "桌機滑鼠點卡片不會誤觸出招");
-  await P.keyboard.press("d"); await sleep(300);
-  ok(await P.evaluate(() => __fist.view.fighters[0].steps === 1), "鍵盤照常可用");
+  ok(await P.evaluate(() => __fist.view.fighters[0].stance === null), "桌機滑鼠點卡片不會誤觸出招");
+  await P.keyboard.press("d"); await sleep(100);
+  ok(await P.evaluate(() => __fist.view.fighters[0].stance === "paper"), "鍵盤照常可用");
   await ctx.close();
 }
 

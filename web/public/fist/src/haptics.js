@@ -47,7 +47,7 @@ export const Haptics = {
     const mine = p => me === null || p === me;
     for (const e of events) {
       if (e.type === "hit") {
-        if (e.kind === "counter") continue;                              // 彈反反擊：跟 parry 同一刻，交給 parry 的「噠噠」，不然會被蓋掉
+        if (e.kind === "counter" || e.kind === "clash") continue;   // 彈反反擊交給 parry、拼刀重砍交給 clash_end                              // 彈反反擊：跟 parry 同一刻，交給 parry 的「噠噠」，不然會被蓋掉
         else if (me !== null && e.p === me) this.buzz(e.kind === "extra" ? H.takeExtra : H.takeBase);
         else this.buzz(e.kind === "extra" ? H.dealExtra : H.dealBase);
       } else if (e.type === "finisher_hit") {
@@ -56,6 +56,8 @@ export const Haptics = {
       } else if (e.type === "parry") this.buzz(mine(e.p) ? H.parryMe : H.gotParried, true);
       else if (e.type === "clash") this.buzz(H.clash);
       else if (e.type === "roll" && mine(e.p)) this.buzz(H.roll);
+      else if (e.type === "clash_cut") this.buzz(H.clash);
+      else if (e.type === "clash_end" && e.winner >= 0) this.buzz(me !== null && e.winner !== me ? H.takeFinisher : H.dealFinisher, true);
       else if (e.type === "ko") this.buzz(me !== null && e.p === me ? H.koMe : H.koThem, true);
     }
   },

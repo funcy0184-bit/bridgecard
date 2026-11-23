@@ -61,6 +61,12 @@ export const Sfx = {
   land() { noise(0.06, 0.18, 500, "lowpass"); tone(90, 0.08, 0.15, "sine", 0.6); },
   win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.25, 0.12, "triangle", 1, i * 0.1)); },
   ok() { tone(880, 0.08, 0.08, "triangle"); tone(1320, 0.12, 0.08, "triangle", 1, 0.07); },
+  lock() { noise(0.03, 0.09, 3200, "highpass", 1); tone(240, 0.05, 0.06, "square", 0.6, 0.02); },          // ♨️ 過熱：微弱「喀嚓」
+  reveal(win) { tone(win ? 660 : 440, 0.12, 0.1, "triangle"); tone(win ? 990 : 440, 0.18, 0.1, "triangle", 1, 0.09); },
+  sizzle() { noise(0.25, 0.05, 5000, "highpass", 1, 0, 2500); },
+  draw() { noise(0.28, 0.16, 900, "bandpass", 2, 0, 7000); tone(1760, 0.2, 0.06, "sine", 1.2, 0.18); },   // ⚡ 先手：拔刀
+  cut(n) { noise(0.08, 0.28, 3600, "bandpass", 3); tone(1200 + n * 180, 0.16, 0.12, "square", 0.7); },
+  cueSoon() { tone(330, 0.22, 0.05, "sine", 1.6); },
 };
 
 // 事件 → 聲音
@@ -69,8 +75,14 @@ function handle(events, view) {
   for (const e of events) {
     switch (e.type) {
       case "step": e.bump ? Sfx.bump() : Sfx.step(); break;
-      case "wobble": Sfx.wobble(); break;
-      case "deny": Sfx.deny(); break;
+      case "deny": e.why === "heat" ? Sfx.lock() : Sfx.deny(); break;
+      case "rps_result": Sfx.reveal(e.winner >= 0); break;
+      case "heat": if (e.heat.some(Boolean)) Sfx.sizzle(); break;
+      case "clash_start": Sfx.clash(); break;
+      case "clash_input": case "clash_pick": Sfx.tick(); break;
+      case "clash_first": Sfx.draw(); break;
+      case "clash_cut": Sfx.cut(e.n); break;
+      case "clash_end": if (e.winner >= 0) Sfx.heavy(); break;
       case "lock": case "stance": case "finisher_pick": Sfx.tick(); break;
       case "hide": Sfx.hide(); break;
       case "clash": Sfx.clash(); break;
@@ -84,17 +96,17 @@ function handle(events, view) {
       case "land": Sfx.land(); break;
       case "ko": Sfx.ko(); break;
       case "gameover": Sfx.win(); break;
-      case "phase": if (e.phase !== PH.SELECT) Sfx.chargeStop(); break;
+      case "phase": if (e.phase !== PH.SELECT) Sfx.chargeStop(); else Sfx.cueSoon(); break;   // 終結擇一開始就先給預告音
     }
   }
-  // 倒數嗒聲：終結判定窗每 0.1 秒一聲；走位／猜拳最後 0.3 秒；最後一下比較尖
+  // 倒數嗒聲：終結判定窗每 0.1 秒一聲；猜拳／拼刀輸入最後 0.3 秒；最後一下比較尖
   if (!view) return;
   if (view.phase !== lastPhase) { lastPhase = view.phase; lastTick = -1; }
   const C = CONFIG.countdown, left = view.dur - view.t;
   if (view.phase === PH.WINDOW && view.round && !view.round.done) {
     const n = Math.ceil(left / C.tickEvery);
     if (n !== lastTick && n >= 1) { lastTick = n; Sfx.count(left <= C.urgentSec + 0.05); }
-  } else if ((view.phase === PH.MOVE || view.phase === PH.RPS) && left > 0 && left <= C.phaseTickLast + 1e-6) {
+  } else if ((view.phase === PH.RPS || view.phase === PH.CLASH_INPUT) && left > 0 && left <= C.phaseTickLast + 1e-6) {
     const n = Math.ceil(left / C.tickEvery);
     if (n !== lastTick) { lastTick = n; Sfx.count(n === 1); }
   }

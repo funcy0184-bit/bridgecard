@@ -3,9 +3,9 @@
 //     · 只能拿 port.view() —— 就是 engine.viewFor(自己座位)，藏招時看不到對手換了什麼、看不到攻方還沒亮出的終結手勢
 //     · 對手的資訊要經過「反應延遲」才看得到：AI 把每一幀的畫面存起來，決策時讀 reactionMs 之前的那一幀
 //     · 只能像真人一樣送按下／放開（同樣受放開再按、判定窗單次鎖死限制）
-//   自己的狀態（力量、硬直、是不是攻方）不用延遲：那是「自己知道的事」
+//   自己的狀態（力量、過熱、是不是攻方）不用延遲：那是「自己知道的事」；過熱是公開資訊（雙方 HUD 都顯示）
 import { CONFIG } from "./config.js";
-import { PH, COUNTER, KEY_OF, GESTURE_OF } from "./engine.js";
+import { PH, COUNTER, KEY_OF, GESTURE_OF, BEATS } from "./engine.js";
 
 const GESTURES = ["rock", "scissors", "paper"];
 
@@ -40,39 +40,45 @@ export class AIPlayer {
   me(v) { return v.fighters[this.seat]; }
   opp(v) { return v.fighters[1 - this.seat]; }
 
-  // ---------- 走位：等看到這一輪開始（反應延遲）才決定 ----------
-  [`on_${PH.MOVE}`](v, seen) {
-    const P = this.plan;
-    if (P.done || seen.phase !== PH.MOVE) return;
-    P.done = true;
-    const me = this.me(v), op = this.opp(seen), dist = Math.abs(me.pos - op.pos), toward = Math.sign(op.pos - me.pos) || 1;
-    const atEdge = me.pos === 1 || me.pos === CONFIG.cells, inward = me.pos === 1 ? 1 : -1;
-    const btnOf = d => (d < 0 ? "L" : "R");
-    const budget = me.power - this.cfg.keepPower;                          // 宗師：保留 2 氣收頭
-    if (this.level === "easy") {
-      if (this.rng() < 0.5 && dist > 1 && me.power >= 1) this.press(btnOf(toward));
-      else if (this.rng() < 0.5) this.press("M");
-    } else if (atEdge && me.power >= 1 && (budget >= 1 || this.level === "mid")) this.press(btnOf(inward));   // 崖邊先往台內
-    else if (dist > 2 && budget >= 1) this.press(btnOf(toward));
-    else this.press("M");
+  // ---------- 猜拳：只會出沒過熱的招；先看對手亮出的架式（有延遲）再選；師兄／宗師會算對手的過熱 ----------
+  //   對手過熱一招 → 對手只剩兩招可出 → 一定有一招「贏一招、平一招、永遠不輸」（保底）
+  allowedFor(f) { return GESTURES.filter(g => g !== f.heat); }
+  safePick(me, op) {                                                     // 對手剩兩招時的保底手勢（自己過熱的話退而求其次）
+    const opts = this.allowedFor(op), mine = this.allowedFor(me);
+    const score = g => opts.reduce((s, o) => s + (BEATS[g] === o ? 1 : BEATS[o] === g ? -1 : 0), 0);
+    const best = Math.max(...mine.map(score));
+    return this.pick(mine.filter(g => score(g) === best));
   }
-
-  // ---------- 猜拳：先看對手亮出的架式（有延遲）再選；宗師會假動作＋藏招變拳 ----------
   [`on_${PH.RPS}`](v, seen) {
-    const P = this.plan, me = this.me(v), C = CONFIG.rps;
-    if (me.stun > 0) return;                                             // 硬直中按了也沒用
-    const oppSeen = seen.phase === PH.RPS && seen.t < (seen.reveal ?? C.reveal) ? this.opp(seen).stance : null;
-    const read = () => (oppSeen && oppSeen !== "hidden" && this.rng() < this.cfg.counterRead ? COUNTER[oppSeen] : this.pick(GESTURES));
+    const P = this.plan, me = this.me(v), op = this.opp(v), mine = this.allowedFor(me);
+    const legal = g => (mine.includes(g) ? g : this.pick(mine));          // 絕不按過熱的鍵
+    const oppSeen = seen.phase === PH.RPS && seen.t < (seen.reveal ?? CONFIG.rps.reveal) ? this.opp(seen).stance : null;
+    const useHeat = op.heat && this.rng() < this.cfg.readHeat;            // 師兄／宗師：拿對手的過熱算保底
+    const read = () => {
+      if (oppSeen && oppSeen !== "hidden" && this.rng() < this.cfg.counterRead && mine.includes(COUNTER[oppSeen])) return COUNTER[oppSeen];
+      return useHeat ? this.safePick(me, op) : this.pick(mine);
+    };
     const ready = seen.phase === PH.RPS;                                  // 反應延遲過了
-    if (!P.first && ready) { P.first = true; P.g = this.cfg.feint ? this.pick(GESTURES) : read(); this.press(KEY_OF[P.g]); return; }
+    const reveal = v.reveal ?? CONFIG.rps.reveal;
+    if (!P.first && ready) { P.first = true; P.g = legal(this.cfg.feint ? this.pick(mine) : read()); this.press(KEY_OF[P.g]); return; }
     if (!P.first) return;
-    if (this.level === "mid" && !P.second && v.t >= 1.0) { P.second = true; const g = read(); if (g !== P.g) { P.g = g; this.press(KEY_OF[g]); } }
-    if (this.cfg.feint && !P.feint && v.t >= 0.75) { P.feint = true; const g = this.pick(GESTURES.filter(x => x !== P.g)); P.g = g; this.press(KEY_OF[g]); }   // 前 1.3s 故意切招騙人
-    if (this.cfg.hiddenSwitch && !P.final && v.t >= (v.reveal ?? C.reveal) + 0.12 + this.rng() * 0.15) {                                                                  // 最後 0.5s 藏招變拳
+    if (this.level === "mid" && !P.second && v.t >= reveal * 0.6) { P.second = true; const g = legal(read()); if (g !== P.g) { P.g = g; this.press(KEY_OF[g]); } }
+    if (this.cfg.feint && !P.feint && v.t >= reveal * 0.45) { P.feint = true; const g = legal(this.pick(mine.filter(x => x !== P.g))); P.g = g; this.press(KEY_OF[g]); }   // 亮招期故意切招騙人
+    if (this.cfg.hiddenSwitch && !P.final && v.t >= reveal + 0.12 + this.rng() * 0.2) {                                                                  // 最後藏招變拳
       P.final = true;
-      const g = this.lastOppStance && this.rng() < this.cfg.counterRead ? COUNTER[this.lastOppStance] : this.pick(GESTURES);
+      let g = this.lastOppStance && this.rng() < this.cfg.counterRead ? COUNTER[this.lastOppStance] : useHeat ? this.safePick(me, op) : this.pick(mine);
+      g = legal(g);
       if (g !== P.g) { P.g = g; this.press(KEY_OF[g]); }
     }
+  }
+
+  // ---------- 拼刀預輸入：照難度的速度連按 3 下（宗師搶先手） ----------
+  [`on_${PH.CLASH_INPUT}`](v, seen) {
+    const P = this.plan;
+    if (P.done || seen.phase !== PH.CLASH_INPUT) return;                   // 看到拼刀開始（反應延遲）才動手
+    P.done = true;
+    const gap = this.cfg.clashMs / 1000;
+    for (let k = 0; k < 3; k++) this.press(KEY_OF[this.pick(GESTURES)], k * gap * (0.85 + this.rng() * 0.3), 0.03);
   }
 
   // ---------- 連打：攻方狂按（按得多快看難度） ----------
@@ -107,7 +113,7 @@ export class AIPlayer {
     const P = this.plan, r = v.round;
     if (P.done || !r || r.def !== this.seat || !r.type) return;
     P.done = true;
-    const at = Math.min(0.46, (this.cfg.defenseMs + (this.rng() * 80 - 40)) / 1000);
+    const at = Math.min(v.dur - 0.05, (this.cfg.defenseMs + (this.rng() * 80 - 40)) / 1000);
     if (r.type === "blue") {
       const right = KEY_OF[COUNTER[r.gesture]];
       if (this.rng() < this.cfg.parryRate) this.press(right, at);
@@ -119,7 +125,7 @@ export class AIPlayer {
   }
 }
 
-// 教學用的腳本電腦：照劇本在指定時間按鍵（例如猜拳時固定亮石頭）
+// 教學用的腳本電腦：照劇本在指定時間按鍵（例如猜拳時固定亮石頭）；劇本可以是函式，依進入階段時的畫面決定
 export class ScriptBot {
   constructor(seat, script = {}) { this.seat = seat; this.script = script; this.now = 0; this.phaseKey = ""; this.timers = []; this.done = {}; }
   attach(port) { this.port = port; }
@@ -130,8 +136,8 @@ export class ScriptBot {
     for (const t of this.timers) if (t.at <= this.now) this.port.input(t.type, t.btn);
     this.timers = this.timers.filter(t => t.at > this.now);
     const key = `${v.phase}:${(v.rt - v.t).toFixed(3)}`;
-    if (key !== this.phaseKey) { this.phaseKey = key; this.done = {}; }
-    for (const [i, s] of (this.script[v.phase] ?? []).entries()) if (!this.done[i] && v.t >= s.at) { this.done[i] = true; this.press(s.btn, 0, s.hold ?? 0.05); }
+    if (key !== this.phaseKey) { const sc = this.script[v.phase]; this.phaseKey = key; this.done = {}; this.list = typeof sc === "function" ? sc(v) : sc ?? []; }
+    for (const [i, s] of (this.list ?? []).entries()) if (!this.done[i] && v.t >= s.at) { this.done[i] = true; this.press(s.btn, 0, s.hold ?? 0.05); }
   }
 }
 export { GESTURE_OF };

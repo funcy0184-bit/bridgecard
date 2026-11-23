@@ -1,4 +1,4 @@
-// 拳刃交鋒（模組版）瀏覽器驗收：大廳四入口、四關教學用鍵盤打通、三難度 AI 對戰、同機雙人（鍵位卡、出招提示開關）、
+// 拳刃交鋒（模組版）瀏覽器驗收：大廳四入口、四關教學用鍵盤打通（v3：過熱／彈反／拼刀／紅招）、三難度 AI 對戰、同機雙人（鍵位卡、過熱卡、拼刀卡、出招提示開關）、
 //   線上對戰雙開瀏覽器（建房、邀請連結、READY 倒數、藏招封包保密、斷線暫停與重連、離開房間）
 //   先起後端（同時提供前端靜態檔）：cd fist-online && npx wrangler dev --port 8790
 //   node test/e2e/fist-app.mjs http://127.0.0.1:8790/ [截圖資料夾]
@@ -26,35 +26,46 @@ for (const t of ["互動教學道場", "單人對戰 AI", "同機雙人", "線�
 await shot("menu");
 
 console.log("互動教學道場（用鍵盤打通四關）");
+const tw = (f, ms = 8000) => P.waitForFunction(f, null, { timeout: ms, polling: 10 }).catch(() => {});
 await P.click('[data-go="tutorial"]'); await sleep(300);
 ok(await P.isVisible("#skipTut") && await P.isVisible("#objective"), "右上角有「跳過教學」、頂部一行目標");
-ok((await objective()).includes("走一步"), `關卡 1 目標：${await objective()}`);
+ok((await objective()).startsWith("1/4") && (await objective()).includes("石頭"), `關卡 1 目標：${await objective()}`);
 await shot("tut1");
-await key("d"); await sleep(250);
-ok((await objective()).includes("連走 2 步"), "走一步之後：換下一個目標（連走兩步）");
-await waitPh("PHASE_MOVE"); await P.waitForFunction(() => __fist.view.t < 0.2, null, { polling: 10 });
-await key("a"); await sleep(220); await key("a"); await sleep(250);
-ok((await objective()).includes("硬直"), "第 2 步落地：看到硬直目標");
-await shot("tut1-stun");
-await P.waitForFunction(() => document.getElementById("objective").textContent.startsWith("2/4"), null, { timeout: 5000 }).catch(() => {});
-ok((await objective()).startsWith("2/4"), `關卡 2：${await objective()}`);
-await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[1].stance === "rock", null, { timeout: 4000 });
-await shot("tut2");
+await tw(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[1].stance === "rock");
+await key("d");                                                     // 布剋石頭
+await tw(() => __fist.view?.phase === "PHASE_REVEAL");
+ok(await P.evaluate(() => __fist.view.rps?.winner === 0), "開牌停頓：布壓制石頭");
+await tw(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[0].heat === "paper");
+await sleep(80);
+const heatCard = await P.evaluate(() => { const c = document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="R"]'); return { cls: c.className, label: c.querySelector(".kl").textContent }; });
+ok(heatCard.cls.includes("heat") && heatCard.label === "♨️ 過熱" && (await objective()).includes("過熱"), `第二輪：布過熱，鍵位卡反灰蓋「${heatCard.label}」`);
+await shot("tut1-heat");
 await key("d");
-await P.waitForFunction(() => document.getElementById("objective").textContent.startsWith("3/4"), null, { timeout: 5000 }).catch(() => {});
-ok((await objective()).startsWith("3/4"), `出布贏石頭 → 關卡 3：${await objective()}`);
+ok(await P.evaluate(() => __fist.view.fighters[0].stance === null), "按過熱的布：鎖住出不了");
+await tw(() => __fist.view.fighters[1].stance === "scissors");
+await key("a");                                                     // 石頭剋剪刀
+await tw(() => document.getElementById("objective").textContent.startsWith("2/4"));
+ok((await objective()).startsWith("2/4"), `改出石頭剋剪刀 → 關卡 2：${await objective()}`);
 await waitPh("PHASE_MASH");
 for (let i = 0; i < 12; i++) { await key(["a", "s", "d"][i % 3], 15); await sleep(10); }
-await shot("tut3-mash");
-await P.waitForFunction(() => document.getElementById("objective").textContent.includes("防守"), null, { timeout: 5000 }).catch(() => {});
+await tw(() => document.getElementById("objective").textContent.includes("防守"));
 ok((await objective()).includes("防守"), "打滿 4 次追加 → 換防守");
-await waitPh("PHASE_FINISHER_WINDOW"); await sleep(80); await shot("tut3-blue");
-await key("a");
-await P.waitForFunction(() => document.getElementById("objective").textContent.startsWith("4/4"), null, { timeout: 6000 }).catch(() => {});
-ok((await objective()).startsWith("4/4"), `彈反成功 → 關卡 4：${await objective()}`);
+await waitPh("PHASE_FINISHER_WINDOW"); await sleep(400); await shot("tut2-blue");
+await key("a");                                                     // 0.4s 才按也來得及
+await tw(() => document.getElementById("objective").textContent.startsWith("3/4"));
+ok((await objective()).startsWith("3/4"), `慢動作 0.8s 內彈反 → 關卡 3：${await objective()}`);
+await tw(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[1].stance === "rock");
+await key("a");                                                     // 故意平手
+await waitPh("PHASE_CLASH_INPUT");
+await sleep(150); await shot("tut3-clash");
+await key("a", 25); await key("s", 25); await key("d", 25);
+await tw(() => __fist.view?.clash?.first === 0, 3000);
+ok(await P.evaluate(() => __fist.view.clash?.first === 0), "搶先填完 3 格：⚡ 先手");
+await tw(() => document.getElementById("objective").textContent.startsWith("4/4"), 10000);
+ok((await objective()).startsWith("4/4"), `看完三刀 → 關卡 4：${await objective()}`);
 await waitPh("PHASE_FINISHER_WINDOW"); await sleep(120); await shot("tut4-red");
 const v4 = await V();
-ok(v4.f[0].pos === 7 && v4.f[0].power === 0 && v4.f[0].damage === 110 && v4.r.type === "red" && JSON.stringify(v4.r.dirs) === "[-1]", "關卡 4：格 7、110%、0 氣、紅招只亮 ◀");
+ok(v4.f[0].pos === 7 && v4.f[0].power === 0 && v4.f[0].damage >= 125 && v4.r.type === "red" && JSON.stringify(v4.r.dirs) === "[-1]", "關卡 4：格 7、瀕死、0 氣、紅招只亮 ◀");
 await key("a");
 await P.waitForFunction(() => document.getElementById("menu").hidden === false, null, { timeout: 8000 }).catch(() => {});
 ok(await P.isVisible("#menu"), "四關完成：回到大廳");
@@ -69,12 +80,12 @@ for (const lv of ["easy", "mid", "master"]) {
   await P.click('[data-go="difficulty"]'); await P.click(`[data-go="ai:${lv}"]`); await sleep(200);
   // 玩家亂按，打到有一回合結算
   const t0 = Date.now(); let rounds = 0, aiActed = false;
-  while (Date.now() - t0 < 12000 && rounds < 2) {
+  while (Date.now() - t0 < 20000 && rounds < 1) {
     const v = await V();
     if (!v) { await sleep(50); continue; }
     if (v.phase === "PHASE_RPS" && v.t > 0.2 && v.t < 0.3) await key(["a", "s", "d"][Math.floor(Math.random() * 3)]);
     if (v.phase === "PHASE_MASH" && v.r?.att === 0) await key(["a", "s", "d"][Math.floor(Math.random() * 3)], 15);
-    if (v.f[1].stance && v.phase === "PHASE_RPS" && v.t < 1.3) aiActed = true;
+    if (v.f[1].stance && v.phase === "PHASE_RPS" && v.t < 2.2) aiActed = true;
     const done = await P.evaluate(() => __fist.view?.phase === "PHASE_RESOLVE");
     if (done) { rounds++; await P.waitForFunction(() => __fist.view?.phase !== "PHASE_RESOLVE", null, { timeout: 4000 }).catch(() => {}); }
     await sleep(30);
@@ -114,13 +125,21 @@ await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 6, power: 2 },
 await sleep(60); const r1 = await cards(1);
 ok(r1.cards[0].label === "◀ 左翻" && !r1.cards[0].cls.includes("locked") && r1.cards[1].cls.includes("locked") && r1.cards[2].cls.includes("locked"), "紅招：守方只亮「◀ 左翻」，中、右鎖住");
 await shot("local2p-red");
-// 走位：按下有壓縮回饋
-await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 5, power: 2 }], phase: "PHASE_MOVE" }));
-await sleep(60); await P.keyboard.down("d");
-const pressed = await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="R"]').className);
-await P.keyboard.up("d");
-const mv = await cards(0);
-ok(mv.cards.map(c => c.label).join("|") === "◀ 左踏|● 原地|▶ 右踏" && pressed.includes("pressed"), "走位卡：◀左踏／●原地／▶右踏，按下 D 卡片壓縮");
+// 猜拳：過熱的鍵反灰、按下去抖一下；正常的鍵按下有壓縮回饋
+await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 5, power: 1, heat: "rock" }], phase: "PHASE_RPS" }));
+await sleep(80);
+let h0 = await cards(0), h1 = await cards(1);
+ok(h0.cards[2].cls.includes("heat") && h0.cards[2].label === "♨️ 過熱" && h1.cards[0].cls.includes("heat"), "P1 過熱布、P2 過熱石：各自那張卡反灰蓋「♨️ 過熱」");
+await P.keyboard.down("d"); const nope = await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="R"]').className); await P.keyboard.up("d");
+await P.keyboard.down("a"); const pressed = await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="L"]').className); await P.keyboard.up("a");
+await P.waitForFunction(() => __fist.view.fighters[0].stance === "rock", null, { timeout: 1000 }).catch(() => {});   // 引擎下一幀才處理按鍵
+ok(nope.includes("nope") && pressed.includes("pressed") && await P.evaluate(() => __fist.view.fighters[0].stance === "rock"), "按過熱的布：卡片抖一下不算；按石頭：壓縮回饋、出石頭");
+await shot("local2p-heat");
+// 拼刀預輸入：三張都能按（過熱不限制），顯示填了幾格
+await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 5, power: 1 }], phase: "PHASE_CLASH_INPUT" }));
+await sleep(80); await key("d", 20); await sleep(60);
+h0 = await cards(0);
+ok(h0.cards.every(c => !c.cls.includes("heat") && !c.cls.includes("locked")) && (await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="M"] .ksub').textContent)) === "劍格 1/3", "拼刀：三張卡都能按（過熱不限制），顯示「劍格 1/3」");
 await P.keyboard.press("Escape"); await sleep(150);
 
 console.log("線上對戰：雙開瀏覽器");
@@ -165,12 +184,12 @@ ok(/^[123]$/.test(await P.textContent("#countdown")), `雙方 READY：倒數 ${a
 await P2.waitForFunction(() => !document.getElementById("countdown").hidden, null, { timeout: 3000 });
 ok(await P2.isVisible("#flowStrip") && await P.isHidden("#flowStrip"), `倒數時：開引導的人看到流程「${await P2.textContent("#flowStrip")}」，關的人沒有`);
 await P.screenshot({ path: OUT ? `${OUT}/online-countdown.png` : "/dev/null" }).catch(() => {});
-await P.waitForFunction(() => __fist.view?.phase === "PHASE_MOVE", null, { timeout: 6000 });
-await P2.waitForFunction(() => __fist.view?.phase === "PHASE_MOVE", null, { timeout: 2000 });
+await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS", null, { timeout: 6000 });
+await P2.waitForFunction(() => __fist.view?.phase === "PHASE_RPS", null, { timeout: 2000 });
 ok(await P.isHidden("#room") && await P.isHidden("#countdown"), "開戰：房間面板收起");
 ok((await P.textContent(".kcap")).includes("P1") && (await P2.textContent(".kcap")).includes("P2"), "鍵位卡標出自己是 P1／P2");
 await P2.waitForFunction(() => !document.getElementById("coach").hidden, null, { timeout: 3000 }).catch(() => {});
-ok((await P2.textContent("#coach")).includes("走位") && await P.isHidden("#coach"), `開戰：朋友看到引導「${await P2.textContent("#coach")}」、房主沒有`);
+ok((await P2.textContent("#coach")).includes("猜拳") && await P.isHidden("#coach"), `開戰：朋友看到引導「${await P2.textContent("#coach")}」、房主沒有`);
 await P2.click("#emoteBtn"); await P2.click('[data-go="emote:3"]');
 await P.waitForFunction(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 1 && p.text === "🔥"), null, { timeout: 3000 }).catch(() => {});
 ok(await P.evaluate(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 1 && p.text === "🔥")) && await P2.isHidden("#emoteTray"), "朋友點 😀 → 🔥：房主畫面上朋友頭頂冒出 🔥");
@@ -179,12 +198,12 @@ await P2.waitForFunction(() => __fist.renderer.fx.some(p => p.k === "emote" && p
 ok(await P2.evaluate(() => __fist.renderer.fx.some(p => p.k === "emote" && p.seat === 0)), "鍵盤 1～8 也能發表情（房主按 1 → 😂）");
 await shot("online-emote");
 console.log("線上：藏招封包保密");
-await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.t > 0.15, null, { timeout: 4000, polling: 10 });
+await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.t > 0.15, null, { timeout: 8000, polling: 10 });
 await P2.keyboard.down("d"); await sleep(30); await P2.keyboard.up("d");                   // P2 亮布
 await P.waitForFunction(() => __fist.view.fighters[1].stance === "paper", null, { timeout: 2000 });
 ok(true, "亮招期：P2 擺『布』，P1 畫面即時看到");
 await P.keyboard.down("a"); await sleep(30); await P.keyboard.up("a");                     // P1 石頭
-await P2.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.t > 1.38, null, { timeout: 3000, polling: 5 });
+await P2.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.t > __fist.view.reveal + 0.08, null, { timeout: 4000, polling: 5 });
 const mark = framesP.length;
 await P2.keyboard.down("s"); await sleep(30); await P2.keyboard.up("s");                   // 藏招期偷換剪刀
 await P.waitForFunction(() => __fist.view?.phase !== "PHASE_RPS", null, { timeout: 3000 });
@@ -193,7 +212,7 @@ ok(hiddenFrames.length > 0 && !hiddenFrames.some(m => JSON.stringify(m).includes
 const result = framesP.flatMap(m => m.t === "state" ? m.events : []).find(e => e.type === "rps_result");
 ok(result?.stances?.join() === "rock,scissors", `鎖定結算才公佈：${result?.stances}（石頭贏剪刀）`);
 console.log("線上：斷線暫停 → 重連接續");
-await P.waitForFunction(() => __fist.view?.phase === "PHASE_MOVE", null, { timeout: 8000 });
+await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.t < 1, null, { timeout: 15000 });
 const before2 = await P2.evaluate(() => __fist.view.fighters.map(f => [f.damage, f.stocks]));
 await P2.evaluate(() => { const t = __fist.transport; t.connect = () => {}; t.ws.close(); });   // P2 斷線（不讓它自動重連）
 await P.waitForFunction(() => !document.getElementById("pauseBox").hidden, null, { timeout: 4000 });

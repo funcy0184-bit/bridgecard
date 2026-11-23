@@ -1467,19 +1467,25 @@ export const ART = {
 export const CONFIG = {
   W: ART.canvas.width, H: ART.canvas.height,
   cells: ART.stage.tileCount, cellW: ART.stage.tileWidthPx, stageX: ART.stage.leftX, floorY: ART.stage.surfaceY,
-  stocks: 3, powerMax: 3, powerStart: 2,
+  stocks: 3, powerMax: 3, powerStart: 1,          // 力量：開局 1 格、上限 3；每輪攻防結算各回 1（平手拼刀不回）；紅招花 2
   spawn: [3, 5],                                   // 開局與掉命後的站位（P1、P2）
 
   // ---- 六階段（秒） ----
-  move: { dur: 1.2, maxSteps: 2, stepTime: 0.16, bumpTime: 0.22, secondStepStun: 1.0, wobbleTime: 0.3 },
-  rps: { dur: 1.8, reveal: 1.3 },
+  // （v3 移除走位階段：站位只靠贏拳推擠、彈反換位、紅招翻滾、擊飛落點）
+  rps: { dur: 2.8, reveal: 2.2 },                  // 前 2.2s 亮招前搖、後 0.6s 黑影藏招
+  reveal: { dur: 0.55 },                           // 開牌停頓：鎖定瞬間停 0.55s，中央放大顯示誰壓制誰
+  // 武器過熱：分出勝負後，雙方剛出的手勢下一輪猜拳不能選（拼刀結算、掉命重生後清除）
+  overheat: { enabled: true },
+  // 拼刀模式：猜拳平手達 CLASH_TRIGGER_TIES 次 → 三連斬預輸入（3 秒）→ 自動對砍三刀（每刀 0.45s）
+  CLASH_TRIGGER_TIES: 1,
+  clashMode: { inputDur: 3.0, slots: 3, animDur: 1.8, cutAt: [0.35, 0.8, 1.25], rush: 14, winDamage: 22, firstBonus: 6, launchMult: 1.15 },
   // 越打越快：整場每 3 回合（一次猜拳結算＝一回合）升一級，第 10 回合起最快；教學道場不加速
   //   各階段時間 = 開局值 →（線性）→ fast 值；終結擇不低於 0.4 秒（長按紅光要 0.3 秒）、判定窗不低於 0.4 秒
-  speed: { roundsPerLevel: 3, maxLevel: 3, fast: { move: 0.85, rpsReveal: 0.9, rpsHidden: 0.4, mash: 0.5, select: 0.4, window: 0.4 } },                  // 前 1.3s 亮招、後 0.5s 藏招
+  speed: { roundsPerLevel: 3, maxLevel: 3, fast: { rpsReveal: 1.6, rpsHidden: 0.5, mash: 0.55, select: 0.4, window: 0.6 } },   // v3 放寬：最快也保留新手看得懂的時間                  // 前 1.3s 亮招、後 0.5s 藏招
   clash: { dur: 0.75 },
   mash: { dur: 0.65, baseHits: [0.12, 0.36], baseDamage: 7, pressesPerExtra: 2, extraDamage: 1.5, maxExtra: 4 },
   select: { dur: 0.45, chargeTime: 0.3, redCost: 2 },
-  window: { dur: 0.5, slowmo: 0.35 },              // slowmo 只影響畫面動作速度
+  window: { dur: 0.8, slowmo: 0.3 },               // 終結判定窗放寬到 0.8s；slowmo 只影響畫面（終結擇就開始放慢）              // slowmo 只影響畫面動作速度
   finisherDamage: 16,                              // 終結技命中（藍／紅）
   parry: { counterDamage: 10, counterKnock: 1, hitstopMs: 150 },
   roll: { cells: 2, time: 0.28 },
@@ -1511,15 +1517,15 @@ export const CONFIG = {
 
   // ---- AI 三難度（ai.js 讀這裡） ----
   ai: {
-    easy: { name: "新手木樁", reactionMs: 550, mashIntervalMs: 210, parryRate: 0.25, rollRate: 0.35, counterRead: 0.2, feint: false, hiddenSwitch: false, keepPower: 0, defenseMs: 380 },
-    mid: { name: "道場師兄", reactionMs: 350, mashIntervalMs: 115, parryRate: 0.55, rollRate: 0.7, counterRead: 0.5, feint: false, hiddenSwitch: false, keepPower: 1, defenseMs: 260 },
-    master: { name: "讀心宗師", reactionMs: 220, mashIntervalMs: 70, parryRate: 0.8, rollRate: 0.9, counterRead: 0.7, feint: true, hiddenSwitch: true, keepPower: 2, defenseMs: 190 },
+    easy: { name: "新手木樁", reactionMs: 550, mashIntervalMs: 210, parryRate: 0.25, rollRate: 0.35, counterRead: 0.2, feint: false, hiddenSwitch: false, keepPower: 0, defenseMs: 380, clashMs: 650, readHeat: 0.2 },
+    mid: { name: "道場師兄", reactionMs: 350, mashIntervalMs: 115, parryRate: 0.55, rollRate: 0.7, counterRead: 0.5, feint: false, hiddenSwitch: false, keepPower: 1, defenseMs: 260, clashMs: 380, readHeat: 0.7 },
+    master: { name: "讀心宗師", reactionMs: 220, mashIntervalMs: 70, parryRate: 0.8, rollRate: 0.9, counterRead: 0.7, feint: true, hiddenSwitch: true, keepPower: 2, defenseMs: 190, clashMs: 150, readHeat: 0.9 },
   },
 
   // ---- 測試場景 ----
   scenarios: [
     { name: "場景 1：中央對峙", p: [{ pos: 3, power: 2, damage: 0 }, { pos: 5, power: 2, damage: 0 }] },
-    { name: "場景 2：崖邊二連走位", p: [{ pos: 5, power: 2, damage: 0 }, { pos: 7, power: 2, damage: 90 }] },
+    { name: "場景 2：崖邊壓迫", p: [{ pos: 5, power: 2, damage: 0 }, { pos: 7, power: 2, damage: 90 }] },
     { name: "場景 3：零力量閃紅招", p: [{ pos: 6, power: 2, damage: 0 }, { pos: 7, power: 0, damage: 110 }] },
   ],
   // ---- 出招提示（showHints：頭頂拳種氣泡、藏招 ❓、藍招克制鍵發光；線上只影響本機畫面） ----
@@ -1540,9 +1546,9 @@ export const CONFIG = {
   deathmatchTitle: "⚡ 絕命對峙！",
   // ---- 底部鍵位卡文字 ----
   cards: {
-    move: { L: "◀ 左踏", M: "● 原地", R: "▶ 右踏" },
     rps: { L: "✊ 石頭", M: "✌️ 剪刀", R: "🖐️ 布" },
     mash: "🔥 狂敲連打！",
+    heat: "♨️ 過熱",
     roll: { L: "◀ 左翻", M: "", R: "▶ 右翻" },
   },
   // ---- 線上對戰（worker/gameRoom.js 與 WebSocketTransport 共用） ----

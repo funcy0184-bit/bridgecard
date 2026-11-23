@@ -7,7 +7,7 @@ import { mulberry32 } from "../public/fist/src/engine.js";
 
 const N = Number(process.argv[2] ?? 60), STEP = 1 / 120;
 const levels = ["easy", "mid", "master"];
-const tally = { games: 0, rounds: 0, clash: 0, parry: 0, roll: 0, red: 0, ko: 0, extra: 0, maxCombo: 0, phases: new Set(), wins: {}, timeoutGames: 0 };
+const tally = { games: 0, rounds: 0, clash: 0, clashMode: 0, clashFirst: 0, clashWin: 0, heatDeny: 0, reveal: 0, parry: 0, roll: 0, red: 0, ko: 0, extra: 0, maxCombo: 0, phases: new Set(), wins: {}, timeoutGames: 0 };
 const secs = [], secsBy = {};
 const bad = [];
 for (let g = 0; g < N; g++) {
@@ -24,6 +24,12 @@ for (let g = 0; g < N; g++) {
     for (const ev of evs) {
       if (ev.type === "rps_result") tally.rounds++;
       if (ev.type === "clash") tally.clash++;
+      if (ev.type === "clash_start") tally.clashMode++;
+      if (ev.type === "clash_first") tally.clashFirst++;
+      if (ev.type === "clash_end" && ev.winner >= 0) tally.clashWin++;
+      if (ev.type === "rps_result") tally.reveal++;
+      if (ev.type === "deny" && ev.why === "heat") { tally.heatDeny++; bad.push(`第 ${g} 場：AI 按了過熱的鍵`); }
+      if (ev.type === "rps_result" && ev.heat.some((h, i) => h && ev.stances[i] === h)) bad.push(`第 ${g} 場：出了過熱的招 ${ev.stances}／${ev.heat}`);
       if (ev.type === "parry") tally.parry++;
       if (ev.type === "roll") tally.roll++;
       if (ev.type === "red_ready") { tally.red++; }

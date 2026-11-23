@@ -1,6 +1,6 @@
 // keybar.js — 底部動態鍵位卡（DOM，疊在畫布底部 y=224～270 那一條）
 //   · 同機雙人：左邊 P1（A/S/D）、右邊 P2（J/K/L）；單人／教學／線上：只顯示自己那組，置中
-//   · 依階段換圖示與中文標籤：走位 ◀左踏／●原地／▶右踏、猜拳 ✊石頭／✌️剪刀／🖐️布、連打 🔥狂敲連打！、紅招只亮可翻滾的方向
+//   · 依階段換圖示與中文標籤：猜拳 ✊石頭／✌️剪刀／🖐️布（過熱那張反灰蓋「♨️ 過熱」）、拼刀照常三張、連打 🔥狂敲連打！、紅招只亮可翻滾的方向
 //   · 卡片狀態與配色照 ART.hud.keyRow.cardStyle：normal／pressed（按下壓縮 85ms）／locked（斜紋、不能按）／parry_guide（藍招克制鍵發光）
 //   · parry_guide 只在「出招提示：開」時出現；藍框、紅區、箭頭、鍵位圖示和按下回饋永遠顯示
 //   · 藏招期間同機共用螢幕：按下只讓整組一起閃，不洩露按了哪一顆
@@ -47,6 +47,14 @@ function injectStyle() {
   .kmash { background: #3A1E12; color: #FFE186; box-shadow: inset 0 0 0 calc(var(--u) * 1px) #F2AB52, 0 calc(var(--u) * 2px) 0 #1A0D08; ${REDUCED ? "" : "animation: kmash 160ms steps(2) infinite;"} }
   @keyframes kmash { 50% { filter: brightness(1.25); } }
   .kgroup.out { opacity: .35; }
+  .kcard.heat { background: #23262E; color: #9AA0AA; filter: grayscale(.85); box-shadow: inset 0 0 0 calc(var(--u) * 1px) #4A4F5A, 0 calc(var(--u) * 1px) 0 #0C111B; }
+  .kcard.heat .kl { color: #FF9A62; filter: none; }
+  .kcard.heat .ksub { color: #8592A4; }
+  .kcard.heat::before, .kcard.heat::after { content: ""; position: absolute; top: calc(var(--u) * 2px); width: calc(var(--u) * 4px); height: calc(var(--u) * 4px); border-radius: 50%; background: rgba(170,176,188,.5); ${REDUCED ? "opacity: .4;" : "animation: ksmoke 1.4s ease-out infinite;"} }
+  .kcard.heat::before { left: 30%; } .kcard.heat::after { left: 60%; animation-delay: .7s; }
+  @keyframes ksmoke { 0% { transform: translateY(0) scale(.6); opacity: .7; } 100% { transform: translateY(calc(var(--u) * -10px)) scale(1.6); opacity: 0; } }
+  .kcard.nope { animation: knope .18s steps(3); }
+  @keyframes knope { 33% { transform: translateX(calc(var(--u) * -2px)); } 66% { transform: translateX(calc(var(--u) * 2px)); } }
   #keybar.touch { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); box-sizing: border-box; background: linear-gradient(#0A0F1A00, #0A0F1A 18%); }
   #keybar.touch .kcard, #keybar.touch .kmash { cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent; }
   #keybar.touch .kk { display: none; }
@@ -118,7 +126,8 @@ export class KeyBar {
     if (!g) return;
     const shared = view && view.seat < 0 && view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal);   // 同機藏招：整組閃，不說是哪顆
     const el = shared ? null : g.mash.hidden ? g.cards[btn] : g.mash;
-    const target = el ?? g.el, cls = el ? "pressed" : "pulse";
+    const heat = el && el.classList.contains("heat");
+    const target = el ?? g.el, cls = heat ? "nope" : el ? "pressed" : "pulse";
     target.classList.remove(cls); void target.offsetWidth; target.classList.add(cls);
     clearTimeout(target._kt); target._kt = setTimeout(() => target.classList.remove(cls), CS.states.pressed.durationMs + 30);
   }
@@ -135,7 +144,8 @@ export class KeyBar {
       for (const b of BTN) {
         const c = g.cards[b], s = st.cards[b];
         c.hidden = !!st.mash;
-        c.className = `kcard ${s.state}`;
+        const keep = ["pressed", "nope"].filter(k => c.classList.contains(k));   // 換狀態時保留正在播的按下回饋（不然選拳那一下的壓縮會被吃掉）
+        c.className = `kcard ${s.state}`; for (const k of keep) c.classList.add(k);
         c.querySelector(".kl").textContent = s.label || "　";
         c.querySelector(".ksub").textContent = s.sub ?? "";
       }
@@ -147,14 +157,14 @@ export class KeyBar {
     const cards = {}, set = (labels, state = "normal") => { for (const b of BTN) cards[b] = { label: labels[b], state }; };
     set(C.rps, "locked");
     if (!f || f.out) return { cards, out: true };
-    if (ph === PH.MOVE) {
-      set(C.move);
-      if (f.locked) { set(C.move, "locked"); cards.M.state = "chosen"; }
-      else if (f.steps >= CONFIG.move.maxSteps || f.stun > 0) set(C.move, "locked");
-      else if (f.power < 1) { cards.L.state = "locked"; cards.R.state = "locked"; }
-    } else if (ph === PH.RPS) {
-      set(C.rps, f.stun > 0 ? "locked" : "normal");
-      if (f.stun <= 0 && ["rock", "scissors", "paper"].includes(f.stance)) cards[KEY_OF[f.stance]].state = "chosen";   // 自己的已選手勢（共用螢幕藏招時 view 已遮掉）
+    if (ph === PH.RPS) {
+      set(C.rps);
+      if (["rock", "scissors", "paper"].includes(f.stance)) cards[KEY_OF[f.stance]].state = "chosen";   // 自己的已選手勢（共用螢幕藏招時 view 已遮掉）
+      if (f.heat) cards[KEY_OF[f.heat]] = { label: C.heat, state: "heat", sub: C.rps[KEY_OF[f.heat]] };   // ♨️ 過熱：這輪不能出
+    } else if (ph === PH.CLASH_INPUT) {                                   // 拼刀預輸入：三張都能按（過熱不限制），顯示填了幾格
+      const n = view.clash?.count?.[seat] ?? 0;
+      set(C.rps, n >= CONFIG.clashMode.slots ? "locked" : "normal");
+      cards.M.sub = `劍格 ${n}/${CONFIG.clashMode.slots}`;
     } else if (ph === PH.MASH && r) {
       if (r.att === seat) return { cards, mash: true };
     } else if (ph === PH.SELECT && r) {

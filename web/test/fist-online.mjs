@@ -68,8 +68,8 @@ B.send({ t: "ready", on: false }); await sleep(120);
 ok(A.lobby.status === "lobby", "倒數中有人取消 READY：回到待機");
 B.send({ t: "ready", on: true });
 const t0 = Date.now();
-await until(phaseIs(A, "PHASE_MOVE"), 6000);
-ok(A.view?.phase === "PHASE_MOVE" && Date.now() - t0 >= 2900, `倒數 3 秒後開打（${Date.now() - t0}ms）`);
+await until(phaseIs(A, "PHASE_RPS"), 6000);
+ok(A.view?.phase === "PHASE_RPS" && Date.now() - t0 >= 2900, `倒數 3 秒後開打：直接進猜拳（${Date.now() - t0}ms）`);
 const st = A.msgs.filter(m => m.t === "state").at(-1);
 ok(typeof st.serverTime === "number" && st.phaseEndTime > st.serverTime, `state 附 serverTime／phaseEndTime（剩 ${st.phaseEndTime - st.serverTime}ms）`);
 
@@ -79,28 +79,31 @@ await sleep(50);
 ok(!A.closed && !B.closed, "壞封包被忽略、連線不斷");
 
 console.log("猜拳：亮招即時轉發、藏招絕不轉發");
-await until(phaseIs(A, "PHASE_RPS"), 4000);
+await until(() => A.view?.phase === "PHASE_RPS" && A.view.t > 0.05, 4000);
 await sleep(150); await B.tap("R");                                  // 亮招期：P2 擺布
 await until(() => A.events.some(e => e.type === "stance" && e.p === 1));
 const pub = A.events.find(e => e.type === "stance" && e.p === 1);
-ok(pub?.gesture === "paper" && A.view.fighters[1].stance === "paper", "前 1.3 秒：P2 擺『布』即時轉給 P1 播前搖");
+ok(pub?.gesture === "paper" && A.view.fighters[1].stance === "paper", "亮招期（前 2.2 秒）：P2 擺『布』即時轉給 P1 播前搖");
 await A.tap("L");                                                     // P1 先擺石頭
-await until(() => A.view.phase === "PHASE_RPS" && A.view.t >= 1.35, 3000);
+await until(() => A.view.phase === "PHASE_RPS" && A.view.t >= A.view.reveal + 0.05, 4000);
 const before = A.events.length;
 await B.tap("M");                                                     // 藏招期：P2 偷換剪刀
 await sleep(60); await A.tap("L");
 await until(() => A.events.some(e => e.type === "rps_result"), 3000);
 const hiddenLeak = A.events.slice(before).filter(e => e.type === "stance" && e.p === 1);
-const viewsDuringHidden = A.msgs.filter(m => m.t === "state" && m.view.phase === "PHASE_RPS" && m.view.t >= 1.3);
-ok(hiddenLeak.length === 0, "最後 0.5 秒：P2 換招的 stance 事件沒有送到 P1");
+const viewsDuringHidden = A.msgs.filter(m => m.t === "state" && m.view.phase === "PHASE_RPS" && m.view.t >= m.view.reveal);
+ok(hiddenLeak.length === 0, "最後 0.6 秒藏招：P2 換招的 stance 事件沒有送到 P1");
 ok(viewsDuringHidden.length > 0 && viewsDuringHidden.every(m => m.view.fighters[1].stance === "hidden" && m.view.fighters[1].anim.state !== "stance_scissors"), `藏招期 P1 收到的 ${viewsDuringHidden.length} 張畫面，P2 一律是 hidden`);
-const rawLeak = A.msgs.filter(m => m.t === "state" && m.view.phase === "PHASE_RPS" && m.view.t >= 1.3).some(m => JSON.stringify(m).includes("scissors"));
+const rawLeak = A.msgs.filter(m => m.t === "state" && m.view.phase === "PHASE_RPS" && m.view.t >= m.view.reveal).some(m => JSON.stringify(m).includes("scissors"));
 ok(!rawLeak, "藏招期 P1 收到的原始封包裡完全找不到「scissors」");
 const res = A.events.find(e => e.type === "rps_result");
 ok(res && res.stances[1] === "scissors" && res.winner === 0, `鎖定結算才一起公佈：P1 石頭 vs P2 剪刀 → P1 贏（${res?.stances}）`);
 
 console.log("連打：伺服器數按鍵、即時轉發守方");
+await until(() => A.msgs.some(m => m.t === "state" && m.view.phase === "PHASE_REVEAL"), 3000);
+ok(A.msgs.some(m => m.t === "state" && m.view.phase === "PHASE_REVEAL" && m.view.rps?.winner === 0), "開牌停頓：雙方都收到結果（P1 石頭壓制剪刀）");
 await until(phaseIs(A, "PHASE_MASH"), 2000);
+ok(A.view.fighters[0].heat === "rock" && B.view.fighters[0].heat === "rock" && A.view.fighters[1].heat === "scissors", "過熱同步：雙方都看得到 P1 禁用石頭、P2 禁用剪刀");
 for (let i = 0; i < 14; i++) await A.tap(["L", "M", "R"][i % 3], 12);
 await until(() => B.events.some(e => e.type === "mash_end"), 2000);
 const extras = B.events.filter(e => e.type === "hit" && e.kind === "extra");
@@ -141,13 +144,35 @@ console.log("暱稱、表情、房主設定");
   ok(A.lobby.settings.guide === before, "非房主不能改新手引導設定");
 }
 
+console.log("拼刀：伺服器保密序列、只廣播格數與先手");
+{
+  const rc = await createRoom(), X = player(rc), Y = player(rc);
+  await X.join(); await Y.join();
+  X.send({ t: "ready", on: true }); Y.send({ t: "ready", on: true });
+  await until(() => X.view?.phase === "PHASE_RPS" && X.view.t > 0.1, 6000);
+  await X.tap("R"); await Y.tap("R");                                  // 布對布：平手
+  await until(phaseIs(X, "PHASE_CLASH_INPUT"), 6000);
+  ok(X.view?.phase === "PHASE_CLASH_INPUT", "線上平手 → 拼刀預輸入");
+  const mark = Y.msgs.length;
+  await X.tap("M", 15); await X.tap("M", 15); await X.tap("L", 15);    // X 先填完：剪 剪 石
+  await until(() => Y.events.some(e => e.type === "clash_first"), 2000);
+  const ymsgs = Y.msgs.slice(mark).filter(m => m.t === "state");
+  ok(Y.events.some(e => e.type === "clash_first" && e.p === 0) && ymsgs.some(m => m.view.clash?.count[0] === 3 && m.view.clash.first === 0), "對手收到：P1 填滿 3 格、搶到 ⚡ 先手");
+  ok(ymsgs.length > 0 && ymsgs.every(m => m.view.phase !== "PHASE_CLASH_INPUT" || m.view.clash.seq[0] === null) && !ymsgs.filter(m => m.view.phase === "PHASE_CLASH_INPUT").some(m => m.events.some(e => e.type === "clash_pick")), "預輸入期間對手收到的封包裡沒有 P1 的序列內容");
+  ok(X.view.clash.seq[0]?.join() === "scissors,scissors,rock", "自己看得到自己填了什麼");
+  await Y.tap("L", 15); await Y.tap("L", 15); await Y.tap("L", 15);
+  await until(phaseIs(Y, "PHASE_CLASH_ANIM"), 2000);
+  ok(Y.view.clash.seq[0]?.join() === "scissors,scissors,rock", "雙方填完 → 對砍：序列全公開");
+  X.ws.close(); Y.ws.close();
+}
+
 console.log("ping");
 A.send({ t: "ping", c: 123 });
 await until(() => A.msgs.some(m => m.t === "pong" && m.c === 123));
 ok(A.msgs.some(m => m.t === "pong" && m.c === 123 && typeof m.s === "number"), "pong 回傳伺服器時間");
 
 console.log("斷線：暫停 → 重連無縫接續");
-await until(phaseIs(A, "PHASE_MOVE"), 4000);
+await until(() => A.view?.phase === "PHASE_RPS" && A.view.t > 0.05, 6000);
 const snap = { ...A.view.fighters[1] }, tokenB = B.token;
 B.ws.close();
 await until(() => A.lobby?.status === "paused");
@@ -160,7 +185,7 @@ const B2 = player(room, tokenB); await B2.join();
 await until(() => B2.view && A.lobby?.status === "playing");
 ok(B2.seat === 1 && A.lobby.status === "playing", "帶原本的 token 回來：回到 P2、對戰繼續");
 ok(B2.view.fighters[1].damage === snap.damage && B2.view.fighters[1].stocks === snap.stocks, `狀態接續（P2 損傷 ${B2.view.fighters[1].damage}%、${B2.view.fighters[1].stocks} 命）`);
-ok(A.view.fighters[0].steps === 0, "暫停時送的按鍵不算");
+ok(A.view.fighters[0].stance === null && !A.view.fighters[0].picked, "暫停時送的按鍵不算");
 
 if (LONG) {
   console.log("斷線超過 15 秒：留在房內的人獲勝");
@@ -176,8 +201,8 @@ if (LONG) {
   B3.send({ t: "rematch" });
   await until(() => A.lobby?.status === "countdown");
   ok(A.lobby.status === "countdown", "雙方都按 Rematch：原地倒數重開");
-  await until(phaseIs(B3, "PHASE_MOVE"), 6000);
-  ok(B3.view?.phase === "PHASE_MOVE" && B3.view.fighters.every(f => f.stocks === 3 && f.damage === 0), `新的一場：3 命、0%（${JSON.stringify(B3.view?.fighters.map(f => [f.stocks, f.damage]))} ${B3.view?.phase}）`);
+  await until(phaseIs(B3, "PHASE_RPS"), 6000);
+  ok(B3.view?.phase === "PHASE_RPS" && B3.view.fighters.every(f => f.stocks === 3 && f.damage === 0), `新的一場：3 命、0%（${JSON.stringify(B3.view?.fighters.map(f => [f.stocks, f.damage]))} ${B3.view?.phase}）`);
   B3.ws.close();
 } else console.log("  （略過 15 秒斷線判勝：加 --long 才跑）");
 
@@ -186,7 +211,7 @@ console.log("離開房間／再來一局");
   const r2 = await createRoom(), P = player(r2), Q = player(r2);
   await P.join(); await Q.join();
   P.send({ t: "ready", on: true }); Q.send({ t: "ready", on: true });
-  await until(phaseIs(P, "PHASE_MOVE"), 6000);
+  await until(phaseIs(P, "PHASE_RPS"), 6000);
   Q.send({ t: "leave" });
   await until(() => P.lobby?.winner === 0, 3000);
   ok(P.lobby.winner === 0 && P.lobby.reason === "leave" && !P.lobby.seats[1].taken, "對戰中離開：對手判勝、座位空出");
@@ -194,14 +219,14 @@ console.log("離開房間／再來一局");
   const R = player(r2); await R.join();
   ok(R.seat === 1, "新朋友可以坐進空出的 P2");
   P.send({ t: "ready", on: true }); R.send({ t: "ready", on: true });
-  await until(phaseIs(R, "PHASE_MOVE"), 6000);
-  ok(R.view?.phase === "PHASE_MOVE", "原房間直接再開一場（免重建房）");
+  await until(phaseIs(R, "PHASE_RPS"), 6000);
+  ok(R.view?.phase === "PHASE_RPS", "原房間直接再開一場（免重建房）");
 }
 {
   const r3 = await createRoom(), P = player(r3), Q = player(r3);
   await P.join(); await Q.join();
   P.send({ t: "ready", on: true }); Q.send({ t: "ready", on: true });
-  await until(phaseIs(P, "PHASE_MOVE"), 6000);
+  await until(phaseIs(P, "PHASE_RPS"), 6000);
   Q.send({ t: "rematch" }); await sleep(100);
   ok(P.lobby.status === "playing" && !P.lobby.seats[1].rematch, "對戰中按 Rematch 無效");
   P.ws.close(); Q.ws.close();
