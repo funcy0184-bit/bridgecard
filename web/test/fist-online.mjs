@@ -102,7 +102,7 @@ ok(res && res.stances[1] === "scissors" && res.winner === 0, `鎖定結算才一
 console.log("連打：伺服器數按鍵、即時轉發守方");
 await until(() => A.msgs.some(m => m.t === "state" && m.view.phase === "PHASE_REVEAL"), 3000);
 ok(A.msgs.some(m => m.t === "state" && m.view.phase === "PHASE_REVEAL" && m.view.rps?.winner === 0), "開牌停頓：雙方都收到結果（P1 石頭壓制剪刀）");
-await until(phaseIs(A, "PHASE_MASH"), 2000);
+await until(() => phaseIs(A, "PHASE_MASH")() && phaseIs(B, "PHASE_MASH")(), 2000);    // 兩邊都收到才比（真實網路上會差幾十毫秒）
 ok(A.view.fighters[0].heat === "rock" && B.view.fighters[0].heat === "rock" && A.view.fighters[1].heat === "scissors", "過熱同步：雙方都看得到 P1 禁用石頭、P2 禁用剪刀");
 for (let i = 0; i < 14; i++) await A.tap(["L", "M", "R"][i % 3], 12);
 await until(() => B.events.some(e => e.type === "mash_end"), 2000);
@@ -153,10 +153,11 @@ console.log("拼刀：伺服器保密序列、只廣播格數與先手");
   ok(X.view.gauge === 0 && Y.view.gauge === 0 && X.view.gaugeMax === 2, "開局蓄力 ⚔️ 0/2（雙方同步）");
   await X.tap("R"); await Y.tap("R");                                  // 布對布：第 1 次平手
   await until(() => phaseIs(X, "PHASE_CLASH")() || phaseIs(X, "PHASE_CLASH_INPUT")(), 6000);
+  await until(() => Y.view?.gauge === 1 && Y.events.some(e => e.type === "gauge"), 2000);   // 真實網路上 Y 的封包可能晚到：兩邊都等到再檢查
   ok(X.view?.phase === "PHASE_CLASH" && X.view.gauge === 1 && Y.view.gauge === 1 && Y.events.some(e => e.type === "gauge" && e.gauge === 1), "第 1 次平手：小拼刀彈開，雙方都看到蓄力 1/2");
   await until(() => X.view?.phase === "PHASE_RPS" && X.view.t > 0.1, 4000);
   await X.tap("L"); await Y.tap("L");                                  // 石對石：第 2 次平手
-  await until(phaseIs(X, "PHASE_CLASH_INPUT"), 6000);
+  await until(() => phaseIs(X, "PHASE_CLASH_INPUT")() && phaseIs(Y, "PHASE_CLASH_INPUT")(), 6000);
   ok(X.view?.phase === "PHASE_CLASH_INPUT" && Y.view.gauge === 2 && X.view.clash.n === 5, "第 2 次平手 → 蓄力 2/2 → 線上五連斬預輸入");
   const mark = Y.msgs.length;
   for (const b of ["M", "M", "L", "R", "M"]) await X.tap(b, 15);      // X 先填完：剪 剪 石 布 剪
