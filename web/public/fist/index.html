@@ -83,6 +83,7 @@
       <button class="btn" data-go="difficulty"><b>單人對戰 AI</b><small>新手木樁／道場師兄／讀心宗師</small></button>
       <button class="btn" data-go="local2p"><b>同機雙人（Local 2P）</b><small>P1 A／S／D　P2 J／K／L</small></button>
       <button class="btn" data-go="online"><b>線上對戰</b><small>建立房間，或輸入 4 碼房號加入</small></button>
+      <button class="btn" data-go="training"><b>🛠️ 訓練場（木樁測試）</b><small>無限命・自訂木樁出招・即時調秒數</small></button>
       <div class="toggles"><button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button><button class="tiny hint" data-go="guide" aria-pressed="true">新手引導：開</button><button class="tiny hint" data-go="haptics" aria-pressed="true">震動：開</button></div>
       <p class="keys">左鍵＝石頭（紅招時往左翻滾）　中鍵＝剪刀　右鍵＝布（紅招時往右翻滾）　｜　Esc 回大廳　` 除錯資訊</p>
     </div>
@@ -116,7 +117,7 @@
     <canvas id="screen" aria-label="拳刃交鋒 遊戲畫面"></canvas>
     <div class="bar">
       <span class="tag" id="modeTag"></span>
-      <span class="row"><span class="tag" id="ping" hidden title="來回延遲（每 15 秒心跳）">-- ms</span><button class="tiny" id="emoteBtn" data-go="emotes" hidden aria-label="表情">😀</button><button class="tiny" id="gearBtn" data-go="settings" aria-label="設定">⚙️</button><button class="tiny" id="skipTut" data-go="skip" hidden>跳過教學</button><button class="tiny" data-go="menu">回大廳</button></span>
+      <span class="row"><span class="tag" id="ping" hidden title="來回延遲（每 15 秒心跳）">-- ms</span><button class="tiny" id="emoteBtn" data-go="emotes" hidden aria-label="表情">😀</button><button class="tiny" id="gearBtn" data-go="settings" aria-label="設定">⚙️</button><button class="tiny" id="skipTut" data-go="skip" hidden>跳過教學</button><button class="tiny" id="trainBtn" data-go="trainpanel" hidden>🛠️ 面板</button><button class="tiny" data-go="menu">回大廳</button></span>
     </div>
     <div id="settingsPop" class="pop" hidden>
       <button class="tiny hint" data-go="hints" aria-pressed="true">出招提示：開</button>
@@ -125,6 +126,7 @@
       <button class="tiny hint" data-go="hideEmotes" aria-pressed="true" id="hideEmotesBtn" hidden>對手表情：顯示</button>
     </div>
     <div id="emoteTray" class="pop tray" hidden></div>
+<div id="trainPanel" hidden></div>
     <div id="objective" hidden></div>
     <div id="coach" hidden></div>
     <div id="keybar" aria-label="鍵位提示"></div>

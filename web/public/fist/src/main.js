@@ -4,6 +4,7 @@ import { PH } from "./engine.js";
 import { Audio } from "./audio.js";
 import { Renderer } from "./renderer.js";
 import { Assets } from "./assets.js";
+import { Training } from "./training.js";
 import { KeyBar } from "./keybar.js";
 import { LocalTransport, AITransport, WebSocketTransport, createRoom, inviteLink, isRoomCode } from "./transport.js";
 import { Tutorial } from "./tutorial.js";
@@ -16,17 +17,20 @@ function show(id) { for (const s of screens) $(s).hidden = s !== id; if (id === 
 
 const renderer = new Renderer($("screen"));
 const keybar = new KeyBar($("keybar"));
+const training = new Training($("trainPanel"));                    // 🛠️ 訓練場（木樁沙盒）：控制層＋設定面板
 let mode = null, transport = null, tutorial = null, unsub = null, latest = { view: null, events: [] }, keyMap = null, opts = {};
 let net = null;                                                    // 線上：{ seat, lobby, rtt, room }
 function fit() {
   const g = $("game"), pad = touch ? keybar.touchLayout(innerWidth, innerHeight).height : 0;
   const top = touch ? document.querySelector("#game .bar").offsetHeight : 0;   // 觸控：上排按鈕不蓋 HUD
-  g.style.paddingBottom = `${pad}px`; g.style.paddingTop = `${top}px`;           // 觸控：畫布讓出按鍵區與上排按鈕
-  renderer.resize(g.clientWidth, g.clientHeight - pad - top - 6);
+  const side = !touch && mode === "training" && !$("trainPanel").hidden && innerWidth >= 900 ? 280 : 0;   // 桌機訓練場：畫布往左讓出面板
+  g.style.paddingBottom = `${pad}px`; g.style.paddingTop = `${top}px`; g.style.paddingRight = `${side}px`;   // 觸控：畫布讓出按鍵區與上排按鈕
+  renderer.resize(g.clientWidth - side, g.clientHeight - pad - top - 6);
   keybar.place($("screen"), renderer.scale);
   // 新手引導那一行：觸控放在按鍵區正上方；桌機放在畫布底部鍵位卡上方
   const c = $("coach"), r = $("screen").getBoundingClientRect();
   c.style.top = ""; c.style.bottom = `${touch ? pad + 6 : Math.max(4, innerHeight - (r.top + 222 * renderer.scale))}px`;
+  c.style.left = `${Math.round(r.left + r.width / 2)}px`;                     // 對齊畫布中央（訓練場面板讓位時畫布不在視窗正中）
 }
 addEventListener("resize", fit);
 
@@ -101,7 +105,7 @@ function startMode(m, o = {}) {
   if (!Assets.ready) { Assets.preload().then(() => startMode(m, o)); return; }    // 進對戰前先等美術圖預載完（缺圖不會卡：逾時就用程式繪製）
   stopMode();
   mode = m; opts = o;
-  for (const id of ["objective", "skipTut", "room", "pauseBox", "countdown", "ping", "settingsPop", "emoteTray", "coach", "flowStrip"]) $(id).hidden = true;
+  for (const id of ["objective", "skipTut", "room", "pauseBox", "countdown", "ping", "settingsPop", "emoteTray", "coach", "flowStrip", "trainBtn", "trainPanel"]) $(id).hidden = true;
   guideOverride = null;
   $("emoteBtn").hidden = m !== "online"; $("hideEmotesBtn").hidden = m !== "online";
   const solo = code => (CONFIG.keys.solo[code] ? { seat: mode === "online" ? net?.seat ?? -1 : 0, btn: CONFIG.keys.solo[code] } : null);
@@ -129,6 +133,13 @@ function startMode(m, o = {}) {
       onDone: skipped => { $("objective").textContent = skipped ? "已跳過教學" : "教學完成！去對戰 AI 試試身手"; setTimeout(() => { if (mode === "tutorial") { stopMode(); show("menu"); } }, skipped ? 300 : 1600); },
     });
     tutorial.start();
+  } else if (m === "training") {                                      // 🛠️ 訓練場：正式引擎＋木樁控制層（training.js），無限命
+    keyMap = solo;
+    renderer.setNames([myName || "你", "木樁"]);
+    keybar.setup([{ seat: 0, keys: CONFIG.keyLabel[0], title: `${myName || "你"}（A/S/D 或 ←↓→）`, color: TEAM[0] }]);
+    bind(training.start());
+    $("modeTag").textContent = touch ? "🛠️ 訓練場" : "🛠️ 訓練場：木樁測試（Esc 回大廳）";
+    $("trainBtn").hidden = false; $("trainPanel").hidden = touch;          // 手機預設收起，點「🛠️ 面板」打開
   } else if (m === "online") {
     keyMap = solo;
     net = { seat: -1, lobby: null, rtt: null, room: o.room };
@@ -150,6 +161,7 @@ function stopMode() {
   unsub?.(); unsub = null;
   transport?.close(); transport = null;
   tutorial?.transport?.close(); tutorial = null;
+  if (mode === "training") training.stop();                          // 還原訓練場改過的 CONFIG（秒數、過熱、對齊框）
   mode = null; latest = { view: null, events: [] }; net = null;
   keybar.clear();
 }
@@ -309,6 +321,8 @@ document.addEventListener("click", e => {
   if (go === "tutorial") startMode("tutorial");
   else if (go === "difficulty") show("difficulty");
   else if (go === "local2p") startMode("local2p");
+  else if (go === "training") startMode("training");
+  else if (go === "trainpanel") { $("trainPanel").hidden = !$("trainPanel").hidden; fit(); b.blur(); }
   else if (go === "online") { $("roomError").textContent = ""; show("online"); }
   else if (go === "menu") backToMenu();
   else if (go.startsWith("ai:")) startMode("ai", { level: go.slice(3) });
