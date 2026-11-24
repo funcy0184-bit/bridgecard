@@ -8,12 +8,13 @@
 //     勝利大招特效有 vfx_win_*.png 就照 CONFIG.vfx 播放，沒有就用程式繪製（橘紅重砸、青色居合十字、綠色氣功光束）
 import { ART, CONFIG } from "./config.js";
 import { PH, PH_LABEL, GLABEL, GNAME, GICON, cellX } from "./engine.js";
+import { Assets } from "./assets.js";
 
 export const ANIM_STATES = [
   "idle", "step", "exhausted", "stance_rock", "stance_scissors", "stance_paper", "stance_hidden", "clash",
   "mash_hit", "finisher_blue", "finisher_red", "parry_success", "roll", "hitstun", "knockback",
 ];
-export const CLASH_STATES = Object.keys(CONFIG.clashAtlas.animations);
+export const CLASH_STATES = Object.keys(CONFIG.clashAtlas.stateMap);
 // 拼刀圖集還沒放：借用基礎圖集裡最接近的動作
 const CLASH_FALLBACK = { clash_dash: "step", clash_rock: "clash", clash_scissors: "clash", clash_paper: "clash", clash_recoil: "hitstun", clash_first_draw: "clash", clash_win_rock: "finisher_red", clash_win_scissors: "finisher_red", clash_win_paper: "finisher_red", clash_draw: "clash" };
 // 15 個狀態對應到切格表的列（mash_hit 交替用 combo_1／combo_2 兩列）
@@ -97,24 +98,28 @@ function drawBubble(g, x0, y0, key, now, reduced) {
 const Fighter = (() => {
   const A = ART.spriteAtlas, WA = ART.weaponVariantAtlas, F = PAL.fighters;
   const CA = CONFIG.clashAtlas;
-  const sheets = [null, null], wsheets = [null, null], csheets = [null, null];
-  // 正式圖檔依 imageByPlayer 檔名接入（放在 public/fist/ 下）：基礎圖集 500×800、武器圖集 500×500；沒有就用程式繪製
-  const load = (file, w, h, put) => {
-    if (typeof Image === "undefined") return;
-    const img = new Image();
-    img.onload = () => { if (img.naturalWidth === w && img.naturalHeight === h) put(img); };
-    img.onerror = () => {};
-    img.src = new URL(`../${file}`, import.meta.url).href;
-  };
-  ["p1", "p2"].forEach((p, i) => {
-    load(A.imageByPlayer[p], A.imageWidth, A.imageHeight, img => { sheets[i] = img; });
-    load(WA.imageByPlayer[p], WA.imageWidth, WA.imageHeight, img => { wsheets[i] = img; });
-    load(CA.imageByPlayer[p], CA.imageWidth, CA.imageHeight, img => { csheets[i] = img; });
-  });
+  // 正式圖檔由 assets.js 預載（public/fist/ 下）：基礎 500×800、武器 500×500、拼刀加購 500×450；缺檔就用程式繪製
+  //   sheets[i] 可用 Renderer.useSheet 手動覆蓋；沒覆蓋就讀預載好的圖
+  const manual = [null, null], PK = ["p1", "p2"];
+  const baseOf = i => manual[i] ?? Assets.get(A.imageByPlayer[PK[i]]);
+  const weapOf = i => Assets.get(WA.imageByPlayer[PK[i]]);
+  const clashOf = i => Assets.get(CA.imageByPlayer[PK[i]]);
+  // 受擊閃白：把那一格 sprite 畫到小畫布、整塊染白（保留角色輪廓），再貼回去
+  let tint = null;
+  function whiteCell(img, sx, sy) {
+    if (!tint) { if (typeof document === "undefined") return null; tint = document.createElement("canvas"); tint.width = A.frameWidth; tint.height = A.frameHeight; }
+    const t = tint.getContext("2d");
+    t.imageSmoothingEnabled = false; t.globalCompositeOperation = "source-over"; t.clearRect(0, 0, tint.width, tint.height);
+    t.drawImage(img, sx, sy, A.frameWidth, A.frameHeight, 0, 0, A.frameWidth, A.frameHeight);
+    t.globalCompositeOperation = "source-in"; t.fillStyle = PAL.fx.impact.core; t.fillRect(0, 0, tint.width, tint.height);
+    return tint;
+  }
   const ATTACK_STATES = new Set(["clash", "mash_hit", "finisher_blue", "finisher_red"]);
+  const STATES_BASE = new Set([...Object.keys(A.animations), "mash_hit"]);       // 基礎圖集畫得出來的動作
   function atlasAnim(state, alt) { return A.animations[ATLAS_ROW_OF(state) ?? (alt ? "combo_2" : "combo_1")]; }
   function frameOf(state, t, f, view) {
     const an = CA.animations[state] ?? atlasAnim(state, f.anim.alt);
+    if (CA.animations[state]) { const n = Math.floor(t * an.fps); return an.playback === "loop" ? n % an.frames : Math.min(n, an.frames - 1); }
     if (!an) return 0;
     const n = Math.floor(t * an.fps);
     if (an.playback === "loop") return n % an.frames;
@@ -247,32 +252,51 @@ const Fighter = (() => {
     return { P: p.primary, S: p.shadow, W: p.secondary, H: p.highlight, K: CONFIG.skin, M: F.neutralSteel, B: PAL.platform.oxidizedBronze, C: CONFIG.cloth.fill, D: CONFIG.cloth.shade, T: CONFIG.cloth.tie, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
   }
   return {
-    frameOf, sheets, wsheets, csheets,
+    frameOf, sheets: manual, baseOf, clashOf,
+    // 解析這一幀要畫哪張圖：回傳 { img, row, anim }（anim＝加購圖集動作名；沒有就照基礎圖集）或 null（程式繪製）
+    //   state 可以是引擎動作（clash_rock…）或畫面層覆寫的加購動作（reveal_win／clash_charge／victory）
     draw(ctx, f, state, t, x, y, face, opt = {}) {
-      g = ctx; OX = Math.round(x); OY = Math.round(y); FACE = face;
-      if (CA.animations[state] && !csheets[f.i] && sheets[f.i]) state = CLASH_FALLBACK[state];   // 有基礎圖、沒拼刀圖：借最接近的動作
+      g = ctx; OX = Math.round(x); OY = Math.round(y); FACE = face < 0 ? -1 : 1;
+      const base = baseOf(f.i), add = clashOf(f.i);
+      let addAnim = null;
+      const map = CA.stateMap[state];
+      if (map) {
+        if (map.atlas === "clash" && add) addAnim = f.anim.alt && map.alt ? map.alt : map.anim;
+        else if (map.atlas === "base" && base) state = map.anim;
+        else if (base) state = CLASH_FALLBACK[state];                     // 有基礎圖、沒加購圖：借最接近的基礎動作
+      } else if (CA.animations[state]) { if (add) addAnim = state; else state = opt.fallbackState ?? "idle"; }
+      if (addAnim) state = addAnim;
       const n = frameOf(state, t, f, opt.view);
       const rot = state === "knockback" ? (f.rot || t * 10) : state === "roll" ? t * 22 : 0;
+      // 以腳底錨點 (pivot) 為原點水平翻轉：ctx.scale(facing, 1)，轉身、換位、落地時腳底不會左右瞬移
+      const blit = (img, col, row) => {
+        const sx = A.originX + A.strideX * col, sy = A.originY + A.strideY * row;
+        const src = opt.white ? whiteCell(img, sx, sy) : img;
+        if (!src) return false;
+        g.translate(OX, OY); g.scale(FACE, 1);
+        if (opt.white) g.drawImage(src, -A.pivot.x, -A.pivot.y);
+        else g.drawImage(img, sx, sy, A.frameWidth, A.frameHeight, -A.pivot.x, -A.pivot.y, A.frameWidth, A.frameHeight);
+        return true;
+      };
       g.save();
       if (opt.alpha !== undefined) g.globalAlpha = opt.alpha;
       if (rot) { g.translate(OX, OY - 14); g.rotate(state === "roll" ? face * rot : -face * rot); g.translate(-OX, -(OY - 14)); }
-      const sh = sheets[f.i], cs = CA.animations[state] && csheets[f.i];
-      if (cs && !opt.white) {                                                    // 拼刀圖集：500×500、10×10，格距與腳底錨點同基礎圖集
-        g.translate(OX, OY); if (face < 0) g.scale(-1, 1);
-        g.drawImage(cs, A.originX + A.strideX * n, A.originY + A.strideY * CA.animations[state].row, A.frameWidth, A.frameHeight, -A.pivot.x, -A.pivot.y, A.frameWidth, A.frameHeight);
-      } else if (sh && !opt.white) {
-        const an = atlasAnim(state, f.anim.alt);
-        let img = sh, row = an.row, col = n;
+      g.imageSmoothingEnabled = false;
+      let drawn = false;
+      if (addAnim) drawn = blit(add, n, CA.animations[addAnim].row);              // 拼刀／開牌／勝利加購圖集
+      else if (base && STATES_BASE.has(state)) {
+        const an = atlasAnim(state, f.anim.alt), wsh = weapOf(f.i);
+        let img = base, row = an.row, col = n;
         // 大剪刀／大布袋的攻擊動作：讀武器圖集；變體圖還沒好 → 先停在對應武器的架式（不會突然變成槌子）
         const gest = ATTACK_STATES.has(state) ? f.stance : null;
         if (gest === "scissors" || gest === "paper") {
           const key = state === "mash_hit" ? (f.anim.alt ? "combo_2" : "combo_1") : state, v = WA.variantsByGesture[gest]?.[key];
-          if (v && wsheets[f.i]) { img = wsheets[f.i]; row = v.row; }
+          if (v && wsh) { img = wsh; row = v.row; }
           else { row = A.animations[ART.weapons.byGesture[gest].stanceState].row; col = 0; }
         }
-        g.translate(OX, OY); if (face < 0) g.scale(-1, 1);
-        g.drawImage(img, A.originX + A.strideX * col, A.originY + A.strideY * row, A.frameWidth, A.frameHeight, -A.pivot.x, -A.pivot.y, A.frameWidth, A.frameHeight);
-      } else {
+        drawn = blit(img, col, row);
+      }
+      if (!drawn) {
         parts = [];
         (STATES[state] ?? STATES.idle)(f, n);
         const mode = opt.white ? "white" : state === "stance_hidden" ? "hidden" : "normal";
@@ -285,23 +309,25 @@ const Fighter = (() => {
 
 // ---------------- 拼刀勝利特效圖（vfx_win_*.png：一張橫條 frames 格；沒有就程式繪製） ----------------
 const VFX = (() => {
-  const imgs = {};
-  if (typeof Image !== "undefined") for (const [key, v] of Object.entries(CONFIG.vfx)) {
-    const img = new Image();
-    img.onload = () => { if (img.naturalWidth >= v.frameW * v.frames && img.naturalHeight >= v.frameH) imgs[key] = img; };
-    img.onerror = () => {};
-    img.src = new URL(`../${v.file}`, import.meta.url).href;
+  const imgOf = key => Assets.get(CONFIG.vfx[key]?.file);
+  // 第幾格：clip（片段，可循環）或整條播一次（hold_last）；超過播放長度回傳 -1（不畫）
+  function frameAt(v, age, clip) {
+    const c = clip && v.clips?.[clip], start = c ? c.start : 0, len = c ? c.end - c.start + 1 : v.frames, n = Math.floor(age * v.fps);
+    if (c?.loop) return start + (n % len);
+    return n < len ? start + n : -1;
   }
   return {
-    has: key => !!imgs[key],
-    // anchor：loser_foot＝底邊中點、loser_center＝正中、winner_front＝左緣（往攻擊方向延伸）
-    draw(ctx, key, age, x, y, dir = 1) {
-      const v = CONFIG.vfx[key], img = imgs[key];
+    has: key => !!imgOf(key),
+    duration(key, clip) { const v = CONFIG.vfx[key], c = clip && v.clips?.[clip]; return (c ? c.end - c.start + 1 : v.frames) / v.fps; },
+    // dir＝-1 時以貼齊點為軸水平翻轉；回傳 false＝沒圖（呼叫端改用程式繪製）
+    draw(ctx, key, age, x, y, dir = 1, clip = null) {
+      const v = CONFIG.vfx[key], img = imgOf(key);
       if (!img) return false;
-      const n = Math.min(v.frames - 1, Math.floor(age * v.fps));
-      ctx.save(); ctx.translate(Math.round(x), Math.round(y)); if (dir < 0) ctx.scale(-1, 1);
-      const ox = v.anchor === "winner_front" ? 0 : -v.frameW / 2, oy = v.anchor === "loser_foot" ? -v.frameH : -v.frameH / 2;
-      ctx.drawImage(img, n * v.frameW, 0, v.frameW, v.frameH, ox, oy, v.frameW, v.frameH);
+      const n = frameAt(v, age, clip);
+      if (n < 0) return true;
+      const [px, py] = v.pivot ?? [v.anchor === "front" ? 0 : v.frameW / 2, v.anchor === "foot" ? v.frameH : v.frameH / 2];
+      ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(x), Math.round(y)); if (dir < 0) ctx.scale(-1, 1);
+      ctx.drawImage(img, n * v.frameW, 0, v.frameW, v.frameH, -px, -py, v.frameW, v.frameH);
       ctx.restore();
       return true;
     },
@@ -311,8 +337,9 @@ const VFX = (() => {
 const FIN_COLOR = { rock: "#FF6A3D", scissors: "#5FE6FF", paper: "#7CF29A" };
 // 拼刀特效（程式繪製；k＝0→1 播放進度）。有 vfx 圖檔時大招改播圖
 const CLASH_FX = {
+  vs(g, p, a, k) { VFX.draw(g, p.key, k * p.max, p.x, p.y, p.dir ?? 1, p.clip ?? null); },   // 一般特效圖（火花、刀光、地裂、KO 光柱）
   wave(g, p, a, k) { const r = 10 + k * 150; g.globalAlpha = a; g.strokeStyle = "#FFFFFF"; g.lineWidth = 4 * a + 1; g.beginPath(); g.ellipse(p.x, CONFIG.floorY - 24, r, r * 0.55, 0, 0, Math.PI * 2); g.stroke(); g.globalAlpha = a * 0.35; g.fillStyle = "#FFFFFF"; g.fill(); },
-  star(g, p, a, k) { const r = 6 + k * 26; g.globalAlpha = a; g.fillStyle = "#FFD45A"; g.fillRect(Math.round(p.x - r), Math.round(p.y) - 1, Math.round(r * 2), 3); g.fillRect(Math.round(p.x) - 1, Math.round(p.y - r), 3, Math.round(r * 2)); g.fillStyle = "#FFF6D0"; g.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 2, 5, 5); },
+  star(g, p, a, k) { if (VFX.draw(g, "vfx_first_draw_star", k * p.max, p.x, p.y, p.dir ?? 1)) return; const r = 6 + k * 26; g.globalAlpha = a; g.fillStyle = "#FFD45A"; g.fillRect(Math.round(p.x - r), Math.round(p.y) - 1, Math.round(r * 2), 3); g.fillRect(Math.round(p.x) - 1, Math.round(p.y - r), 3, Math.round(r * 2)); g.fillStyle = "#FFF6D0"; g.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 2, 5, 5); },
   speed(g, p, a) { g.globalAlpha = a * 0.5; g.fillStyle = "#DDE8FF"; for (let i = 0; i < 9; i++) { const y = 70 + ((i * 37 + Math.floor(p.life * 300)) % 140); g.fillRect(((i * 97) % CONFIG.W), y, 40, 1); } },
   streak(g, p, a) { g.globalAlpha = a; g.fillStyle = "#5FE6FF"; const x = Math.min(p.x0, p.x1), w = Math.abs(p.x1 - p.x0); g.fillRect(Math.round(x), CONFIG.floorY - 26, Math.round(w), 3); g.fillStyle = "#FFFFFF"; g.fillRect(Math.round(x), CONFIG.floorY - 25, Math.round(w), 1); },
   slam(g, p, a, k) {
@@ -344,7 +371,7 @@ export class Renderer {
     this.scale = 1; this.dpr = 1;
     this.fx = []; this.trails = [[], []]; this.trailClock = [0, 0]; this.lastXY = [null, null];
     this.freezeUntil = 0; this.frozen = null; this.shake = { amp: 0, until: 0 };
-    this.flashT = [0, 0]; this.rimT = [0, 0]; this.keyFlash = { L: 0, M: 0, R: 0 }; this.combo = null;
+    this.flashF = [0, 0]; this.rimT = [0, 0]; this.keyFlash = { L: 0, M: 0, R: 0 }; this.combo = null;
     this.cam = { zoom: 1, x: CONFIG.W / 2, y: CONFIG.H / 2 };
     this.lb = 0; this.impactLeft = 0; this.gaugeAt = -9; this.gaugeFullAt = -9; this.tiebreakAt = -9; this.finText = null;   // 拼刀：黑邊、衝擊幀、蓄力閃爍
     this.stars = Array.from({ length: 46 }, () => ({ x: (Math.random() * CONFIG.W) | 0, y: (Math.random() * 110) | 0, tw: Math.random() * 6 }));
@@ -355,7 +382,7 @@ export class Renderer {
   }
   static get ANIM_STATES() { return ANIM_STATES; }
   useSheet(seat, img) { Fighter.sheets[seat] = img; }      // 手動接 Sprite Sheet（500×800，切格表照 ART.spriteAtlas）
-  hasSheet(seat) { return !!Fighter.sheets[seat]; }
+  hasSheet(seat) { return !!Fighter.baseOf(seat); }
   setNames(n) { this.names = n; }
   keyPress(btn) { this.keyFlash[btn] = 0.12; }
   reset() { this.lb = 0; this.impactLeft = 0; this.finText = null; this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null })); }
@@ -385,23 +412,23 @@ export class Renderer {
         // （開牌結果改由畫面中央的大字顯示，不在頭上另外冒小字）
         case "clash":
           if (e.wave) { this.fx.push({ k: "wave", x: e.x, life: 0.55, max: 0.55 }); this.popup(e.x, CONFIG.floorY - 72, "平分！各自彈開", PAL.fx.impact.core, 12); this.kick(3, 0.16, now); }
-          else { this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.core, 8, 2.4); this.vspark(e.x, CONFIG.floorY - 26, 6); this.popup(e.x, CONFIG.floorY - 64, "叮！", PAL.fx.impact.core, 16); }
+          else { if (!this.sprite("vfx_sparks", e.x, CONFIG.floorY - 26)) this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.core, 8, 2.4); this.vspark(e.x, CONFIG.floorY - 26, 6); this.popup(e.x, CONFIG.floorY - 64, "叮！", PAL.fx.impact.core, 16); }
           break;
         case "gauge": if (e.full) { this.gaugeFullAt = now; this.kick(2, 0.12, now); } else if (e.gauge > 0) this.gaugeAt = now; break;
         case "hit": {
-          this.flashT[e.p] = ms(FX.impactFrameFlash.durationMs);
+          this.flashF[e.p] = 1;                                                   // 受擊閃白 1 幀
           const n = e.kind === "extra" ? 4 + e.n * 2 : 6;
-          this.spark(e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24 - (e.kind === "extra" ? Math.random() * 10 : 0), e.kind === "extra" ? PAL.fx.impact.core : PAL.fx.impact.spark, n, e.kind === "extra" ? 2.8 : 2.2);
+          if (!this.sprite("vfx_sparks", e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24 - (e.kind === "extra" ? Math.random() * 10 : 0), e.toward ?? 1)) this.spark(e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24 - (e.kind === "extra" ? Math.random() * 10 : 0), e.kind === "extra" ? PAL.fx.impact.core : PAL.fx.impact.spark, n, e.kind === "extra" ? 2.8 : 2.2);
           this.popup(e.x, CONFIG.floorY - 58 - (e.kind === "extra" ? e.n * 3 : 0), `+${+e.damage.toFixed(1)}%`, PAL.fx.impact.core, e.kind === "extra" ? 8 : 10);
           if (e.combo !== undefined && view.round) this.combo = { n: e.combo, at: now, x: view.fighters[view.round.att].x, extra: e.kind === "extra" };
           break;
         }
         case "red_ready": { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 70, "紅光強化！", PAL.fx.red.rim, 12); this.kick(2, 0.1, now); break; }
-        case "parry": this.rimT = [ms(FX.parryFlash.durationMs), ms(FX.parryFlash.durationMs)]; this.ring(e.x, CONFIG.floorY - 24, PAL.fx.impact.core); this.popup(e.x, CONFIG.floorY - 72, "完美彈反！", PAL.hud.focusOutline, 14); break;
+        case "parry": this.sprite("vfx_sparks", e.x, CONFIG.floorY - 24); this.rimT = [ms(FX.parryFlash.durationMs), ms(FX.parryFlash.durationMs)]; this.ring(e.x, CONFIG.floorY - 24, PAL.fx.impact.core); this.popup(e.x, CONFIG.floorY - 72, "完美彈反！", PAL.hud.focusOutline, 14); break;
         case "roll": this.zoneBlast(e.zone); this.popup(cellX(e.to), CONFIG.floorY - 58, "閃過！", PAL.fx.safeArrow.fill, 12); break;
-        case "finisher_hit": if (e.red) this.zoneBlast(e.zone); this.spark(e.x, CONFIG.floorY - 24, e.red ? PAL.fx.red.core : PAL.fx.impact.spark, e.red ? 12 : 7, 3); this.popup(e.x, CONFIG.floorY - 64, `+${e.damage}%`, e.red ? PAL.fx.red.core : PAL.fx.blue.core, 12); break;
+        case "finisher_hit": if (e.red) this.zoneBlast(e.zone); this.flashF[e.p] = 1; this.sprite("vfx_slash", e.x, CONFIG.floorY - 24, view.fighters[e.att]?.face ?? 1); this.spark(e.x, CONFIG.floorY - 24, e.red ? PAL.fx.red.core : PAL.fx.impact.spark, e.red ? 12 : 7, 3); this.popup(e.x, CONFIG.floorY - 64, `+${e.damage}%`, e.red ? PAL.fx.red.core : PAL.fx.blue.core, 12); break;
         case "land": this.spark(e.x, CONFIG.floorY, PAL.platform.topEdge, 4, 1.2); break;
-        case "ko": this.fx.push({ k: "beam", x: e.x, at: now, max: ms(FX.koBlast.durationMs) }); this.kick(FX.cameraShakePx.ko, 0.2, now); this.popup(clamp(e.x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22); this.trails = [[], []]; break;
+        case "ko": if (!this.sprite("vfx_ko_pillar", e.x, CONFIG.H - 1, e.x > CONFIG.W / 2 ? -1 : 1)) this.fx.push({ k: "beam", x: e.x, at: now, max: ms(FX.koBlast.durationMs) });   // 光柱依出界的左右邊緣翻轉 this.kick(FX.cameraShakePx.ko, 0.2, now); this.popup(clamp(e.x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22); this.trails = [[], []]; break;
         case "round_end": this.popup(CONFIG.W / 2, 110, "雙方 +1 氣", PAL.hud.powerFill, 9); break;
         case "speed_up": this.banner(`⚡ 加速！速度 Lv.${e.lv + 1}`, PAL.fx.red.rim); this.kick(1, 0.1, now); break;
         case "phase": if (e.phase === PH.RPS) this.combo = null; break;
@@ -409,13 +436,17 @@ export class Renderer {
         case "clash_start": this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
         case "clash_first": {                                                     // ⚡ 先手：金色十字星芒＋徽章（畫在劍格上方）
           this.kick(1, 0.08, now); this.firstAt = now;
-          const f = view.fighters[e.p]; this.fx.push({ k: "star", x: f.x, y: CONFIG.floorY - 30, life: 0.45, max: 0.45 });
+          const f = view.fighters[e.p]; this.fx.push({ k: "star", x: f.x + f.face * 9, y: CONFIG.floorY - 24, dir: f.face, life: 0.45, max: 0.45 });   // 對齊刀柄／手部
           break;
         }
         case "clash_dash": this.fx.push({ k: "speed", life: e.dur + 0.1, max: e.dur + 0.1 }); break;
         case "clash_cut": {
           if (e.winner < 0) this.vspark(e.x, CONFIG.floorY - 26, 10);            // 平刀：火花垂直噴發
-          else { this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.spark, 10 + e.n * 2, 2.6); this.flashT[1 - e.winner] = 0.08; }   // 敗方白閃後滑
+          else {                                                                  // 勝刀：火花＋刀光（朝敗方），敗方白閃 1 幀後滑
+            const w = view.fighters[e.winner], dir = Math.sign(view.fighters[1 - e.winner].x - w.x) || 1;
+            if (!this.sprite("vfx_sparks", e.x, CONFIG.floorY - 26, dir)) this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.spark, 10 + e.n * 2, 2.6);
+            this.sprite("vfx_slash", e.x, CONFIG.floorY - 26, dir); this.flashF[1 - e.winner] = 1;
+          }
           if (e.impact && !REDUCED) this.impactLeft = e.impact;                    // 第 5 刀：黑白反色衝擊幀
           const me = view.seat, res = e.winner < 0 ? "平" : me >= 0 ? (e.winner === me ? "勝" : "敗") : `P${e.winner + 1} 勝`;
           this.cutText = { life: 0.42, text: `第${e.n}刀 ${res}`, at: now, color: e.winner < 0 ? PAL.hud.label : me >= 0 ? (e.winner === me ? PAL.hud.powerFill : PAL.fx.red.rim) : PAL.fighters["p" + (e.winner + 1)].secondary };
@@ -427,7 +458,7 @@ export class Renderer {
           else this.finText = { text: `【${F.name}】`, sub: `${e.score[0]} : ${e.score[1]}`, at: now, color: FIN_COLOR[e.main] };
           break;
         }
-        case "clash_pass": { const w = view.fighters[e.p]; this.fx.push({ k: "streak", x0: w.x - (e.x - w.x), x1: e.x, life: 0.22, max: 0.22 }); break; }
+        case "clash_pass": { const w = view.fighters[e.p]; this.fx.push({ k: "streak", x0: w.x - (e.x - w.x), x1: e.x, life: 0.22, max: 0.22 }); this.sprite("vfx_slash", (w.x + e.x) / 2, CONFIG.floorY - 26, Math.sign(e.x - w.x) || 1); break; }
         case "clash_finisher": {
           const fy = CONFIG.floorY;
           if (e.main === "rock") { this.fx.push({ k: "slam", x: e.x, y: fy, age: 0, life: 0.5, max: 0.5 }); for (let i = 0; i < 10; i++) this.fx.push({ k: "debris", x: e.x + (Math.random() - 0.5) * 40, y: fy, vx: (Math.random() - 0.5) * 200, vy: -120 - Math.random() * 160, life: 0.5, max: 0.5 }); }
@@ -441,13 +472,22 @@ export class Renderer {
     }
   }
   kick(px, dur, now, vertical = false) { if (REDUCED || !px) return; if (px >= this.shake.amp || now > this.shake.until) this.shake = { amp: px, until: now + dur, vertical }; }
+  // 特效圖：有圖就排進 fx（依 CONFIG.vfx[key].layer 前後分層）並回傳 true；沒圖回傳 false，呼叫端照舊用程式繪製
+  sprite(key, x, y, dir = 1, clip = null) {
+    if (!VFX.has(key)) return false;
+    const d = VFX.duration(key, clip);
+    this.fx.push({ k: "vs", key, x, y, dir, clip, layer: CONFIG.vfx[key].layer, life: d, max: d });
+    return true;
+  }
   vspark(x, y, n) { for (let i = 0; i < n; i++) this.fx.push({ k: "spark", x: x + (Math.random() - 0.5) * 4, y, vx: (Math.random() - 0.5) * 30, vy: -(140 + Math.random() * 160) * (i % 2 ? 1 : -0.6), life: 0.25 + Math.random() * 0.15, max: 0.4, color: PAL.fx.impact.core }); }
   spark(x, y, color, n, speed) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * speed * 50; this.fx.push({ k: "spark", x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 25, life: 0.18 + Math.random() * 0.18, max: 0.36, color }); } }
   ring(x, y, color) { this.fx.push({ k: "ring", x, y, life: 0.3, max: 0.3, color }); }
   popup(x, y, text, color, size) { this.fx.push({ k: "text", x, y, text, color, size, life: 0.9, max: 0.9 }); }
   emote(seat, text) { this.fx = this.fx.filter(p => !(p.k === "emote" && p.seat === seat)); this.fx.push({ k: "emote", seat, text, life: CONFIG.emoteShowMs / 1000, max: CONFIG.emoteShowMs / 1000 }); }   // 表情泡泡：頭頂 2 秒
   banner(text, color = PAL.hud.focusOutline) { this.fx.push({ k: "banner", text, color, life: 1.6, max: 1.6 }); }
-  zoneBlast(zone = []) { for (const c of zone) { this.fx.push({ k: "crack", c, life: 0.5, max: 0.5 }); for (let i = 0; i < 6; i++) this.fx.push({ k: "debris", x: cellX(c) + (Math.random() - 0.5) * 30, y: CONFIG.floorY, vx: (Math.random() - 0.5) * 160, vy: -80 - Math.random() * 120, life: 0.45, max: 0.45 }); } }
+  zoneBlast(zone = []) {                                    // 紅招地裂：有圖就在危險區中央播 impact 片段（一張 96px＝兩格），沒圖畫舊裂紋；碎石照噴
+    const img = zone.length && this.sprite("vfx_red_crack", (cellX(Math.min(...zone)) + cellX(Math.max(...zone))) / 2, CONFIG.floorY, 1, "impact");
+    for (const c of zone) { if (!img) this.fx.push({ k: "crack", c, life: 0.5, max: 0.5 }); for (let i = 0; i < 6; i++) this.fx.push({ k: "debris", x: cellX(c) + (Math.random() - 0.5) * 30, y: CONFIG.floorY, vx: (Math.random() - 0.5) * 160, vy: -80 - Math.random() * 120, life: 0.45, max: 0.45 }); } }
 
   // ---- 一幀 ----
   draw(view, events, now, dt) {
@@ -462,10 +502,11 @@ export class Renderer {
     this.updateTrails(world, vdt);
     this.updateCam(view, dt);
     for (const k in this.keyFlash) this.keyFlash[k] = Math.max(0, this.keyFlash[k] - dt);
-    for (const i of [0, 1]) { this.flashT[i] = Math.max(0, this.flashT[i] - dt); this.rimT[i] = Math.max(0, this.rimT[i] - dt); }
+    for (const i of [0, 1]) { this.rimT[i] = Math.max(0, this.rimT[i] - dt); }
 
     const ctx = this.ctx, cam = this.cam;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false; this.sctx.imageSmoothingEnabled = false;   // 每幀鎖定銳利像素（縮放、換分頁後瀏覽器可能重設）
     this.drawBackground(now);
     const amp = now < this.shake.until ? this.shake.amp : 0;
     const vert = amp && this.shake.vertical, sx = amp && !vert ? Math.round((Math.random() * 2 - 1) * amp) : 0, sy = amp ? Math.round((Math.random() * 2 - 1) * amp * (vert ? 1.6 : 1)) : 0;
@@ -474,8 +515,9 @@ export class Renderer {
     this.drawHazardFill(view, now);
     this.drawTrails(world);
     this.drawSpotlight(view);
-    this.drawFighters(world);
-    this.drawFx(now);
+    this.drawFx(now, "back");                                 // 角色後方：紅招地裂、KO 光柱
+    this.drawFighters(world);                                 // 角色本體（含殘影、受擊閃白）
+    this.drawFx(now, "front");                                // 角色前方：火花、刀光、先手金星、主招大招
     this.drawHazardEdges(view);
     this.drawStanceBubbles(view, now);
     this.drawTelegraphs(view, now);
@@ -510,7 +552,7 @@ export class Renderer {
       const tr = this.trails[i];
       for (const s of tr) s.age += vdt;
       this.trails[i] = tr.filter(s => s.age < ms(T.lifetimeMs));
-      const last = this.lastXY[i], moving = last && (Math.abs(f.x - last[0]) + Math.abs(f.y - last[1]) > 1.2) && ["knockback", "roll", "parry_success", "mash_hit", "hitstun"].includes(f.anim.state);
+      const last = this.lastXY[i], moving = last && (Math.abs(f.x - last[0]) + Math.abs(f.y - last[1]) > 1.2) && ["knockback", "roll", "parry_success", "mash_hit", "hitstun", "clash_dash", "clash_win_scissors", "clash_win_paper"].includes(f.anim.state);
       this.lastXY[i] = [f.x, f.y];
       if (!moving || vdt === 0 || f.out) return;
       this.trailClock[i] += vdt;
@@ -558,6 +600,7 @@ export class Renderer {
     const r = this.cue(view);
     if (!r || r.type !== "red") return;
     const ctx = this.ctx, T = ART.telegraphs.redRoll, Y = CONFIG.floorY, W = CONFIG.cellW, band = ART.stage.dangerTopBandHeightPx;
+    if (r.zone.length && VFX.draw(ctx, "vfx_red_crack", view.t, (cellX(Math.min(...r.zone)) + cellX(Math.max(...r.zone))) / 2, Y, 1, "warning")) return;   // 紅招預警：地裂圖 warning 片段循環（角色後方）
     const step = REDUCED ? 0 : Math.floor(view.t * 1000 / T.hazardHatchStepMs);
     for (const c of r.zone) {
       const x = CONFIG.stageX + (c - 1) * W;
@@ -569,13 +612,29 @@ export class Renderer {
   }
   drawHazardEdges(view) {
     const r = this.cue(view);
-    if (!r || r.type !== "red" || !r.zone.length) return;
+    if (!r || r.type !== "red" || !r.zone.length || VFX.has("vfx_red_crack")) return;   // 地裂圖自帶外框
     const ctx = this.ctx, Y = CONFIG.floorY, W = CONFIG.cellW, a = Math.min(...r.zone), b = Math.max(...r.zone), x0 = CONFIG.stageX + (a - 1) * W, x1 = CONFIG.stageX + b * W;
     ctx.fillStyle = PAL.fx.red.outline; ctx.fillRect(x0 - 1, Y - 2, x1 - x0 + 2, 1); ctx.fillRect(x0 - 1, Y + 16, x1 - x0 + 2, 1);
     ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(x0, Y - 1, x1 - x0, 1); ctx.fillRect(x0, Y + 15, x1 - x0, 1); ctx.fillRect(x0, Y - 1, 1, 17); ctx.fillRect(x1 - 1, Y - 1, 1, 17);
   }
   animTime(view, f) { return view.phase === PH.WINDOW || view.phase === PH.SELECT ? f.anim.t * CONFIG.window.slowmo : f.anim.t; }   // 終結擇起就進慢動作（只影響畫面）
-  stateFor(view, f) { return view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal) && f.anim.state.startsWith("stance_") ? "stance_hidden" : f.anim.state; }   // 藏招：雙方都回到收手黑影
+  stateFor(view, f) {
+    if (Fighter.clashOf(f.i)) {                                // 有加購圖：開牌壓制／受壓、五連斬蓄勢、比賽勝利
+      if (view.phase === PH.REVEAL && view.rps && view.rps.winner >= 0) return view.rps.winner === f.i ? "reveal_win" : "reveal_lose";
+      if (view.phase === PH.CLASH_INPUT && f.anim.state === "idle") return "clash_charge";
+      if (view.phase === PH.GAMEOVER && view.winner === f.i && !f.out) return "victory";
+    }
+    return view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal) && f.anim.state.startsWith("stance_") ? "stance_hidden" : f.anim.state;   // 藏招：雙方都回到收手黑影
+  }
+  // 驗收用：50×50 格框（綠）＋腳底錨點 (24, 40)（紅點）
+  drawSpriteBox(f) {
+    const ctx = this.ctx, A = ART.spriteAtlas, x = Math.round(f.x), y = Math.round(f.y);
+    const x0 = x - A.pivot.x - A.originX, y0 = y - A.pivot.y - A.originY;
+    ctx.save(); ctx.globalAlpha = 1; ctx.strokeStyle = "#39FF6A"; ctx.lineWidth = 1;
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, A.strideX - 1, A.strideY - 1);
+    ctx.fillStyle = "#FF2A2A"; ctx.fillRect(x - 1, y - 1, 3, 3);
+    ctx.restore();
+  }
   drawTrails(view) {
     const al = FX.motionTrail.alphaNewestToOldest;
     this.trails.forEach(tr => tr.forEach((s, i) => Fighter.draw(this.ctx, s.f, this.stateFor(view, s.f), this.animTime(view, s.f), s.f.x, s.f.y, s.f.face, { alpha: al[i] ?? 0.1, view })));
@@ -605,13 +664,15 @@ export class Renderer {
       const state = this.stateFor(view, f), t = this.animTime(view, f);
       if (f.redGlow && !REDUCED) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(performance.now() / 50); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 14, Math.round(y) - 42, 28, 42); ctx.globalAlpha = 1; }   // 紅光強化：全身泛紅
       Fighter.draw(ctx, f, state, t, x, y, f.face, { rim: this.rimT[f.i] > 0 && !REDUCED, view });
-      if (this.flashT[f.i] > 0 && !REDUCED) Fighter.draw(ctx, f, state, t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity, view });
+      if (this.flashF[f.i] > 0) { this.flashF[f.i]--; if (!REDUCED) Fighter.draw(ctx, f, state, t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity, view }); }   // 受擊閃白：只亮 1 幀
+      if (CONFIG.DEBUG_SPRITE_BOX) this.drawSpriteBox(f);
       if (f.deny > 0) { ctx.globalAlpha = Math.min(1, f.deny * 3); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 8, Math.round(y) - 46, 16, 1); ctx.globalAlpha = 1; }
     }
   }
-  drawFx(now) {
+  drawFx(now, layer) {
     const ctx = this.ctx;
     for (const p of this.fx) {
+      if ((p.layer ?? (p.k === "beam" || p.k === "crack" ? "back" : "front")) !== layer) continue;
       const a = p.life !== undefined ? clamp(p.life / p.max, 0, 1) : 1;
       if (p.k === "spark") { ctx.globalAlpha = a; ctx.fillStyle = p.color; ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2); }
       else if (p.k in CLASH_FX) { ctx.save(); CLASH_FX[p.k](ctx, p, a, 1 - a); ctx.restore(); }

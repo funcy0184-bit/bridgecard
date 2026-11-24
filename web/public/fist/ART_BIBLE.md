@@ -154,29 +154,28 @@ Create a red-finisher sprite strip for the attached original fighter using exact
 2. **同一套提示連續看。** 紅招的兩格面積從開始到命中維持一致，紅箭頭和底部方向永遠吻合。藏招第一幀移除上一手勢的武器殘影。兩人靠近時，藍框仍掛在正確攻方上方。
 3. **像素與時間。** 用 1× 和 2× 檢查輪廓、斜紋與數字。驗證讀入 JSON 後，每個狀態都能切到指定格；命中與彈反凍結時畫面倒數仍跟遊戲時鐘。最後用灰階與減少動態各跑一場，確認警示認得出來。
 
-## 拼刀五連斬素材（選配，沒放就用程式繪製）
+## 已串接的美術資源（v3 加購包）
 
-檔案放在 `public/fist/`，檔名照下面寫，遊戲開啟時自動偵測；尺寸不對會被忽略、繼續用程式繪製版。
+檔案都在 `public/fist/`，由 `src/assets.js` 在進對戰前預載；缺檔或尺寸不符時 Console 會警告並退回程式繪製。驗收對齊：`config.js` 的 `DEBUG_SPRITE_BOX: true`（或遊戲中 `__fist.CONFIG.DEBUG_SPRITE_BOX = true`）會畫出 50×50 綠框與腳底 (24, 40) 紅點。
 
-**角色拼刀圖集** `fighter_p1_clash.png`／`fighter_p2_clash.png`：500×500、10×10 格，格距、透明邊與腳底錨點與基礎圖集 `spriteAtlas` 相同，一列一個動作，全部 `hold_last`。
+**角色**：全部面朝右、50×50 一格（48×48 繪製區＋四邊 1px 透明）、腳底 (24, 40)；程式依 `facing` 以腳底為軸 `scale(facing, 1)` 翻轉。
 
-| 列 | 動作 | 格數 | fps | 用途 |
+| 檔案 | 尺寸 | 內容 |
+|---|---|---|
+| `fighter_p1.png`／`fighter_p2.png` | 500×800（16 列） | 基礎 16 動作（`spriteAtlas`） |
+| `fighter_p1_weapons.png`／`fighter_p2_weapons.png` | 500×500（10 列） | 大剪刀／大布袋攻擊變體 |
+| `fighter_p1_v3_addon.png`／`fighter_p2_v3_addon.png` | 500×450（9 列） | 拼刀／開牌／勝利加購（`clashAtlas`） |
+
+加購 9 列：0 `reveal_win`(4)、1 `reveal_lose`(4)、2 `clash_charge`(4，循環)、3 `clash_first_draw`(6)、4 `clash_dash`(4)、5 `clash_slash_a`(5)、6 `clash_slash_b`(5)、7 `clash_heavy`(8)、8 `victory`(6)。
+引擎拼刀動作對照（`clashAtlas.stateMap`）：每一刀交替 slash_a／slash_b；三種主招大招共用 `clash_heavy`（差別靠特效）；`clash_recoil` 用基礎 `hitstun`、`clash_draw` 用基礎 `clash`。
+
+**特效**（橫條，規格同 `vfx_spec.json`）：
+
+| 檔案 | 每格 | 格數 | 圖層 | 用途 |
 |---|---|---|---|---|
-| 0 | `clash_dash` | 4 | 16 | 0.25 秒衝刺交會 |
-| 1 | `clash_rock` | 5 | 24 | 這一刀出石頭 |
-| 2 | `clash_scissors` | 5 | 24 | 這一刀出剪刀 |
-| 3 | `clash_paper` | 5 | 24 | 這一刀出布 |
-| 4 | `clash_recoil` | 4 | 20 | 這一刀輸：白閃後滑 |
-| 5 | `clash_first_draw` | 6 | 20 | 搶到 ⚡ 先手的拔刀架勢 |
-| 6 | `clash_win_rock` | 10 | 20 | 崩山重砸：跳起→垂直砸下 |
-| 7 | `clash_win_scissors` | 10 | 24 | 居合十字斬：穿身→背後收刀 |
-| 8 | `clash_win_paper` | 10 | 20 | 零距離氣功轟飛：貼身蓄氣→發波 |
-| 9 | `clash_draw` | 6 | 16 | 平分被白色衝擊波彈開 |
+| `vfx_red_crack.png` | 96×32 | 6（0–2 預警循環、3–5 地裂） | 角色後方 | 紅招危險區（一格 96px＝兩格擂台），pivot (48, 12) |
+| `vfx_ko_pillar.png` | 64×270 | 6 | 角色後方 | 場外擊飛光柱，右側出界自動翻轉，pivot (32, 269) |
+| `vfx_sparks.png` | 48×48 | 5 | 角色前方 | 打擊、拼刀、彈反火花（也當作 clash_spark） |
+| `vfx_slash.png` | 64×64 | 5 | 角色前方 | 刀光（終結命中、拼刀勝刀、居合穿身），依攻擊方向翻轉 |
 
-**勝利特效**（一張橫條，由左到右 8 格）：
-
-| 檔名 | 每格 | fps | 貼在哪 |
-|---|---|---|---|
-| `vfx_win_rock_slam.png` | 128×64 | 20 | 敗方腳底（底邊中點） |
-| `vfx_win_scissors_cross.png` | 96×96 | 24 | 敗方身體中心 |
-| `vfx_win_paper_beam.png` | 192×48 | 20 | 勝方正前方（左緣對齊，往攻擊方向延伸） |
+**尚未交付（目前用程式繪製）**：`vfx_first_draw_star.png`（48×48×6）、`vfx_win_rock_slam.png`（128×64×8，貼敗方腳底）、`vfx_win_scissors_cross.png`（96×96×8，敗方中心）、`vfx_win_paper_beam.png`（192×48×8，勝方正前方、依朝向翻轉）。放進資料夾就會自動換上。

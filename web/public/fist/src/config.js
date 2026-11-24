@@ -1556,28 +1556,49 @@ export const CONFIG = {
   hints: { default: true, storageKey: "fist.showHints" },
   // ---- 耐受度狀態字（分級、顏色、粒子讀 ART.palette.damageBands） ----
   status: { criticalAlt: "一擊必飛！！", altEverySec: 0.9, flashEverySec: 1.3, flashMs: 90, popMs: 220, jitter: { teetering: { px: 1, hz: 6 }, critical: { px: 2, hz: 22 } } },
-  // ---- 拼刀美術接口（圖還沒放進資料夾前，用程式繪製）----
-  //   fighter_p1_clash.png／fighter_p2_clash.png：500×500、10×10 格（格距、透明邊、腳底錨點同 spriteAtlas），一列一個動作
+  // ---- 美術驗收：畫出每個角色的 50×50 格框（綠）與腳底錨點 (24, 40)（紅點）；遊戲中可用 __fist.CONFIG.DEBUG_SPRITE_BOX = true 即時切換 ----
+  DEBUG_SPRITE_BOX: false,
+  // ---- 拼刀／開牌／勝利加購圖集（實際交付：fighter_p*_v3_addon.png，500×450、9 列×最多 10 格；格距、透明邊、腳底錨點同 spriteAtlas）----
   clashAtlas: {
-    imageByPlayer: { p1: "fighter_p1_clash.png", p2: "fighter_p2_clash.png" }, imageWidth: 500, imageHeight: 500,
+    imageByPlayer: { p1: "fighter_p1_v3_addon.png", p2: "fighter_p2_v3_addon.png" }, imageWidth: 500, imageHeight: 450,
     animations: {
-      clash_dash: { row: 0, frames: 4, fps: 16, playback: "hold_last" },
-      clash_rock: { row: 1, frames: 5, fps: 24, playback: "hold_last" },
-      clash_scissors: { row: 2, frames: 5, fps: 24, playback: "hold_last" },
-      clash_paper: { row: 3, frames: 5, fps: 24, playback: "hold_last" },
-      clash_recoil: { row: 4, frames: 4, fps: 20, playback: "hold_last" },
-      clash_first_draw: { row: 5, frames: 6, fps: 20, playback: "hold_last" },
-      clash_win_rock: { row: 6, frames: 10, fps: 20, playback: "hold_last" },
-      clash_win_scissors: { row: 7, frames: 10, fps: 24, playback: "hold_last" },
-      clash_win_paper: { row: 8, frames: 10, fps: 20, playback: "hold_last" },
-      clash_draw: { row: 9, frames: 6, fps: 16, playback: "hold_last" },
+      reveal_win: { row: 0, frames: 4, fps: 12, playback: "hold_last" },          // 開牌壓制
+      reveal_lose: { row: 1, frames: 4, fps: 12, playback: "hold_last" },         // 開牌受壓
+      clash_charge: { row: 2, frames: 4, fps: 10, playback: "loop" },             // 五連斬輸入中蓄勢
+      clash_first_draw: { row: 3, frames: 6, fps: 20, playback: "hold_last" },    // ⚡ 先手拔刀
+      clash_dash: { row: 4, frames: 4, fps: 16, playback: "hold_last" },          // 衝刺交會
+      clash_slash_a: { row: 5, frames: 5, fps: 24, playback: "hold_last" },       // 上段劈砍（奇數刀）
+      clash_slash_b: { row: 6, frames: 5, fps: 24, playback: "hold_last" },       // 下段反撩（偶數刀）
+      clash_heavy: { row: 7, frames: 8, fps: 20, playback: "hold_last" },         // 迴旋重斬（三種主招大招共用，差異靠 VFX）
+      victory: { row: 8, frames: 6, fps: 10, playback: "hold_last" },             // 勝利收勢
+    },
+    // 引擎動作 → 圖集動作（atlas: "clash"＝加購圖、"base"＝基礎圖；alt 交替）
+    stateMap: {
+      clash_dash: { atlas: "clash", anim: "clash_dash" },
+      clash_rock: { atlas: "clash", anim: "clash_slash_a", alt: "clash_slash_b" },
+      clash_scissors: { atlas: "clash", anim: "clash_slash_a", alt: "clash_slash_b" },
+      clash_paper: { atlas: "clash", anim: "clash_slash_a", alt: "clash_slash_b" },
+      clash_first_draw: { atlas: "clash", anim: "clash_first_draw" },
+      clash_win_rock: { atlas: "clash", anim: "clash_heavy" },
+      clash_win_scissors: { atlas: "clash", anim: "clash_heavy" },
+      clash_win_paper: { atlas: "clash", anim: "clash_heavy" },
+      clash_recoil: { atlas: "base", anim: "hitstun" },
+      clash_draw: { atlas: "base", anim: "clash" },
     },
   },
-  //   特效：一張橫條，frames 格、每格 frameW×frameH；anchor＝貼在哪
+  // ---- 特效圖（一張橫條、由左到右；規格同 public/fist/vfx_spec.json）。layer：back＝畫在角色後面、front＝角色前面 ----
+  //   pivot＝貼齊點（格內像素）；沒有 pivot 就用 anchor：foot＝底邊中點、center＝正中、front＝左緣中點（往朝向延伸）
   vfx: {
-    vfx_win_rock_slam: { file: "vfx_win_rock_slam.png", frameW: 128, frameH: 64, frames: 8, fps: 20, anchor: "loser_foot" },
-    vfx_win_scissors_cross: { file: "vfx_win_scissors_cross.png", frameW: 96, frameH: 96, frames: 8, fps: 24, anchor: "loser_center" },
-    vfx_win_paper_beam: { file: "vfx_win_paper_beam.png", frameW: 192, frameH: 48, frames: 8, fps: 20, anchor: "winner_front" },
+    vfx_sparks: { file: "vfx_sparks.png", frameW: 48, frameH: 48, frames: 5, fps: 24, anchor: "center", layer: "front" },
+    vfx_slash: { file: "vfx_slash.png", frameW: 64, frameH: 64, frames: 5, fps: 24, anchor: "center", layer: "front" },
+    vfx_red_crack: { file: "vfx_red_crack.png", frameW: 96, frameH: 32, frames: 6, fps: 16, pivot: [48, 12], layer: "back",
+      clips: { warning: { start: 0, end: 2, loop: true }, impact: { start: 3, end: 5, loop: false } } },
+    vfx_ko_pillar: { file: "vfx_ko_pillar.png", frameW: 64, frameH: 270, frames: 6, fps: 16, pivot: [32, 269], layer: "back" },
+    // 以下尚未交付：缺檔時 Console 警告並用程式繪製
+    vfx_first_draw_star: { file: "vfx_first_draw_star.png", frameW: 48, frameH: 48, frames: 6, fps: 20, anchor: "center", layer: "front" },
+    vfx_win_rock_slam: { file: "vfx_win_rock_slam.png", frameW: 128, frameH: 64, frames: 8, fps: 20, anchor: "foot", layer: "front" },
+    vfx_win_scissors_cross: { file: "vfx_win_scissors_cross.png", frameW: 96, frameH: 96, frames: 8, fps: 24, anchor: "center", layer: "front" },
+    vfx_win_paper_beam: { file: "vfx_win_paper_beam.png", frameW: 192, frameH: 48, frames: 8, fps: 20, anchor: "front", layer: "front" },
   },
   // ---- 線上：暱稱、表情（固定 8 個，不開放自由打字）、新手引導（房主預設） ----
   profile: { nameMax: 8, storageKey: "fist.name" },

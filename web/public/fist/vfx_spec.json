@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "canvas": [
+    480,
+    270
+  ],
+  "layout": "horizontal",
+  "frameIndexBase": 0,
+  "padding": 0,
+  "sampling": "nearest",
+  "effects": {
+    "sparks": {
+      "file": "vfx_sparks.png",
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": 5,
+      "fps": 24
+    },
+    "slash": {
+      "file": "vfx_slash.png",
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": 5,
+      "fps": 24
+    },
+    "red_crack": {
+      "file": "vfx_red_crack.png",
+      "frameWidth": 96,
+      "frameHeight": 32,
+      "frames": 6,
+      "fps": 16,
+      "clips": {
+        "warning": {
+          "startFrame": 0,
+          "endFrameInclusive": 2,
+          "loop": true
+        },
+        "impact": {
+          "startFrame": 3,
+          "endFrameInclusive": 5,
+          "loop": false
+        }
+      },
+      "pivotPx": [
+        48,
+        12
+      ]
+    },
+    "ko_pillar": {
+      "file": "vfx_ko_pillar.png",
+      "frameWidth": 64,
+      "frameHeight": 270,
+      "frames": 6,
+      "fps": 16,
+      "pivotPx": [
+        32,
+        269
+      ]
+    }
+  }
+}

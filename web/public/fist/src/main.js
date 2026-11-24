@@ -3,6 +3,7 @@ import { CONFIG } from "./config.js";
 import { PH } from "./engine.js";
 import { Audio } from "./audio.js";
 import { Renderer } from "./renderer.js";
+import { Assets } from "./assets.js";
 import { KeyBar } from "./keybar.js";
 import { LocalTransport, AITransport, WebSocketTransport, createRoom, inviteLink, isRoomCode } from "./transport.js";
 import { Tutorial } from "./tutorial.js";
@@ -97,6 +98,7 @@ function bind(t) {
   renderer.reset();
 }
 function startMode(m, o = {}) {
+  if (!Assets.ready) { Assets.preload().then(() => startMode(m, o)); return; }    // 進對戰前先等美術圖預載完（缺圖不會卡：逾時就用程式繪製）
   stopMode();
   mode = m; opts = o;
   for (const id of ["objective", "skipTut", "room", "pauseBox", "countdown", "ping", "settingsPop", "emoteTray", "coach", "flowStrip"]) $(id).hidden = true;
@@ -357,4 +359,4 @@ if (qRoom && isRoomCode(qRoom)) {
 else show("menu");
 
 // 驗收／除錯用
-globalThis.__fist = { get view() { return latest.view; }, get transport() { return tutorial?.transport ?? transport; }, get tutorial() { return tutorial; }, get net() { return net; }, get showHints() { return showHints; }, get touch() { return touch; }, get guide() { return guideOn(); }, Haptics, setHints, setTouch, startMode, stopMode, renderer, keybar, CONFIG };
+globalThis.__fist = { get view() { return latest.view; }, get transport() { return tutorial?.transport ?? transport; }, get tutorial() { return tutorial; }, get net() { return net; }, get showHints() { return showHints; }, get touch() { return touch; }, get guide() { return guideOn(); }, Haptics, setHints, setTouch, startMode, stopMode, renderer, keybar, CONFIG, Assets };
