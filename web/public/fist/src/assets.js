@@ -15,7 +15,12 @@ function manifest() {
   atlas(ART.spriteAtlas, "角色基礎動作");
   atlas(ART.weaponVariantAtlas, "武器變體");
   atlas(CONFIG.clashAtlas, "拼刀／開牌／勝利加購");
-  for (const [key, v] of Object.entries(CONFIG.vfx)) list.push({ file: v.file, w: v.frameW * v.frames, h: v.frameH, exact: false, label: `特效 ${key}` });
+  atlas(CONFIG.extraAtlas, "開牌／勝利加購");
+  // 選配包：CONFIG.ART_PACKS 沒開就完全不請求（檔案還沒放進來時不會在主控台冒 404）
+  const on = pack => !pack || CONFIG.ART_PACKS?.[pack];
+  if (on(CONFIG.charExtraAtlas.pack)) atlas(CONFIG.charExtraAtlas, "擴充角色動作");
+  if (on(CONFIG.dummyAtlas.pack)) list.push({ file: CONFIG.dummyAtlas.imageByPlayer.p1, w: CONFIG.dummyAtlas.imageWidth, h: CONFIG.dummyAtlas.imageHeight, exact: true, label: "訓練場木樁" });
+  for (const [key, v] of Object.entries(CONFIG.vfx)) if (on(v.pack)) list.push({ file: v.file, w: v.frameW * v.frames, h: v.frameH, exact: false, label: `特效 ${key}` });
   return list;
 }
 

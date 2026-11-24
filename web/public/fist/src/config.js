@@ -1612,7 +1612,52 @@ export const CONFIG = {
     vfx_win_rock_slam: { file: "vfx_win_rock_slam.png", frameW: 96, frameH: 64, frames: 6, fps: 18, pivot: [48, 44], layer: "front" },       // 震地裂岩：貼敗方腳底
     vfx_win_scissors_cross: { file: "vfx_win_scissors_cross.png", frameW: 96, frameH: 96, frames: 6, fps: 24, pivot: [48, 46], layer: "front", burstFrame: 2 },   // 延遲十字斬：第 2 格炸開＝命中
     vfx_win_paper_beam: { file: "vfx_win_paper_beam.png", frameW: 128, frameH: 64, frames: 6, fps: 20, pivot: [3, 32], layer: "front" },     // 翠綠氣功波：從勝方掌心往朝向延伸
+    // vfx_mega_spec.json v1.0（pack: "vfxMega"：ART_PACKS.vfxMega 開了才預載；loop＝循環覆蓋層，狀態結束才收）
+    vfx_hit_light: { pack: "vfxMega", file: "vfx_hit_light.png", frameW: 48, frameH: 48, frames: 5, fps: 24, pivot: [24, 24], layer: "front" },            // 四套拳第 1～2 拳
+    vfx_hit_heavy: { pack: "vfxMega", file: "vfx_hit_heavy.png", frameW: 64, frameH: 64, frames: 6, fps: 22, pivot: [32, 32], layer: "front" },            // 連勝重擊、第 3～4 拳、反打命中
+    vfx_counter_flash: { pack: "vfxMega", file: "vfx_counter_flash.png", frameW: 80, frameH: 80, frames: 6, fps: 24, pivot: [40, 40], layer: "front" },    // 架開瞬間（配黑白衝擊幀）
+    vfx_streak_aura: { pack: "vfxMega", file: "vfx_streak_aura.png", frameW: 64, frameH: 64, frames: 6, fps: 14, pivot: [32, 56], layer: "back", loop: true },   // 爆發＋四套拳期間貼攻方腳底
+    vfx_overheat_smoke: { pack: "vfxMega", file: "vfx_overheat_smoke.png", frameW: 32, frameH: 32, frames: 5, fps: 12, pivot: [16, 29], layer: "front", loop: true },   // 按到過熱鍵：槌頭冒煙
+    vfx_dust_dash: { pack: "vfxMega", file: "vfx_dust_dash.png", frameW: 48, frameH: 32, frames: 5, fps: 20, pivot: [39, 28], layer: "back" },            // 衝刺、被推
+    vfx_dust_land: { pack: "vfxMega", file: "vfx_dust_land.png", frameW: 48, frameH: 24, frames: 5, fps: 18, pivot: [24, 20], layer: "back" },            // 擊飛落地
+    vfx_smear_rock: { pack: "vfxMega", file: "vfx_smear_rock.png", frameW: 64, frameH: 64, frames: 4, fps: 24, pivot: [20, 43], layer: "back" },          // 巨錘扇形殘影（握點）
+    vfx_smear_scissors: { pack: "vfxMega", file: "vfx_smear_scissors.png", frameW: 64, frameH: 64, frames: 4, fps: 28, pivot: [32, 32], layer: "front" }, // 雙刃交叉殘影（刃口）
+    vfx_smear_paper: { pack: "vfxMega", file: "vfx_smear_paper.png", frameW: 64, frameH: 64, frames: 4, fps: 24, pivot: [29, 32], layer: "front" },       // 掌風螺旋（掌心）
   },
+  // ---- 選配美術包開關：檔案真的放進 public/fist/ 才改 true（false＝完全不發請求、不會 404，照舊程式繪製）----
+  //   charExtra＝fighter_p1_extra.png／fighter_p2_extra.png；dummy＝dummy_sheet.png；vfxMega＝上面 pack: "vfxMega" 的 10 張
+  ART_PACKS: { charExtra: false, dummy: false, vfxMega: false },
+  // ---- 擴充角色動作包（char_expansion_spec.json v1.0）：500×600、12 列；格距、透明邊、腳底錨點 (24, 40) 同 spriteAtlas ----
+  //   contactFrame＝命中那一格（事件發生那一刻對齊這格）；parryFrame＝架開格；ventCellPx＝每格槌頭排氣口（冒煙位置）
+  charExtraAtlas: {
+    pack: "charExtra", imageByPlayer: { p1: "fighter_p1_extra.png", p2: "fighter_p2_extra.png" }, imageWidth: 500, imageHeight: 600,
+    animations: {
+      idle_tired: { row: 0, frames: 4, fps: 7, playback: "loop" },                // 彎腰喘息：損傷 60～110%
+      idle_critical: { row: 1, frames: 4, fps: 6, playback: "loop" },             // 單膝硬撐：損傷 ≥110%
+      cliff_teeter: { row: 2, frames: 4, fps: 9, playback: "loop" },              // 崖邊失衡：站第 1／7 格
+      streak_1_hit: { row: 3, frames: 5, fps: 18, playback: "once", contactFrame: 2 },
+      streak_burst: { row: 4, frames: 6, fps: 14, playback: "once", burstFrame: 3 },
+      combo4_hit1: { row: 5, frames: 5, fps: 24, playback: "once", contactFrame: 2 },
+      combo4_hit2: { row: 6, frames: 5, fps: 20, playback: "once", contactFrame: 3 },
+      combo4_hit3: { row: 7, frames: 6, fps: 20, playback: "once", contactFrame: 3 },
+      combo4_hit4_launch: { row: 8, frames: 8, fps: 18, playback: "once", contactFrame: 5 },
+      counter_break: { row: 9, frames: 6, fps: 22, playback: "once", parryFrame: 1, contactFrame: 4 },
+      overheat_shake: { row: 10, frames: 4, fps: 10, playback: "once", ventCellPx: [[33, 7], [34, 6], [38, 11], [33, 7]] },
+      taunt_ready: { row: 11, frames: 4, fps: 9, playback: "once" },
+    },
+    idle: { tiredMin: 60, criticalMin: 110, edgeTiles: [1, 7] },                  // 待機優先序：崖邊 > 瀕死 > 疲累 > 一般
+  },
+  // ---- 訓練場木樁（dummy_sheet.png，500×200、4 列）：只在訓練場的 P2 使用；腳底錨點＝木座中心 ----
+  dummyAtlas: {
+    pack: "dummy", imageByPlayer: { p1: "dummy_sheet.png", p2: "dummy_sheet.png" }, imageWidth: 500, imageHeight: 200,
+    animations: {
+      dummy_idle: { row: 0, frames: 4, fps: 7, playback: "loop" },
+      dummy_hit: { row: 1, frames: 5, fps: 16, playback: "once" },
+      dummy_attack: { row: 2, frames: 5, fps: 17, playback: "once", contactFrame: 2 },
+      dummy_ko: { row: 3, frames: 6, fps: 13, playback: "hold_last" },            // 停在最後一格直到重生
+    },
+  },
+  trainingDummySeat: -1,                                                          // 訓練場進場時設 1（P2 畫成木樁），離場還原
   // ---- 線上：暱稱、表情（固定 8 個，不開放自由打字）、新手引導（房主預設） ----
   profile: { nameMax: 8, storageKey: "fist.name" },
   emotes: ["😂", "😡", "👍", "🔥", "😱", "🙏", "🤡", "GG"], emoteGapMs: 1500, emoteShowMs: 2000,

@@ -102,13 +102,14 @@ export class Training {
     if (this.saved) {
       Object.assign(CONFIG.rps, this.saved.rps); CONFIG.combo.reactDur = this.saved.reactDur; CONFIG.clashMode.inputDur = this.saved.inputDur;
       CONFIG.overheat.enabled = this.saved.overheat; CONFIG.DEBUG_SPRITE_BOX = this.saved.debug;
-      this.saved = null;
+      CONFIG.trainingDummySeat = -1; this.saved = null;
     }
     this.engine = null; this.transport = null;
   }
   applyConfig() {
     CONFIG.overheat.enabled = this.saved ? !this.s.noHeat : CONFIG.overheat.enabled;
     CONFIG.DEBUG_SPRITE_BOX = this.s.debugBox;
+    CONFIG.trainingDummySeat = 1;                      // P2 畫成木樁（dummy_sheet.png 沒放就照舊畫武者）
     if (this.s.noHeat) this.engine?.clearHeat();
   }
 

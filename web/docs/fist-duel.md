@@ -118,3 +118,17 @@
 - 一鍵：雙方損傷 0／60／110／140%、站位 1～7、關閉過熱、對齊框；直接測我打／木樁打四套拳、直接進五連斬、重置
 - 即時調秒數滑桿（猜拳、每拳反擊、拼刀輸入）＋「📋 複製目前參數」；離開訓練場時 CONFIG 全部還原，不影響其他模式；線上房間由伺服器自己的 CONFIG 跑
 - 驗收：`node test/e2e/fist-training.mjs <網址>`（26 項）
+
+## 擴充角色動作包＋特效全家桶（選配美術包）
+
+規格：`public/fist/char_expansion_spec.json`、`public/fist/vfx_mega_spec.json`。程式已全部接好，**圖檔放進 `public/fist/` 後，把 `config.js` 的 `ART_PACKS` 對應開關改成 `true`** 才會預載（沒開就完全不發請求，不會 404，照舊程式繪製）。
+
+| 開關 | 檔案 | 用在哪 |
+|---|---|---|
+| `charExtra` | fighter_p1_extra.png／fighter_p2_extra.png（500×600） | 待機優先序：崖邊（第 1／7 格）`cliff_teeter` ＞ 損傷 ≥110 `idle_critical` ＞ ≥60 `idle_tired` ＞ `idle`；連勝重擊 `streak_1_hit`、第 3 勝 `streak_burst`、四套拳 `combo4_hit1～4_launch`、反擊 `counter_break`、按過熱鍵 `overheat_shake`、開局／重置 `taunt_ready` |
+| `dummy` | dummy_sheet.png（500×200） | 只在訓練場的 P2：待機／被打／出手／擊飛旋轉解體 |
+| `vfxMega` | vfx_hit_light、vfx_hit_heavy、vfx_counter_flash、vfx_streak_aura、vfx_overheat_smoke、vfx_dust_dash、vfx_dust_land、vfx_smear_rock／scissors／paper | 命中、反擊十字閃（配黑白衝擊幀）、爆發＋四套拳氣場（後層循環）、過熱蒸氣（跟槌頭排氣口）、衝刺／被推揚塵、落地氣浪、五連斬揮刀殘影 |
+
+- 動作是「畫面層一次性動作」：事件那一刻對齊規格的接觸格（contactFrame／parryFrame），播完交回引擎動作；頓幀時一起停。
+- 尺寸不符或缺檔：Console 警告、該張退回程式繪製。訓練場勾「顯示 50×50 對齊框」會在框上方印出目前動作名（綠＝加購圖）。
+- 場景／UI 包（stage_platform_*、bg_sky_*、ui_*）這次沒有檔案也沒有規格，尚未接。
