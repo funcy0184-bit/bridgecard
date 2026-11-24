@@ -163,8 +163,8 @@ export class KeyBar {
       if (f.heat) cards[KEY_OF[f.heat]] = { label: C.heat, state: "heat", sub: C.rps[KEY_OF[f.heat]] };   // ♨️ 過熱：這輪不能出
     } else if (ph === PH.CLASH_INPUT) {                                   // 拼刀預輸入：三張都能按（過熱不限制），顯示填了幾格
       const n = view.clash?.count?.[seat] ?? 0;
-      set(C.rps, n >= CONFIG.clashMode.slots ? "locked" : "normal");
-      cards.M.sub = `劍格 ${n}/${CONFIG.clashMode.slots}`;
+      set(C.rps, n >= CONFIG.CLASH_SEQUENCE_LENGTH ? "locked" : "normal");
+      cards.M.sub = `劍格 ${n}/${CONFIG.CLASH_SEQUENCE_LENGTH}`;
     } else if (ph === PH.MASH && r) {
       if (r.att === seat) return { cards, mash: true };
     } else if (ph === PH.SELECT && r) {

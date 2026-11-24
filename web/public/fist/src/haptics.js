@@ -57,7 +57,7 @@ export const Haptics = {
       else if (e.type === "clash") this.buzz(H.clash);
       else if (e.type === "roll" && mine(e.p)) this.buzz(H.roll);
       else if (e.type === "clash_cut") this.buzz(H.clash);
-      else if (e.type === "clash_end" && e.winner >= 0) this.buzz(me !== null && e.winner !== me ? H.takeFinisher : H.dealFinisher, true);
+      else if (e.type === "clash_finisher") this.buzz(me !== null && e.winner !== me ? H.takeRed : H.dealRed, true);   // 拼刀大招＝最重的震動
       else if (e.type === "ko") this.buzz(me !== null && e.p === me ? H.koMe : H.koThem, true);
     }
   },

@@ -72,13 +72,14 @@ export class AIPlayer {
     }
   }
 
-  // ---------- 拼刀預輸入：照難度的速度連按 3 下（宗師搶先手） ----------
+  // ---------- 拼刀預輸入：照難度的節奏連按 5 下（新手慢、宗師搶先手） ----------
   [`on_${PH.CLASH_INPUT}`](v, seen) {
     const P = this.plan;
     if (P.done || seen.phase !== PH.CLASH_INPUT) return;                   // 看到拼刀開始（反應延遲）才動手
     P.done = true;
     const gap = this.cfg.clashMs / 1000;
-    for (let k = 0; k < 3; k++) this.press(KEY_OF[this.pick(GESTURES)], k * gap * (0.85 + this.rng() * 0.3), 0.03);
+    let at = 0;
+    for (let k = 0; k < CONFIG.CLASH_SEQUENCE_LENGTH; k++) { this.press(KEY_OF[this.pick(GESTURES)], at, 0.03); at += gap * (0.85 + this.rng() * 0.3); }
   }
 
   // ---------- 連打：攻方狂按（按得多快看難度） ----------

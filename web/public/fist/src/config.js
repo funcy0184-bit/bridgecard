@@ -1476,9 +1476,32 @@ export const CONFIG = {
   reveal: { dur: 0.55 },                           // 開牌停頓：鎖定瞬間停 0.55s，中央放大顯示誰壓制誰
   // 武器過熱：分出勝負後，雙方剛出的手勢下一輪猜拳不能選（拼刀結算、掉命重生後清除）
   overheat: { enabled: true },
-  // 拼刀模式：猜拳平手達 CLASH_TRIGGER_TIES 次 → 三連斬預輸入（3 秒）→ 自動對砍三刀（每刀 0.45s）
-  CLASH_TRIGGER_TIES: 1,
-  clashMode: { inputDur: 3.0, slots: 3, animDur: 1.8, cutAt: [0.35, 0.8, 1.25], rush: 14, winDamage: 22, firstBonus: 6, launchMult: 1.15 },
+  // 拼刀：整場「累積」平手 CLASH_TRIGGER_TIES 次（不用連續）→ 五連斬預輸入 → 由慢到快五刀對砍 → 依主招分流三種勝利大招
+  //   第 1 次平手：小拼刀「叮！」彈開（不回氣、過熱不重置），拼刀蓄力 1/2；集滿 → 大拼刀；結算或有人落台後歸零
+  CLASH_TRIGGER_TIES: 2,
+  CLASH_SEQUENCE_LENGTH: 5,
+  clashMode: {
+    inputDur: 3.5,                                   // 五連斬預輸入（過熱不限制）
+    dashDur: 0.25, dashZoom: 1.22, rush: 14,         // 衝刺交會：0.25s、鏡頭拉近 1.22x
+    // 每刀：距上一刀的間隔、鏡頭倍率、頓幀、音高（由慢到快、逐刀加強）；第 5 刀多 2 幀黑白反色衝擊幀
+    cuts: [
+      { gap: 0.55, zoom: 1.22, hitstop: 50, pitch: 1.00 },
+      { gap: 0.40, zoom: 1.27, hitstop: 60, pitch: 1.10 },
+      { gap: 0.28, zoom: 1.32, hitstop: 70, pitch: 1.20 },
+      { gap: 0.20, zoom: 1.37, hitstop: 80, pitch: 1.32 },
+      { gap: 0.14, zoom: 1.45, hitstop: 180, pitch: 1.45, impactFrames: 2 },
+    ],
+    resolvePause: 0.12,                              // 第 5 刀頓幀後，停一下再宣布勝負
+    tiebreakSlow: 0.25,                              // 同分靠先手：「⚡ 先手絕殺！」金光慢動作
+    winDamage: 24, firstBonus: 6,                    // 勝方大招 +24%（持先手再 +6%）
+    // 主招專屬勝利動畫：windup＝出招前搖（勝方演出時間），angle／mult＝擊飛角度與倍率
+    finisher: {
+      rock: { name: "崩山重砸", windup: 0.45, angle: 72, mult: 1.25 },                     // 跳起垂直重砸：高拋物線
+      scissors: { name: "居合十字斬", windup: 0.30, dash: 0.12, angle: 28, mult: 1.45 },   // 0.12s 穿身＋靜止 0.18s 後炸開
+      paper: { name: "零距離氣功轟飛", windup: 0.42, angle: 10, mult: 1.5, skid: true },   // 水平掃出：落地後還會滑行
+    },
+    letterboxPx: 18, dim: 0.6,                       // 電影黑邊、背景壓暗
+  },
   // 越打越快：整場每 3 回合（一次猜拳結算＝一回合）升一級，第 10 回合起最快；教學道場不加速
   //   各階段時間 = 開局值 →（線性）→ fast 值；終結擇不低於 0.4 秒（長按紅光要 0.3 秒）、判定窗不低於 0.4 秒
   speed: { roundsPerLevel: 3, maxLevel: 3, fast: { rpsReveal: 1.6, rpsHidden: 0.5, mash: 0.55, select: 0.4, window: 0.6 } },   // v3 放寬：最快也保留新手看得懂的時間                  // 前 1.3s 亮招、後 0.5s 藏招
@@ -1498,6 +1521,7 @@ export const CONFIG = {
     gravity: 900,
     koMargin: 26,
     koPause: 0.9,
+    skidFriction: 900,                             // 氣功轟飛：貼地滑行的摩擦（損傷越高滑越遠）
   },
 
   // ---- 演出 ----
@@ -1517,7 +1541,7 @@ export const CONFIG = {
 
   // ---- AI 三難度（ai.js 讀這裡） ----
   ai: {
-    easy: { name: "新手木樁", reactionMs: 550, mashIntervalMs: 210, parryRate: 0.25, rollRate: 0.35, counterRead: 0.2, feint: false, hiddenSwitch: false, keepPower: 0, defenseMs: 380, clashMs: 650, readHeat: 0.2 },
+    easy: { name: "新手木樁", reactionMs: 550, mashIntervalMs: 210, parryRate: 0.25, rollRate: 0.35, counterRead: 0.2, feint: false, hiddenSwitch: false, keepPower: 0, defenseMs: 380, clashMs: 560, readHeat: 0.2 },
     mid: { name: "道場師兄", reactionMs: 350, mashIntervalMs: 115, parryRate: 0.55, rollRate: 0.7, counterRead: 0.5, feint: false, hiddenSwitch: false, keepPower: 1, defenseMs: 260, clashMs: 380, readHeat: 0.7 },
     master: { name: "讀心宗師", reactionMs: 220, mashIntervalMs: 70, parryRate: 0.8, rollRate: 0.9, counterRead: 0.7, feint: true, hiddenSwitch: true, keepPower: 2, defenseMs: 190, clashMs: 150, readHeat: 0.9 },
   },
@@ -1532,6 +1556,29 @@ export const CONFIG = {
   hints: { default: true, storageKey: "fist.showHints" },
   // ---- 耐受度狀態字（分級、顏色、粒子讀 ART.palette.damageBands） ----
   status: { criticalAlt: "一擊必飛！！", altEverySec: 0.9, flashEverySec: 1.3, flashMs: 90, popMs: 220, jitter: { teetering: { px: 1, hz: 6 }, critical: { px: 2, hz: 22 } } },
+  // ---- 拼刀美術接口（圖還沒放進資料夾前，用程式繪製）----
+  //   fighter_p1_clash.png／fighter_p2_clash.png：500×500、10×10 格（格距、透明邊、腳底錨點同 spriteAtlas），一列一個動作
+  clashAtlas: {
+    imageByPlayer: { p1: "fighter_p1_clash.png", p2: "fighter_p2_clash.png" }, imageWidth: 500, imageHeight: 500,
+    animations: {
+      clash_dash: { row: 0, frames: 4, fps: 16, playback: "hold_last" },
+      clash_rock: { row: 1, frames: 5, fps: 24, playback: "hold_last" },
+      clash_scissors: { row: 2, frames: 5, fps: 24, playback: "hold_last" },
+      clash_paper: { row: 3, frames: 5, fps: 24, playback: "hold_last" },
+      clash_recoil: { row: 4, frames: 4, fps: 20, playback: "hold_last" },
+      clash_first_draw: { row: 5, frames: 6, fps: 20, playback: "hold_last" },
+      clash_win_rock: { row: 6, frames: 10, fps: 20, playback: "hold_last" },
+      clash_win_scissors: { row: 7, frames: 10, fps: 24, playback: "hold_last" },
+      clash_win_paper: { row: 8, frames: 10, fps: 20, playback: "hold_last" },
+      clash_draw: { row: 9, frames: 6, fps: 16, playback: "hold_last" },
+    },
+  },
+  //   特效：一張橫條，frames 格、每格 frameW×frameH；anchor＝貼在哪
+  vfx: {
+    vfx_win_rock_slam: { file: "vfx_win_rock_slam.png", frameW: 128, frameH: 64, frames: 8, fps: 20, anchor: "loser_foot" },
+    vfx_win_scissors_cross: { file: "vfx_win_scissors_cross.png", frameW: 96, frameH: 96, frames: 8, fps: 24, anchor: "loser_center" },
+    vfx_win_paper_beam: { file: "vfx_win_paper_beam.png", frameW: 192, frameH: 48, frames: 8, fps: 20, anchor: "winner_front" },
+  },
   // ---- 線上：暱稱、表情（固定 8 個，不開放自由打字）、新手引導（房主預設） ----
   profile: { nameMax: 8, storageKey: "fist.name" },
   emotes: ["😂", "😡", "👍", "🔥", "😱", "🙏", "🤡", "GG"], emoteGapMs: 1500, emoteShowMs: 2000,

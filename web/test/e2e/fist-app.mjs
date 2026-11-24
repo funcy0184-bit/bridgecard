@@ -55,14 +55,16 @@ await key("a");                                                     // 0.4s 才�
 await tw(() => document.getElementById("objective").textContent.startsWith("3/4"));
 ok((await objective()).startsWith("3/4"), `慢動作 0.8s 內彈反 → 關卡 3：${await objective()}`);
 await tw(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[1].stance === "rock");
+ok(await P.evaluate(() => __fist.view.gauge === 1), "關卡 3：蓄力從 ⚔️ 1/2 開始");
 await key("a");                                                     // 故意平手
 await waitPh("PHASE_CLASH_INPUT");
 await sleep(150); await shot("tut3-clash");
-await key("a", 25); await key("s", 25); await key("d", 25);
+for (const k of ["a", "s", "d", "a", "s"]) await key(k, 25);
 await tw(() => __fist.view?.clash?.first === 0, 3000);
-ok(await P.evaluate(() => __fist.view.clash?.first === 0), "搶先填完 3 格：⚡ 先手");
-await tw(() => document.getElementById("objective").textContent.startsWith("4/4"), 10000);
-ok((await objective()).startsWith("4/4"), `看完三刀 → 關卡 4：${await objective()}`);
+ok(await P.evaluate(() => __fist.view.clash?.first === 0 && __fist.view.clash.count[0] === 5), "搶先填完 5 格：⚡ 先手");
+await waitPh("PHASE_CLASH_ANIM"); await sleep(1300); await shot("tut3-cuts");
+await tw(() => document.getElementById("objective").textContent.startsWith("4/4"), 12000);
+ok((await objective()).startsWith("4/4"), `看完五刀對砍 → 關卡 4：${await objective()}`);
 await waitPh("PHASE_FINISHER_WINDOW"); await sleep(120); await shot("tut4-red");
 const v4 = await V();
 ok(v4.f[0].pos === 7 && v4.f[0].power === 0 && v4.f[0].damage >= 125 && v4.r.type === "red" && JSON.stringify(v4.r.dirs) === "[-1]", "關卡 4：格 7、瀕死、0 氣、紅招只亮 ◀");
@@ -139,7 +141,7 @@ await shot("local2p-heat");
 await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 5, power: 1 }], phase: "PHASE_CLASH_INPUT" }));
 await sleep(80); await key("d", 20); await sleep(60);
 h0 = await cards(0);
-ok(h0.cards.every(c => !c.cls.includes("heat") && !c.cls.includes("locked")) && (await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="M"] .ksub').textContent)) === "劍格 1/3", "拼刀：三張卡都能按（過熱不限制），顯示「劍格 1/3」");
+ok(h0.cards.every(c => !c.cls.includes("heat") && !c.cls.includes("locked")) && (await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="M"] .ksub').textContent)) === "劍格 1/5", "拼刀：三張卡都能按（過熱不限制），顯示「劍格 1/5」");
 await P.keyboard.press("Escape"); await sleep(150);
 
 console.log("線上對戰：雙開瀏覽器");

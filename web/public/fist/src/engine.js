@@ -1,11 +1,15 @@
 // engine.js — 《拳刃交鋒》規則引擎（純邏輯：不碰 DOM、不碰畫面、不碰聲音）
 //   · 輸入：engine.input(seat, "down" | "up", btn)，btn = "L" | "M" | "R"（本機鍵盤、AI、線上都送同一種事件）
 //   · 時間：engine.step(dt) 回傳這一步發生的事件（畫面、音效、教學都靠事件）
-//   · 畫面資料：engine.viewFor(seat) —— 依觀看者遮掉不該看到的東西（藏招、攻方還沒亮出的終結手勢、拼刀時對手的三連斬序列）
+//   · 畫面資料：engine.viewFor(seat) —— 依觀看者遮掉不該看到的東西（藏招、攻方還沒亮出的終結手勢、拼刀時對手的五連斬序列）
 //   · v3 流程（沒有走位）：
 //       猜拳 RPS（2.2s 亮招＋0.6s 藏招）→ 開牌停頓 REVEAL（0.55s）
 //         ├ 分出勝負 → 雙方剛出的手勢過熱 → 連打 MASH → 終結擇 SELECT → 判定窗 WINDOW（0.8s）→ 結算 RESOLVE → 下一輪猜拳
-//         └ 平手 → 拼刀模式：預輸入 CLASH_INPUT（3s、搶先手）→ 自動對砍 CLASH_ANIM（三刀）→ 有勝方就結算擊飛，沒有就各自彈開
+//         └ 平手 → 拼刀蓄力 +1（整場累積，不用連續）
+//              ├ 未滿 CLASH_TRIGGER_TIES（2）：小拼刀「叮！」彈開 CLASH（不回氣、過熱不重置）→ 下一輪猜拳
+//              └ 集滿：五連斬預輸入 CLASH_INPUT（3.5s、搶 ⚡ 先手）→ 由慢到快五刀對砍 CLASH_ANIM
+//                   → 積分高者（同分看先手）依「主招」放專屬大招擊飛 → 結算；同分又沒先手：白色衝擊波彈開
+//              拼刀結算或有人落台：蓄力歸零、過熱全清
 //   · 防誤觸：
 //       1. 放開再按：進入新階段時，還按著的鍵一律標 stale，要放開再按才算；鍵盤自動重複不算新按下
 //       2. 判定窗單次鎖死：終結判定窗內守方只認第一次按鍵，按錯立刻吃招
@@ -17,7 +21,7 @@ export const PH = {
   GAMEOVER: "PHASE_GAMEOVER", IDLE: "PHASE_IDLE",
 };
 export const PH_LABEL = {
-  [PH.RPS]: "猜拳對峙", [PH.REVEAL]: "開牌！", [PH.CLASH]: "平手！", [PH.CLASH_INPUT]: "⚔️ 拼刀：三連斬", [PH.CLASH_ANIM]: "⚔️ 拼刀對砍",
+  [PH.RPS]: "猜拳對峙", [PH.REVEAL]: "開牌！", [PH.CLASH]: "平手！", [PH.CLASH_INPUT]: "⚔️ 拼刀：五連斬", [PH.CLASH_ANIM]: "⚔️ 拼刀對砍",
   [PH.MASH]: "連打加壓", [PH.SELECT]: "終結擇", [PH.WINDOW]: "終結判定", [PH.RESOLVE]: "結算", [PH.GAMEOVER]: "比賽結束", [PH.IDLE]: "",
 };
 export const GESTURE_OF = CONFIG.gestureOf;
@@ -56,11 +60,11 @@ export class Engine {
   }
 
   // ---------------- 狀態 ----------------
-  //   setup：{ p: [{ pos, power, damage, stocks, heat }×2], stocks, phase, round, rounds, ties }
+  //   setup：{ p: [{ pos, power, damage, stocks, heat }×2], stocks, phase, round, rounds, gauge }
   reset(setup = DEFAULT_SETUP) {
     this.rt = 0; this.t = 0; this.dur = 0; this.phase = PH.IDLE;
     this.round = null; this.winner = -1; this.koTimer = null; this.lastRps = null; this.cm = null;
-    this.rounds = setup.rounds ?? 0; this.ties = setup.ties ?? 0;
+    this.rounds = setup.rounds ?? 0; this.gauge = clamp(setup.gauge ?? setup.ties ?? 0, 0, CONFIG.CLASH_TRIGGER_TIES);
     this.speedLv = this.levelFor(this.rounds); this.reveal = CONFIG.rps.reveal;
     this.inbox = []; this.out = this.out ?? [];                                       // flow 在階段中途 reset：同一幀已發出的事件不能丟
     this.keys = [0, 1].map(() => ({ L: { down: false, stale: false, at: 0 }, M: { down: false, stale: false, at: 0 }, R: { down: false, stale: false, at: 0 } }));
@@ -68,7 +72,7 @@ export class Engine {
       const s = setup.p[i];
       return {
         i, pos: s.pos, power: s.power ?? CONFIG.powerStart, damage: s.damage ?? 0, stocks: s.stocks ?? setup.stocks ?? CONFIG.stocks,
-        heat: s.heat ?? null, deny: 0,
+        heat: s.heat ?? null, deny: 0, skid: false,
         stance: null, picked: false, random: false,
         x: cellX(s.pos), y: CONFIG.floorY, vx: 0, vy: 0, air: false, rot: 0, out: false, gl: null,
         face: i === 0 ? 1 : -1, anim: { state: "idle", t: 0 }, fin: 0, redGlow: false,
@@ -84,6 +88,7 @@ export class Engine {
   setAnim(f, st) { if (f.anim.state !== st) f.anim = { state: st, t: 0 }; }
   // 這位玩家這一輪猜拳能出的手勢（扣掉過熱那招）
   allowed(f) { return GESTURES.filter(g => !(CONFIG.overheat.enabled && g === f.heat)); }
+  setGauge(n) { n = clamp(n, 0, CONFIG.CLASH_TRIGGER_TIES); if (n !== this.gauge) { this.gauge = n; this.emit("gauge", { gauge: n, full: n >= CONFIG.CLASH_TRIGGER_TIES }); } }
   clearHeat() { if (this.f.some(f => f.heat)) { for (const f of this.f) f.heat = null; this.emit("heat", { heat: [null, null] }); } }
 
   // ---------------- 輸入 ----------------
@@ -112,21 +117,26 @@ export class Engine {
       this.dur = C.reveal.dur;
       for (const f of this.f) this.setAnim(f, "stance_" + f.stance);
       this.emit("rps_result", this.lastRps);
-    } else if (ph === PH.CLASH) {                                          // 平手但還沒到拼刀次數（或拼刀平分）：短暫彈開
+    } else if (ph === PH.CLASH) {                                          // 小拼刀「叮！」（蓄力還沒滿）／大拼刀平分（白色衝擊波）：短暫彈開
       this.dur = C.clash.dur;
-      for (const f of this.f) this.setAnim(f, "clash");
-      this.emit("clash", { x: (a.x + b.x) / 2 });
+      const wave = !!this.cm?.revealed && this.cm.winner < 0;
+      for (const f of this.f) this.setAnim(f, wave ? "clash_draw" : "clash");
+      this.emit("clash", { x: (a.x + b.x) / 2, gauge: this.gauge, wave });
       this.emit("hitstop", { ev: "clash" });
     } else if (ph === PH.CLASH_INPUT) {
       this.dur = C.clashMode.inputDur;
-      this.cm = { seq: [[], []], first: -1, done: [false, false], score: [0, 0], cut: 0, cuts: [], winner: -1, revealed: false };
+      this.cm = { seq: [[], []], first: -1, done: [false, false], score: [0, 0], cut: 0, cuts: [], winner: -1, revealed: false, stage: "input", result: null, hitAt: 0, zoom: 1 };
       for (const f of this.f) { f.stance = null; this.setAnim(f, "idle"); }
-      this.emit("clash_start", { ties: this.ties });
+      this.emit("clash_start", { gauge: this.gauge, n: C.CLASH_SEQUENCE_LENGTH });
     } else if (ph === PH.CLASH_ANIM) {
-      this.dur = C.clashMode.animDur;
-      this.cm.revealed = true;
-      this.emit("clash_lock", { seq: this.cm.seq.map(s => s.slice()), first: this.cm.first });
-      for (const f of this.f) this.setAnim(f, "clash");
+      const M = C.clashMode, cm = this.cm;
+      cm.revealed = true; cm.stage = "cuts";
+      let t = M.dashDur; cm.cutAt = M.cuts.map(c => (t += c.gap));                 // 由慢到快：0.80 / 1.20 / 1.48 / 1.68 / 1.82
+      cm.resAt = t + M.cuts[M.cuts.length - 1].hitstop / 1000 + M.resolvePause;    // 第 5 刀頓幀後停一下才宣布
+      this.dur = cm.resAt;
+      this.emit("clash_lock", { seq: cm.seq.map(s => s.slice()), first: cm.first });
+      this.emit("clash_dash", { zoom: M.dashZoom, dur: M.dashDur });
+      for (const f of this.f) this.setAnim(f, "clash_dash");
     } else if (ph === PH.MASH) {
       this.dur = this.sp(C.mash.dur, C.speed.fast.mash);
       if (data) this.round = { att: data.att, def: 1 - data.att, winGesture: data.winGesture, winKey: KEY_OF[data.winGesture] };
@@ -217,12 +227,11 @@ export class Engine {
   [`upd_${PH.REVEAL}`]() {
     if (this.t < this.dur) return;
     const L = this.lastRps, w = L.winner;
-    if (w < 0) {
-      this.ties++;
-      if (this.ties >= CONFIG.CLASH_TRIGGER_TIES) { this.go(PH.CLASH_INPUT); return; }
-      this.go(PH.CLASH); return;
+    if (w < 0) {                                                          // 平手：拼刀蓄力 +1（整場累積），集滿才進五連斬
+      this.cm = null;
+      this.setGauge(this.gauge + 1);
+      this.go(this.gauge >= CONFIG.CLASH_TRIGGER_TIES ? PH.CLASH_INPUT : PH.CLASH); return;
     }
-    this.ties = 0;
     if (CONFIG.overheat.enabled) {                                        // 分出勝負：雙方剛出的那招過熱，下一輪猜拳不能選
       this.f.forEach((f, i) => { f.heat = L.stances[i]; });
       this.emit("heat", { heat: L.stances.slice() });
@@ -231,16 +240,16 @@ export class Engine {
     this.go(PH.MASH);
   }
 
-  // ---------------- 平手（還沒到拼刀次數）／拼刀平分：彈開、不回氣、直接下一輪猜拳 ----------------
+  // ---------------- 小拼刀（蓄力未滿）／大拼刀平分：彈開、不回氣、直接下一輪猜拳 ----------------
   [`upd_${PH.CLASH}`]() {
     const [a, b] = this.f, k = clamp(this.t / this.dur, 0, 1);
     a.x = cellX(a.pos) - Math.sin(Math.PI * k) * 6; b.x = cellX(b.pos) + Math.sin(Math.PI * k) * 6;
     if (this.t >= this.dur) { a.x = cellX(a.pos); b.x = cellX(b.pos); this.go(PH.RPS); }
   }
 
-  // ---------------- PHASE_CLASH_INPUT（三連斬預輸入：先填滿的拿 ⚡ 先手） ----------------
+  // ---------------- PHASE_CLASH_INPUT（五連斬預輸入：先填滿的拿 ⚡ 先手；過熱不限制） ----------------
   [`upd_${PH.CLASH_INPUT}`](dt, evs, ph) {
-    const cm = this.cm, N = CONFIG.clashMode.slots, finished = [];
+    const cm = this.cm, N = CONFIG.CLASH_SEQUENCE_LENGTH, finished = [];
     for (const e of evs) {
       if (this.phase !== ph) return;
       if (e.type !== "down") continue;
@@ -253,6 +262,7 @@ export class Engine {
     }
     if (cm.first < 0 && finished.length === 1 && !cm.done[1 - finished[0]]) {          // 同一步一起填完＝沒有先手
       cm.first = finished[0];
+      this.setAnim(this.f[cm.first], "clash_first_draw");                              // 先手拔刀架勢
       this.emit("clash_first", { p: cm.first });
     }
     if ((cm.done[0] && cm.done[1]) || this.t >= this.dur) {
@@ -261,44 +271,93 @@ export class Engine {
     }
   }
 
-  // ---------------- PHASE_CLASH_ANIM（衝到中央對砍三刀，積分制；平分看先手） ----------------
+  // ---------------- PHASE_CLASH_ANIM（衝刺交會 → 由慢到快五刀 → 宣布勝負 → 主招大招） ----------------
   [`upd_${PH.CLASH_ANIM}`]() {
     const cm = this.cm, M = CONFIG.clashMode, [a, b] = this.f, mid = (cellX(a.pos) + cellX(b.pos)) / 2;
-    const rush = clamp(this.t / 0.18, 0, 1) * (1 - clamp((this.t - (M.animDur - 0.25)) / 0.25, 0, 1));   // 衝到中央，最後退回
     const dir = Math.sign(cellX(b.pos) - cellX(a.pos)) || 1;
-    a.x = lerp(cellX(a.pos), mid - dir * M.rush, rush); b.x = lerp(cellX(b.pos), mid + dir * M.rush, rush);
-    while (cm.cut < M.slots && this.t >= M.cutAt[cm.cut]) {
-      const k = cm.cut, g = [cm.seq[0][k], cm.seq[1][k]], w = duel(g[0], g[1]);
-      if (w >= 0) cm.score[w]++;
-      cm.cuts.push(w); cm.cut++;
-      for (const f of this.f) f.anim = { state: "clash", t: 0, alt: k % 2 };
-      this.emit("clash_cut", { n: k + 1, gestures: g, winner: w, score: cm.score.slice(), x: mid });
-      this.emit("hitstop", { ev: "clash", ms: w < 0 ? 45 : 70, shake: w < 0 ? 1 : 2 });
+    if (cm.stage === "cuts") {
+      const rush = 1 - Math.pow(1 - clamp(this.t / M.dashDur, 0, 1), 2);            // 0.25s 衝到中央交會
+      a.x = lerp(cellX(a.pos), mid - dir * M.rush, rush); b.x = lerp(cellX(b.pos), mid + dir * M.rush, rush);
+      cm.zoom = lerp(1, M.dashZoom, rush);
+      while (cm.cut < cm.cutAt.length && this.t >= cm.cutAt[cm.cut]) {
+        const k = cm.cut, c = M.cuts[k], g = [cm.seq[0][k], cm.seq[1][k]], w = duel(g[0], g[1]);
+        if (w >= 0) cm.score[w]++;
+        cm.cuts.push(w); cm.cut++; cm.zoom = c.zoom;
+        this.f.forEach((f, i) => { f.stance = g[i]; f.anim = { state: w === 1 - i ? "clash_recoil" : "clash_" + g[i], t: 0, alt: k % 2 }; });
+        this.emit("clash_cut", { n: k + 1, gestures: g, winner: w, score: cm.score.slice(), x: mid, hitstop: c.hitstop, pitch: c.pitch, zoom: c.zoom, impact: c.impactFrames ?? 0, last: k === M.cuts.length - 1 });
+        this.emit("hitstop", { ev: "clash", ms: c.hitstop, shake: w < 0 ? 1 : 2 + (k >= 3 ? 1 : 0) });
+      }
+      if (this.t < cm.resAt) return;
+      this.clashResult();
+      return;
     }
-    if (this.t < this.dur) return;
-    a.x = cellX(a.pos); b.x = cellX(b.pos);
-    const w = cm.score[0] === cm.score[1] ? cm.first : cm.score[0] > cm.score[1] ? 0 : 1;
+    // ---- 勝方主招大招 ----
+    const R = cm.result, win = this.f[R.winner], lose = this.f[1 - R.winner], F = M.finisher[R.main];
+    const away = Math.sign(lose.pos - win.pos) || (lose.i === 0 ? -1 : 1);
+    const t0 = cm.fxAt, k = clamp((this.t - t0) / F.windup, 0, 1);
+    if (cm.stage === "fin") {
+      if (this.t >= t0) {
+        const sx = cm.winFrom, tx = lose.x - away * 10;
+        if (R.main === "rock") {                                          // 崩山重砸：跳起、從正上方砸下
+          win.x = lerp(sx, tx, k); win.y = CONFIG.floorY - Math.sin(Math.PI * Math.min(1, k * 1.05)) * 46;
+        } else if (R.main === "scissors") {                               // 居合十字斬：0.12s 青光穿身、停在背後收刀
+          const kd = clamp((this.t - t0) / F.dash, 0, 1);
+          win.x = lerp(sx, lose.x + away * 22, 1 - Math.pow(1 - kd, 3));
+          if (kd >= 1 && !cm.passed) { cm.passed = true; win.face = -away; this.emit("clash_pass", { p: win.i, x: win.x }); }
+        } else {                                                          // 零距離氣功：貼身蓄氣
+          win.x = lerp(sx, tx, 1 - Math.pow(1 - clamp(k / 0.6, 0, 1), 2));
+        }
+      }
+      if (this.t < cm.hitAt) return;
+      // 命中：+24%（先手 +6%）＋高倍率擊飛
+      cm.stage = "hit";
+      win.y = CONFIG.floorY;
+      const dmg = M.winDamage + (cm.first === R.winner ? M.firstBonus : 0), RS = CONFIG.resolve;
+      lose.damage += dmg;
+      const v = RS.vBase * (1 + lose.damage / RS.damageDiv) * F.mult, ang = F.angle * Math.PI / 180;
+      lose.vx = Math.cos(ang) * v * away; lose.vy = -Math.sin(ang) * v; lose.air = true; lose.rot = 0; lose.skid = !!F.skid;
+      this.setAnim(lose, "knockback"); win.fin = 1;
+      this.round = { att: R.winner, def: 1 - R.winner, type: "clash", result: "clash", gesture: R.main, winGesture: R.main, zone: [], dirs: [], main: R.main };
+      this.emit("clash_finisher", { winner: R.winner, main: R.main, name: F.name, damage: dmg, first: cm.first === R.winner, x: lose.x, y: lose.y, wx: win.x, toward: away });
+      this.emit("hit", { p: lose.i, kind: "clash", damage: dmg, x: lose.x, toward: away, main: R.main });
+      this.emit("hitstop", { ev: "finisher_red", ms: R.main === "rock" ? 140 : 120, shake: R.main === "rock" ? 6 : 4, vertical: R.main === "rock" });
+      this.emit("clash_end", { winner: R.winner, score: cm.score.slice(), first: cm.first, damage: dmg, main: R.main, tiebreak: R.tiebreak });
+      this.glide(win, 0.32, 4, 0.2); win.face = away;                     // 收招、滑回自己的格子
+      this.go(PH.RESOLVE);
+    }
+  }
+  // 宣布拼刀勝負：比分高者勝；同分看 ⚡ 先手；都沒有 → 白色衝擊波彈開
+  clashResult() {
+    const cm = this.cm, M = CONFIG.clashMode, [a, b] = this.f;
+    const w = cm.score[0] !== cm.score[1] ? (cm.score[0] > cm.score[1] ? 0 : 1) : cm.first;
+    const tiebreak = cm.score[0] === cm.score[1] && w >= 0;
     cm.winner = w;
-    this.ties = 0;
-    this.clearHeat();                                                     // 拼刀結算：過熱全部清除
-    if (w < 0) {                                                          // 平分又沒先手：各自彈開、不回氣
-      this.emit("clash_end", { winner: -1, score: cm.score.slice(), first: cm.first });
+    this.clearHeat();                                                     // 拼刀結算：過熱全部清除、蓄力歸零
+    this.setGauge(0);
+    if (w < 0) {
+      a.x = cellX(a.pos); b.x = cellX(b.pos); cm.zoom = 1;
+      this.emit("clash_end", { winner: -1, score: cm.score.slice(), first: cm.first, draw: true });
       this.go(PH.CLASH);
       return;
     }
-    // 勝方重砍：+22%（有先手再 +6%）＋大推擠，可能直接砍出場外
-    const win = this.f[w], lose = this.f[1 - w], R = CONFIG.resolve;
-    const dmg = M.winDamage + (cm.first === w ? M.firstBonus : 0);
-    lose.damage += dmg;
-    const away = Math.sign(lose.pos - win.pos) || (lose.i === 0 ? -1 : 1);
-    const v = R.vBase * (1 + lose.damage / R.damageDiv) * M.launchMult, ang = R.angleDeg * Math.PI / 180;
-    lose.vx = Math.cos(ang) * v * away; lose.vy = -Math.sin(ang) * v; lose.air = true; lose.rot = 0;
-    this.setAnim(lose, "knockback"); this.setAnim(win, "finisher_blue"); win.fin = 1;
-    this.round = { att: w, def: 1 - w, type: "clash", result: "clash", gesture: null, winGesture: null, zone: [], dirs: [] };
-    this.emit("clash_end", { winner: w, score: cm.score.slice(), first: cm.first, damage: dmg });
-    this.emit("hit", { p: lose.i, kind: "clash", damage: dmg, x: lose.x, toward: away });
-    this.emit("hitstop", { ev: "finisher_blue" });
-    this.go(PH.RESOLVE);
+    const main = this.mainGesture(w);
+    cm.result = { winner: w, main, tiebreak, score: cm.score.slice() };
+    cm.stage = "fin"; cm.fxAt = this.t + (tiebreak ? M.tiebreakSlow : 0);
+    cm.hitAt = cm.fxAt + M.finisher[main].windup; this.dur = cm.hitAt + 1;
+    cm.winFrom = this.f[w].x;
+    this.setAnim(this.f[w], "clash_win_" + main); this.setAnim(this.f[1 - w], "clash_recoil");
+    this.f[w].stance = main;
+    this.emit("clash_result", { winner: w, main, tiebreak, score: cm.score.slice(), first: cm.first, name: M.finisher[main].name });
+  }
+  // 主招：勝方「贏最多刀」的手勢；次數相同 → 勝方最後一次贏的那刀；一刀都沒贏（靠先手）→ 最後一格
+  mainGesture(w) {
+    const cm = this.cm, cnt = { rock: 0, scissors: 0, paper: 0 };
+    cm.cuts.forEach((r, k) => { if (r === w) cnt[cm.seq[w][k]]++; });
+    const top = Math.max(...Object.values(cnt));
+    if (top === 0) return cm.seq[w][cm.seq[w].length - 1];
+    const best = GESTURES.filter(g => cnt[g] === top);
+    for (let k = cm.cuts.length - 1; k >= 0; k--) if (cm.cuts[k] === w && best.includes(cm.seq[w][k])) return cm.seq[w][k];
+    return best[0];
   }
 
   // ---------------- PHASE_MASH（連打加壓） ----------------
@@ -419,24 +478,36 @@ export class Engine {
   [`upd_${PH.RESOLVE}`](dt) {
     const R = CONFIG.resolve;
     for (const f of this.f) {
-      if (!f.air || f.out) continue;
+      if (f.out) continue;
+      if (f.skidding) {                                                        // 氣功轟飛：貼地滑行，滑出台邊就掉下去
+        const left = CONFIG.stageX, right = CONFIG.stageX + CONFIG.cells * CONFIG.cellW, d = Math.sign(f.vx);
+        f.x += f.vx * dt; f.vx -= d * R.skidFriction * dt;
+        if (f.x < left || f.x >= right) { f.skidding = false; f.air = true; f.vy = 40; continue; }
+        if (Math.sign(f.vx) !== d || Math.abs(f.vx) < 8) { f.skidding = false; f.vx = 0; this.land(f); }
+        continue;
+      }
+      if (!f.air) continue;
       f.vy += R.gravity * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vx * dt * 0.05;
       const left = CONFIG.stageX, right = CONFIG.stageX + CONFIG.cells * CONFIG.cellW;
       if (f.y >= CONFIG.floorY && f.vy > 0 && f.x >= left && f.x < right) {        // 落在台上：對齊最近的格子
         f.y = CONFIG.floorY; f.air = false; f.rot = 0;
+        if (f.skid) { f.skid = false; f.skidding = true; f.vy = 0; this.emit("skid", { p: f.i, x: f.x }); continue; }
+        this.land(f);
+      } else if (f.x < -R.koMargin || f.x > CONFIG.W + R.koMargin || f.y > CONFIG.H + 40) this.ko(f);
+    }
+    if (this.koTimer !== null) { this.koTimer -= dt; if (this.koTimer > 0) return; this.koTimer = null; if (this.afterKO()) return; }
+    if (this.t >= this.dur && this.f.every(f => !f.air && !f.gl && !f.skidding)) this.endRound();
+  }
+  land(f) {
         let c = clamp(Math.floor((f.x - CONFIG.stageX) / CONFIG.cellW) + 1, 1, CONFIG.cells);
         const o = this.other(f);
         if (c === o.pos) { const d = Math.sign(f.vx) || 1; c = (c + d >= 1 && c + d <= CONFIG.cells) ? c + d : c - d; }
         f.pos = c; this.glide(f, 0.15, 0, 0);
         this.setAnim(f, "idle");
         this.emit("land", { p: f.i, pos: c, x: f.x });
-      } else if (f.x < -R.koMargin || f.x > CONFIG.W + R.koMargin || f.y > CONFIG.H + 40) this.ko(f);
-    }
-    if (this.koTimer !== null) { this.koTimer -= dt; if (this.koTimer > 0) return; this.koTimer = null; if (this.afterKO()) return; }
-    if (this.t >= this.dur && this.f.every(f => !f.air && !f.gl)) this.endRound();
   }
   ko(f) {
-    f.out = true; f.air = false; f.stocks -= 1;
+    f.out = true; f.air = false; f.skid = f.skidding = false; f.stocks -= 1;
     const K = { left: 16, right: 464 };
     const x = f.x < 0 ? K.left : f.x > CONFIG.W ? K.right : clamp(f.x, K.left, K.right);
     this.koTimer = CONFIG.resolve.koPause;
@@ -447,11 +518,11 @@ export class Engine {
     if (dead) { this.winner = 1 - dead.i; this.go(PH.GAMEOVER); return true; }
     for (const f of this.f) {                                                  // 掉命：重置中央站位，被擊落的一方損傷歸零
       if (f.out) { f.damage = 0; f.out = false; }
-      f.pos = CONFIG.spawn[f.i]; f.x = cellX(f.pos); f.y = CONFIG.floorY; f.air = false; f.vx = f.vy = 0; f.rot = 0; f.gl = null; f.redGlow = false;
+      f.pos = CONFIG.spawn[f.i]; f.x = cellX(f.pos); f.y = CONFIG.floorY; f.air = false; f.vx = f.vy = 0; f.rot = 0; f.gl = null; f.redGlow = false; f.skid = f.skidding = false;
       this.setAnim(f, "idle");
     }
-    this.ties = 0;
-    this.clearHeat();                                                          // 落台重生：過熱全部清除
+    this.setGauge(0);                                                          // 落台重生：拼刀蓄力歸零、過熱全部清除
+    this.clearHeat();
     this.emit("respawn");
     return false;
   }
@@ -486,12 +557,14 @@ export class Engine {
     const inClash = cm && (this.phase === PH.CLASH_INPUT || this.phase === PH.CLASH_ANIM || (this.phase === PH.RESOLVE && r?.type === "clash") || (this.phase === PH.CLASH && cm.revealed && cm.winner < 0));
     return {
       phase: this.phase, t: this.t, dur: this.dur, rt: this.rt, winner: this.winner, seat,
-      reveal: this.reveal, speedLv: this.speedLv, rounds: this.rounds, ties: this.ties,
+      reveal: this.reveal, speedLv: this.speedLv, rounds: this.rounds, gauge: this.gauge, gaugeMax: CONFIG.CLASH_TRIGGER_TIES,
       rps: this.phase === PH.REVEAL && this.lastRps ? { stances: this.lastRps.stances.slice(), winner: this.lastRps.winner, random: this.lastRps.random.slice() } : null,
       clash: inClash ? {
         count: cm.seq.map(s => s.length), first: cm.first, done: cm.done.slice(),
         seq: cm.seq.map((s, i) => (cm.revealed || i === seat ? s.slice() : null)),       // 預輸入時只看得到自己的；對砍開始才全公開
-        cut: cm.cut, cuts: cm.cuts.slice(), score: cm.score.slice(), winner: this.phase === PH.CLASH_ANIM ? -2 : cm.winner,
+        cut: cm.cut, cuts: cm.cuts.slice(), score: cm.score.slice(), winner: this.phase === PH.CLASH_ANIM && !cm.result ? -2 : cm.winner,
+        n: CONFIG.CLASH_SEQUENCE_LENGTH, stage: cm.stage, zoom: cm.zoom, result: cm.result ? { ...cm.result } : null,
+        hitAt: cm.hitAt ?? 0, fxAt: cm.fxAt ?? 0, cutAt: cm.cutAt ? cm.cutAt.slice() : null,
       } : null,
       fighters: this.f.map(f => ({
         i: f.i, pos: f.pos, x: f.x, y: f.y, rot: f.rot, face: f.face, out: f.out, air: f.air,

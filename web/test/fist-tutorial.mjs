@@ -13,7 +13,7 @@ const until = (cond, max = 15) => { for (let t = 0; t < max && !cond(); t += STE
 const tap = (btn, hold = 0.05) => { tut.transport.sendInput({ seat: 0, type: "down", btn }); run(hold); tut.transport.sendInput({ seat: 0, type: "up", btn }); run(STEP); };
 const phase = () => tut.transport?.engine.phase;
 
-ok(LESSONS.length === 4 && LESSONS.map(l => l.name).join("／") === "關卡 1：前搖讀心與過熱／關卡 2：連打與藍光彈反／關卡 3：三連斬拼刀／關卡 4：崖邊閃紅招", "四關名稱照新規則");
+ok(LESSONS.length === 4 && LESSONS.map(l => l.name).join("／") === "關卡 1：前搖讀心與過熱／關卡 2：連打與藍光彈反／關卡 3：五連斬拼刀／關卡 4：崖邊閃紅招", "四關名稱照新規則");
 tut.start();
 
 console.log("關卡 1：前搖讀心與過熱");
@@ -43,19 +43,20 @@ run(0.5); tap("L");                                               // 0.5s 才按
 until(() => objective.lesson === 2);
 ok(objective.lesson === 2, "彈反成功 → 進關卡 3");
 
-console.log("關卡 3：三連斬拼刀");
+console.log("關卡 3：五連斬拼刀");
 until(() => phase() === PH.RPS && view().fighters[1].stance === "rock");
 tap("R");                                                         // 先故意贏（不平手）
 until(() => objective.retry);
 ok(objective.retry && objective.step === 0, `沒平手要重來：${objective.text}`);
 until(() => phase() === PH.RPS && view().fighters[1].stance === "rock");
+ok(view().gauge === 1, "關卡 3 開場蓄力 ⚔️ 1/2");
 tap("L");
 until(() => phase() === PH.CLASH_INPUT);
-ok(objective.step === 1, `平手 → 拼刀：${objective.text}`);
-tap("L", 0.03); tap("L", 0.03); tap("L", 0.03);                   // 石頭×3 對上剪刀×3
+ok(objective.step === 1 && view().gauge === 2, `平手 → 拼刀：${objective.text}`);
+for (let i = 0; i < 5; i++) tap("L", 0.03);                        // 石頭×5 對上剪刀×5
 ok(tut.transport.engine.cm.first === 0 && objective.step === 2, "搶先填完：⚡ 先手");
-until(() => objective.lesson === 3, 8);
-ok(objective.lesson === 3, "看完三刀 → 進關卡 4");
+until(() => objective.lesson === 3, 10);
+ok(objective.lesson === 3, "看完五刀對砍 → 進關卡 4");
 
 console.log("關卡 4：崖邊閃紅招");
 until(() => phase() === PH.WINDOW);

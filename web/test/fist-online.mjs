@@ -150,19 +150,27 @@ console.log("拼刀：伺服器保密序列、只廣播格數與先手");
   await X.join(); await Y.join();
   X.send({ t: "ready", on: true }); Y.send({ t: "ready", on: true });
   await until(() => X.view?.phase === "PHASE_RPS" && X.view.t > 0.1, 6000);
-  await X.tap("R"); await Y.tap("R");                                  // 布對布：平手
+  ok(X.view.gauge === 0 && Y.view.gauge === 0 && X.view.gaugeMax === 2, "開局蓄力 ⚔️ 0/2（雙方同步）");
+  await X.tap("R"); await Y.tap("R");                                  // 布對布：第 1 次平手
+  await until(() => phaseIs(X, "PHASE_CLASH")() || phaseIs(X, "PHASE_CLASH_INPUT")(), 6000);
+  ok(X.view?.phase === "PHASE_CLASH" && X.view.gauge === 1 && Y.view.gauge === 1 && Y.events.some(e => e.type === "gauge" && e.gauge === 1), "第 1 次平手：小拼刀彈開，雙方都看到蓄力 1/2");
+  await until(() => X.view?.phase === "PHASE_RPS" && X.view.t > 0.1, 4000);
+  await X.tap("L"); await Y.tap("L");                                  // 石對石：第 2 次平手
   await until(phaseIs(X, "PHASE_CLASH_INPUT"), 6000);
-  ok(X.view?.phase === "PHASE_CLASH_INPUT", "線上平手 → 拼刀預輸入");
+  ok(X.view?.phase === "PHASE_CLASH_INPUT" && Y.view.gauge === 2 && X.view.clash.n === 5, "第 2 次平手 → 蓄力 2/2 → 線上五連斬預輸入");
   const mark = Y.msgs.length;
-  await X.tap("M", 15); await X.tap("M", 15); await X.tap("L", 15);    // X 先填完：剪 剪 石
+  for (const b of ["M", "M", "L", "R", "M"]) await X.tap(b, 15);      // X 先填完：剪 剪 石 布 剪
   await until(() => Y.events.some(e => e.type === "clash_first"), 2000);
   const ymsgs = Y.msgs.slice(mark).filter(m => m.t === "state");
-  ok(Y.events.some(e => e.type === "clash_first" && e.p === 0) && ymsgs.some(m => m.view.clash?.count[0] === 3 && m.view.clash.first === 0), "對手收到：P1 填滿 3 格、搶到 ⚡ 先手");
+  ok(Y.events.some(e => e.type === "clash_first" && e.p === 0) && ymsgs.some(m => m.view.clash?.count[0] === 5 && m.view.clash.first === 0), "對手收到：P1 填滿 5 格、搶到 ⚡ 先手");
   ok(ymsgs.length > 0 && ymsgs.every(m => m.view.phase !== "PHASE_CLASH_INPUT" || m.view.clash.seq[0] === null) && !ymsgs.filter(m => m.view.phase === "PHASE_CLASH_INPUT").some(m => m.events.some(e => e.type === "clash_pick")), "預輸入期間對手收到的封包裡沒有 P1 的序列內容");
-  ok(X.view.clash.seq[0]?.join() === "scissors,scissors,rock", "自己看得到自己填了什麼");
-  await Y.tap("L", 15); await Y.tap("L", 15); await Y.tap("L", 15);
+  ok(X.view.clash.seq[0]?.join() === "scissors,scissors,rock,paper,scissors", "自己看得到自己填了什麼");
+  for (let k = 0; k < 5; k++) await Y.tap("L", 15);                    // Y：石×5 → 刀：P2 P2 平 P1 P2
   await until(phaseIs(Y, "PHASE_CLASH_ANIM"), 2000);
-  ok(Y.view.clash.seq[0]?.join() === "scissors,scissors,rock", "雙方填完 → 對砍：序列全公開");
+  ok(Y.view.clash.seq[0]?.join() === "scissors,scissors,rock,paper,scissors", "雙方填完 → 對砍：序列全公開");
+  await until(() => X.events.some(e => e.type === "clash_finisher") && Y.events.some(e => e.type === "clash_finisher"), 5000);
+  const fx = X.events.find(e => e.type === "clash_finisher"), fy = Y.events.find(e => e.type === "clash_finisher");
+  ok(X.events.filter(e => e.type === "clash_cut").length === 5 && fx && fy && fx.winner === 1 && fx.main === "rock" && fy.main === "rock" && fx.damage === 24, "伺服器判定：P2 3:1 勝，主招石頭（崩山重砸）+24%，雙方收到同一結果");
   X.ws.close(); Y.ws.close();
 }
 

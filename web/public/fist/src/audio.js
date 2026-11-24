@@ -65,7 +65,22 @@ export const Sfx = {
   reveal(win) { tone(win ? 660 : 440, 0.12, 0.1, "triangle"); tone(win ? 990 : 440, 0.18, 0.1, "triangle", 1, 0.09); },
   sizzle() { noise(0.25, 0.05, 5000, "highpass", 1, 0, 2500); },
   draw() { noise(0.28, 0.16, 900, "bandpass", 2, 0, 7000); tone(1760, 0.2, 0.06, "sine", 1.2, 0.18); },   // ⚡ 先手：拔刀
-  cut(n) { noise(0.08, 0.28, 3600, "bandpass", 3); tone(1200 + n * 180, 0.16, 0.12, "square", 0.7); },
+  // ---- 拼刀 ----
+  ding() { tone(2640, 0.32, 0.14, "triangle", 0.99); tone(3960, 0.2, 0.06, "sine"); noise(0.04, 0.2, 7000, "highpass"); },   // 小拼刀「叮！」
+  gaugeFull() { [660, 880, 1320].forEach((f, i) => tone(f, 0.16, 0.1, "triangle", 1, i * 0.05)); noise(0.2, 0.12, 4000, "highpass", 1, 0.1); },
+  dash() { noise(0.25, 0.22, 600, "bandpass", 0.8, 0, 4200); tone(90, 0.2, 0.2, "sine", 0.5); },
+  // 一刀：pitch 逐刀升高（1.00→1.45）；平刀多一聲金屬顫音；第 5 刀加低頻衝擊
+  cut(n, pitch = 1, tie = false, impact = false) {
+    noise(0.08, 0.3, 3600 * pitch, "bandpass", 3); tone(1100 * pitch, 0.16, 0.13, "square", 0.7);
+    if (tie) tone(2200 * pitch, 0.25, 0.08, "triangle", 0.98, 0.01);
+    if (impact) { tone(55, 0.5, 0.5, "sine", 0.4); noise(0.35, 0.4, 500, "lowpass", 0.8, 0.02, 90); }
+  },
+  sting() { tone(1568, 0.3, 0.12, "triangle"); tone(2093, 0.4, 0.12, "triangle", 1, 0.08); noise(0.3, 0.1, 6000, "highpass", 1, 0.05); },   // ⚡ 先手絕殺
+  slam() { tone(48, 0.6, 0.7, "sine", 0.3); noise(0.4, 0.6, 350, "lowpass", 0.7, 0, 60); noise(0.08, 0.4, 2200, "bandpass", 1); },         // 崩山重砸
+  iai() { noise(0.1, 0.35, 7000, "highpass", 1); tone(3000, 0.12, 0.08, "sine", 0.5); },                                                     // 居合：穿身一閃
+  iaiBoom() { noise(0.3, 0.45, 5000, "bandpass", 2, 0, 900); tone(80, 0.35, 0.45, "sine", 0.4); },                                             // 十字炸開
+  beam() { tone(160, 0.6, 0.3, "sawtooth", 1.8); noise(0.6, 0.35, 1200, "bandpass", 0.7, 0, 400); tone(80, 0.5, 0.4, "sine", 0.5); },          // 氣功轟飛
+  wave() { noise(0.5, 0.35, 2500, "bandpass", 0.8, 0, 300); tone(523, 0.3, 0.1, "triangle", 0.5); },                                          // 平分白色衝擊波
   cueSoon() { tone(330, 0.22, 0.05, "sine", 1.6); },
 };
 
@@ -79,13 +94,17 @@ function handle(events, view) {
       case "rps_result": Sfx.reveal(e.winner >= 0); break;
       case "heat": if (e.heat.some(Boolean)) Sfx.sizzle(); break;
       case "clash_start": Sfx.clash(); break;
+      case "gauge": if (e.full) Sfx.gaugeFull(); break;
+      case "clash_dash": Sfx.dash(); break;
+      case "clash_result": if (e.tiebreak) Sfx.sting(); break;
+      case "clash_pass": Sfx.iai(); break;
+      case "clash_finisher": e.main === "rock" ? Sfx.slam() : e.main === "scissors" ? Sfx.iaiBoom() : Sfx.beam(); break;
       case "clash_input": case "clash_pick": Sfx.tick(); break;
       case "clash_first": Sfx.draw(); break;
-      case "clash_cut": Sfx.cut(e.n); break;
-      case "clash_end": if (e.winner >= 0) Sfx.heavy(); break;
+      case "clash_cut": Sfx.cut(e.n, e.pitch ?? 1, e.winner < 0, !!e.impact); break;
       case "lock": case "stance": case "finisher_pick": Sfx.tick(); break;
       case "hide": Sfx.hide(); break;
-      case "clash": Sfx.clash(); break;
+      case "clash": e.wave ? Sfx.wave() : Sfx.ding(); break;
       case "hit": e.kind === "extra" ? Sfx.jab(e.n) : Sfx.punch(e.kind === "counter" ? 1.1 : e.n === 1 ? 0.8 : 1); break;
       case "charge_start": Sfx.chargeStart(); break;
       case "charge_stop": Sfx.chargeStop(); break;

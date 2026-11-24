@@ -1,9 +1,10 @@
 // guide.js — 新手引導：每個階段告訴玩家「現在該按什麼」
 //   · 只說該做什麼、不說該出什麼（不會洩露對手藏招，也不是幫你作弊）
 //   · seat = 自己的座位；-1 = 同機雙人共用畫面
+import { CONFIG } from "./config.js";
 import { PH, GLABEL, GICON } from "./engine.js";
 
-export const FLOW = "✊ 猜拳 → 👀 開牌 → 🔥 連打 → 🎯 終結技 → 🛡️ 彈反／🔴 翻滾（平手 ⚔️ 拼刀）";
+export const FLOW = "✊ 猜拳 → 👀 開牌 → 🔥 連打 → 🎯 終結技 → 🛡️ 彈反／🔴 翻滾（平手累積 2 次 ⚔️ 五連斬拼刀）";
 
 export function coachText(v, seat) {
   if (!v) return "";
@@ -19,11 +20,12 @@ export function coachText(v, seat) {
     case PH.REVEAL: return "👀 開牌！看清楚誰壓制誰";
     case PH.CLASH_INPUT: {
       const n = v.clash?.count?.[seat] ?? 0;
-      if (!me) return "⚔️ 拼刀！兩邊各在 3 秒內連按 3 下填滿劍格，先填完拿 ⚡ 先手";
-      return n >= 3 ? "⚔️ 填好了！等對手…" : `⚔️ 拼刀！3 秒內連按 3 下填滿劍格（${n}/3），先填完拿 ⚡ 先手`;
+      const N = CONFIG.CLASH_SEQUENCE_LENGTH, T = CONFIG.clashMode.inputDur;
+      if (!me) return `⚔️ 五連斬！兩邊各在 ${T} 秒內連按 ${N} 下填滿劍格，先填完拿 ⚡ 先手`;
+      return n >= N ? "⚔️ 填好了！等對手…" : `⚔️ 五連斬！${T} 秒內連按 ${N} 下填滿劍格（${n}/${N}），先填完拿 ⚡ 先手`;
     }
-    case PH.CLASH_ANIM: return "⚔️ 三刀對砍：贏刀多的重砍對手，平分看 ⚡ 先手";
-    case PH.CLASH: return "⚔️ 平手彈開，馬上下一輪";
+    case PH.CLASH_ANIM: return v.clash?.result ? "⚔️ 勝負已分：主招大招！" : "⚔️ 五刀由慢到快對砍：贏刀多的放大招，同分看 ⚡ 先手";
+    case PH.CLASH: return (v.gauge ?? 0) > 0 ? `⚔️ 叮！平手彈開，拼刀蓄力 ${v.gauge}/${v.gaugeMax}` : "⚔️ 平分！各自彈開，馬上下一輪";
     case PH.MASH:
       if (!r) return "";
       if (!me) return `🔥 ${P(r.att)} 贏拳！狂按任意鍵追加連擊（最多 4 拳）`;

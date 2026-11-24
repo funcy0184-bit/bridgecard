@@ -1,11 +1,14 @@
 // gameRoom.js（拳刃交鋒）— 一個 4 碼房號 = 一個 GameRoom Durable Object
 //   · 權威伺服器：跑跟前端同一份 engine.js；瀏覽器只送按鍵，所有判定（猜拳、連打、彈反、翻滾、擊飛）都在這裡算
-//   · 時間軸：房內計時器固定 1/120 秒推進引擎，六個階段的切換都由伺服器時鐘決定；
+//   · 時間軸：房內計時器固定 1/120 秒推進引擎，各階段的切換都由伺服器時鐘決定；
 //            每則 state 附 serverTime 與 phaseEndTime，前端依此對齊倒數條
-//   · v3 規則（沒有走位）：猜拳 → 開牌停頓 PHASE_REVEAL → 連打／終結擇／判定窗；平手 → 拼刀 PHASE_CLASH_INPUT → PHASE_CLASH_ANIM
+//   · v3 規則（沒有走位）：猜拳 → 開牌停頓 PHASE_REVEAL → 連打／終結擇／判定窗；
+//     平手累積 2 次（view.gauge／gaugeMax，公開）→ 五連斬拼刀 PHASE_CLASH_INPUT（3.5 秒）→ PHASE_CLASH_ANIM（五刀＋主招大招）
 //       - 武器過熱：view.fighters[i].heat 公開同步給雙方（誰禁用哪招）
-//       - 拼刀預輸入：伺服器保密雙方序列，只廣播「填了幾格」（clash_input）與誰搶到先手（clash_first）；
-//         填了什麼（clash_pick）只送給本人，view.clash.seq 對手那格是 null；3 秒到或雙方都填完才進對砍、全公開
+//       - 拼刀蓄力：第 1 次平手只「叮！」彈開（gauge 事件），集滿才拼刀；拼刀結算或有人落台歸零
+//       - 拼刀預輸入：伺服器保密雙方 5 招序列，只廣播「填了幾格」（clash_input）與誰搶到先手（clash_first）；
+//         填了什麼（clash_pick）只送給本人，view.clash.seq 對手那格是 null；3.5 秒到（沒填滿伺服器隨機補）或雙方都填完才進對砍、全公開
+//       - 對砍時間軸、勝負、主招（clash_cut／clash_result／clash_finisher）全由伺服器決定，前端只播演出
 //   · 隱藏資訊：每個座位只收 engine.viewFor(自己) ＋ 自己看得到的事件
 //       - 猜拳前 1.3 秒：架式（stance 事件）即時轉發給對手播前搖
 //       - 最後 0.5 秒藏招：只記錄、絕不轉發；對手畫面上的你永遠是「hidden」，直到鎖定結算（rps_result）一起公佈

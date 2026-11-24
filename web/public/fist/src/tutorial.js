@@ -1,6 +1,6 @@
 // tutorial.js — 四關互動式教學（跑的是真的 engine，不是動畫影片）
 //   · 每關：setup（站位、損傷、力量、過熱、從哪個階段開始）＋ 腳本電腦 ＋ flow（引擎換階段前的掛鉤：重來、換段、停住）＋ 一串目標
-//   · v3 四關：前搖讀心與過熱／連打與藍光彈反／三連斬拼刀／崖邊閃紅招
+//   · v3 四關：前搖讀心與過熱／連打與藍光彈反／五連斬拼刀／崖邊閃紅招
 //   · 畫面頂部只放一行目標；失敗就原地重來，不用看長篇說明
 //   · 用法：const tut = new Tutorial({ onTransport, onObjective, onDone }); tut.start();
 import { CONFIG } from "./config.js";
@@ -47,21 +47,22 @@ export const LESSONS = [
     ],
   },
   {
-    name: "關卡 3：三連斬拼刀",
-    setup: S({ pos: 3, power: 1 }, { pos: 5, power: 1, damage: 90 }, { phase: PH.RPS }),
-    setupB: S({ pos: 3, power: 1 }, { pos: 5, power: 1, damage: 90 }, { phase: PH.CLASH_INPUT, ties: 1 }),
-    // 陪練：亮石頭；拼刀時慢吞吞地填三下剪刀
-    script: { [PH.RPS]: [{ at: 0.3, btn: "L" }], [PH.CLASH_INPUT]: [{ at: 1.5, btn: "M" }, { at: 1.9, btn: "M" }, { at: 2.3, btn: "M" }] },
+    name: "關卡 3：五連斬拼刀",
+    // 蓄力直接從 ⚔️ 1/2 開始：再平手一次就觸發五連斬
+    setup: S({ pos: 3, power: 1 }, { pos: 5, power: 1, damage: 90 }, { phase: PH.RPS, gauge: 1 }),
+    setupB: S({ pos: 3, power: 1 }, { pos: 5, power: 1, damage: 90 }, { phase: PH.CLASH_INPUT, gauge: 2 }),
+    // 陪練：亮石頭；拼刀時慢吞吞地填五下剪刀（最後一下 3.1 秒）
+    script: { [PH.RPS]: [{ at: 0.3, btn: "L" }], [PH.CLASH_INPUT]: [1.5, 1.9, 2.3, 2.7, 3.1].map(at => ({ at, btn: "M" })) },
     flow(from, to, e, L) {
       if (from === PH.REVEAL && e.lastRps.winner !== -1) return { reset: L.setup };      // 沒平手：重來
       if (from === PH.CLASH_INPUT && e.cm.first !== 0) return { reset: L.setupB };       // 先手被搶：重填
       if (from === PH.RESOLVE || from === PH.CLASH) return { phase: PH.IDLE };
     },
     goals: [
-      { text: "對手亮『✊ 石頭』—— 這次故意也按 A 出石頭，平手觸發拼刀", done: e => e.type === "clash_start", retry: e => e.type === "rps_result" && e.winner !== -1 && "要出一樣的才會拼刀：按 A" },
-      { text: "⚔️ 3 秒內連按 3 下填滿劍格（A／S／D 隨你配），搶先填完拿 ⚡ 先手！", done: e => e.type === "clash_first" && e.p === 0, retry: e => e.type === "clash_first" && e.p === 1 && "先手被搶走了！手再快一點" },
-      { text: "⚡ 先手到手！看三刀對砍 —— 就算平分也是你贏", done: e => e.type === "clash_end" },
-      { text: "拼刀結算！勝方重砍 +22%（先手再 +6%），損傷高就直接飛出去", wait: 1.6 },
+      { text: "上方的 ⚔️ 1/2 是拼刀蓄力：平手累積 2 次就拼刀。對手亮『✊ 石頭』—— 故意也按 A 出石頭！", done: e => e.type === "clash_start", retry: e => e.type === "rps_result" && e.winner !== -1 && "要出一樣的才會平手：按 A" },
+      { text: "⚔️ 3.5 秒內連按 5 下填滿劍格（A／S／D 隨你配），搶先填完拿 ⚡ 先手！", done: e => e.type === "clash_first" && e.p === 0, retry: e => e.type === "clash_first" && e.p === 1 && "先手被搶走了！手再快一點" },
+      { text: "⚡ 先手到手！看五刀由慢到快對砍 —— 就算同分也是你贏", done: e => e.type === "clash_end" },
+      { text: "拼刀結算！贏最多刀的手勢決定大招（✊ 崩山重砸／✌️ 居合十字斬／🖐️ 氣功轟飛），+24%、先手再 +6%", wait: 2.0 },
     ],
   },
   {
