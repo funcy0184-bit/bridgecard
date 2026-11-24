@@ -1,0 +1,402 @@
+{
+  "schemaVersion": "2.0.0",
+  "project": "拳刃交鋒",
+  "canvas": {
+    "width": 480,
+    "height": 270,
+    "filter": "nearest",
+    "integerScale": true
+  },
+  "layout": {
+    "origin": "topLeft",
+    "indexBase": 0,
+    "fighterCellPx": [
+      50,
+      50
+    ],
+    "drawableRectXYWH": [
+      1,
+      1,
+      48,
+      48
+    ],
+    "fighterPivotInCellPx": [
+      24,
+      40
+    ],
+    "fighterPivotInCroppedRectPx": [
+      23,
+      39
+    ],
+    "baseFacing": "right",
+    "unusedCells": "transparent",
+    "alpha": "straight RGBA8; alpha 0 or 255"
+  },
+  "rules": {
+    "trigger": {
+      "metric": "accumulatedDraws",
+      "threshold": 2,
+      "requiresConsecutive": false
+    },
+    "clashCount": 5,
+    "finisherSelector": "highestWinningGestureCount",
+    "countOnly": "beats won by the already resolved winner",
+    "excludeDraws": true,
+    "tiedMaximum": "use game-provided resolvedFinisherGesture among tied leaders",
+    "noResolvedWinner": "do not trigger a victory finisher"
+  },
+  "files": {
+    "fighter_p1_clash.png": {
+      "type": "fighter",
+      "width": 500,
+      "height": 500,
+      "frameWidth": 50,
+      "frameHeight": 50,
+      "columns": 10,
+      "rows": 10,
+      "frames": 57,
+      "capacity": 100,
+      "fpsByRow": [
+        10,
+        20,
+        24,
+        18,
+        24,
+        18,
+        20,
+        16,
+        22,
+        16
+      ],
+      "animationsRef": "animations"
+    },
+    "fighter_p2_clash.png": {
+      "type": "fighter",
+      "width": 500,
+      "height": 500,
+      "frameWidth": 50,
+      "frameHeight": 50,
+      "columns": 10,
+      "rows": 10,
+      "frames": 57,
+      "capacity": 100,
+      "fpsByRow": [
+        10,
+        20,
+        24,
+        18,
+        24,
+        18,
+        20,
+        16,
+        22,
+        16
+      ],
+      "animationsRef": "animations"
+    },
+    "vfx_clash_spark.png": {
+      "type": "vfx",
+      "width": 240,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "columns": 5,
+      "rows": 1,
+      "frames": 5,
+      "fps": 24,
+      "loop": false,
+      "pivotPx": [
+        24,
+        24
+      ],
+      "label": "相撞火花"
+    },
+    "vfx_first_draw_star.png": {
+      "type": "vfx",
+      "width": 96,
+      "height": 24,
+      "frameWidth": 24,
+      "frameHeight": 24,
+      "columns": 4,
+      "rows": 1,
+      "frames": 4,
+      "fps": 24,
+      "loop": false,
+      "pivotPx": [
+        12,
+        12
+      ],
+      "label": "拔刀星芒"
+    },
+    "vfx_win_rock_slam.png": {
+      "type": "vfx",
+      "width": 576,
+      "height": 64,
+      "frameWidth": 96,
+      "frameHeight": 64,
+      "columns": 6,
+      "rows": 1,
+      "frames": 6,
+      "fps": 18,
+      "loop": false,
+      "pivotPx": [
+        48,
+        44
+      ],
+      "label": "震地裂岩"
+    },
+    "vfx_win_scissors_cross.png": {
+      "type": "vfx",
+      "width": 576,
+      "height": 96,
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "columns": 6,
+      "rows": 1,
+      "frames": 6,
+      "fps": 24,
+      "loop": false,
+      "pivotPx": [
+        48,
+        46
+      ],
+      "label": "延遲十字斬"
+    },
+    "vfx_win_paper_beam.png": {
+      "type": "vfx",
+      "width": 768,
+      "height": 64,
+      "frameWidth": 128,
+      "frameHeight": 64,
+      "columns": 6,
+      "rows": 1,
+      "frames": 6,
+      "fps": 20,
+      "loop": false,
+      "pivotPx": [
+        3,
+        32
+      ],
+      "label": "翠綠氣功波"
+    }
+  },
+  "animations": {
+    "clash_charge": {
+      "row": 0,
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "label": "按刀蓄勢"
+    },
+    "clash_first_draw": {
+      "row": 1,
+      "frames": 6,
+      "fps": 20,
+      "loop": false,
+      "label": "先手拔刀",
+      "vfxEvent": {
+        "frame": 2,
+        "asset": "vfx_first_draw_star.png",
+        "attach": "fighterCell",
+        "positionPx": [
+          27,
+          28
+        ],
+        "mode": "once"
+      }
+    },
+    "clash_dash": {
+      "row": 2,
+      "frames": 4,
+      "fps": 24,
+      "loop": false,
+      "label": "拼刀衝刺",
+      "worldMotion": "Approach clash point supplied by gameplay; round draw positions to integer pixels."
+    },
+    "clash_rock": {
+      "row": 3,
+      "frames": 5,
+      "fps": 18,
+      "loop": false,
+      "label": "石頭重砸",
+      "contactFrame": 3
+    },
+    "clash_scissors": {
+      "row": 4,
+      "frames": 5,
+      "fps": 24,
+      "loop": false,
+      "label": "雙刃斜斬",
+      "contactFrame": 2
+    },
+    "clash_paper": {
+      "row": 5,
+      "frames": 5,
+      "fps": 18,
+      "loop": false,
+      "label": "布掌風推擊",
+      "contactFrame": 3
+    },
+    "clash_recoil": {
+      "row": 6,
+      "frames": 4,
+      "fps": 20,
+      "loop": false,
+      "label": "閃白彈開",
+      "flashFrame": 0
+    },
+    "clash_win_rock": {
+      "row": 7,
+      "frames": 8,
+      "fps": 16,
+      "loop": false,
+      "label": "崩山重砸",
+      "renderOffsetYPxByFrame": [
+        0,
+        0,
+        -7,
+        -14,
+        -9,
+        0,
+        0,
+        0
+      ]
+    },
+    "clash_win_scissors": {
+      "row": 8,
+      "frames": 8,
+      "fps": 22,
+      "loop": false,
+      "label": "居合十字斬",
+      "crossTargetFrame": 3,
+      "sheathingFramesInclusive": [
+        5,
+        7
+      ]
+    },
+    "clash_win_paper": {
+      "row": 9,
+      "frames": 8,
+      "fps": 16,
+      "loop": false,
+      "label": "零距離氣功轟飛",
+      "chargeFramesInclusive": [
+        0,
+        3
+      ]
+    }
+  },
+  "finishers": {
+    "rock": {
+      "title": "崩山重砸",
+      "animation": "clash_win_rock",
+      "impactFrame": 5,
+      "vfx": "vfx_win_rock_slam.png",
+      "spawnFrame": 5,
+      "anchor": "targetGround",
+      "cameraShakePx": 4,
+      "cameraShakeMs": 155,
+      "hitstopMs": 96
+    },
+    "scissors": {
+      "title": "居合十字斬",
+      "animation": "clash_win_scissors",
+      "impactFrame": 5,
+      "vfx": "vfx_win_scissors_cross.png",
+      "spawnFrame": 3,
+      "vfxBurstFrame": 2,
+      "anchor": "targetChestAtPassThrough",
+      "cameraShakePx": 2,
+      "cameraShakeMs": 90,
+      "hitstopMs": 65
+    },
+    "paper": {
+      "title": "零距離氣功轟飛",
+      "animation": "clash_win_paper",
+      "impactFrame": 5,
+      "vfx": "vfx_win_paper_beam.png",
+      "spawnFrame": 5,
+      "anchor": "winnerPalm",
+      "cellPositionPx": [
+        42,
+        23
+      ],
+      "cameraShakePx": 3,
+      "cameraShakeMs": 135,
+      "hitstopMs": 82
+    }
+  },
+  "ordinaryContact": {
+    "asset": "vfx_clash_spark.png",
+    "anchor": "weaponContact",
+    "loserAnimation": "clash_recoil",
+    "cameraShakePx": 1,
+    "hitstopMs": 45
+  },
+  "presentation": {
+    "units": {
+      "cameraShakePx": "peak displacement in virtual pixels",
+      "hitstopMs": "milliseconds"
+    },
+    "eventTiming": "0-based. Fire once on entering the marked frame, before hitstop. Visual events never determine the winner. Freeze fighter and impact animation together during hitstop.",
+    "attachments": {
+      "targetGround": "surface at target feet",
+      "targetChestAtPassThrough": "snapshot target chest position when the attacker passes frame 3; trigger impact at fighter frame 5",
+      "winnerPalm": "from fighter cell origin at cellPositionPx, extend toward facing direction"
+    },
+    "jumpOffset": "apply renderOffsetYPxByFrame to the sprite origin only; world foot anchor stays fixed",
+    "crossing": "resolve side change from game world positions at crossTargetFrame; artwork stays right-facing",
+    "mirror": "mirror around the fighter or effect pivot when facing left",
+    "reducedMotion": {
+      "cameraShakePx": 0,
+      "flashFrameReplacement": "clash_recoil frame 1"
+    }
+  },
+  "visualSpec": {
+    "fighterPalette": {
+      "outline": "#10121B",
+      "neutralSteel": "#A9A9AC",
+      "p1": {
+        "shadow": "#713B29",
+        "primary": "#D58941",
+        "secondary": "#FFF0C3",
+        "highlight": "#FFF9E8"
+      },
+      "p2": {
+        "shadow": "#23544E",
+        "primary": "#4BB381",
+        "secondary": "#C6F9D8",
+        "highlight": "#ECFFF1"
+      }
+    },
+    "techniquePalettes": {
+      "rock": [
+        "#691E37",
+        "#B94543",
+        "#F27943",
+        "#FFC878",
+        "#FFF7E5"
+      ],
+      "scissors": [
+        "#1B477E",
+        "#287FBB",
+        "#58B6FF",
+        "#A6E7FA",
+        "#E4F7FF"
+      ],
+      "paper": [
+        "#184B45",
+        "#278565",
+        "#4ECF86",
+        "#A3F4B8",
+        "#E5FFDE"
+      ]
+    },
+    "weaponScale": "Standing fighter is about 30 px tall. Hammer length roughly 32 px, shears roughly 32 px, tied cloth sack roughly 30 px tall. Foreshortening varies by frame.",
+    "moveReads": {
+      "rock": "舉過頭頂的厚方槌、橘紅下壓弧線與貼地碎岩。",
+      "scissors": "雙環長剪斜斬、穿身後合刃入鞘，先見細線再裂出純白十字。",
+      "paper": "等身束口布袋背負於後，雙掌貼胸聚氣，同拍向前轟出翠綠波束。"
+    }
+  }
+}

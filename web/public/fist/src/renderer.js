@@ -4,7 +4,8 @@
 //   · 頓幀只停「演出」：凍結世界層畫面幾十毫秒，HUD 倒數照走（引擎本身不停）
 //   · 底部鍵位卡改由 keybar.js（DOM）負責；畫布只畫世界、提示與上方 HUD
 //   · 15 個角色動畫狀態（美術換皮接口，見 ANIM_STATES）；有 Sprite Sheet 就照 ART.spriteAtlas 切格，沒有就程式繪製
-//   · 拼刀另外 10 個狀態（CLASH_STATES）：有 fighter_p1_clash.png／fighter_p2_clash.png 就照 CONFIG.clashAtlas 切格；
+//   · 拼刀另外 10 個狀態（CLASH_STATES）：fighter_p1_clash.png／fighter_p2_clash.png 照 CONFIG.clashAtlas（clash_art_spec.json v2）切格；
+//     開牌壓制／受壓、勝利收勢讀 fighter_p*_v3_addon.png（CONFIG.extraAtlas）；
 //     勝利大招特效有 vfx_win_*.png 就照 CONFIG.vfx 播放，沒有就用程式繪製（橘紅重砸、青色居合十字、綠色氣功光束）
 import { ART, CONFIG } from "./config.js";
 import { PH, PH_LABEL, GLABEL, GNAME, GICON, cellX } from "./engine.js";
@@ -14,7 +15,7 @@ export const ANIM_STATES = [
   "idle", "step", "exhausted", "stance_rock", "stance_scissors", "stance_paper", "stance_hidden", "clash",
   "mash_hit", "finisher_blue", "finisher_red", "parry_success", "roll", "hitstun", "knockback",
 ];
-export const CLASH_STATES = Object.keys(CONFIG.clashAtlas.stateMap);
+export const CLASH_STATES = Object.keys(CONFIG.clashAtlas.animations);
 // 拼刀圖集還沒放：借用基礎圖集裡最接近的動作
 const CLASH_FALLBACK = { clash_dash: "step", clash_rock: "clash", clash_scissors: "clash", clash_paper: "clash", clash_recoil: "hitstun", clash_first_draw: "clash", clash_win_rock: "finisher_red", clash_win_scissors: "finisher_red", clash_win_paper: "finisher_red", clash_draw: "clash" };
 // 15 個狀態對應到切格表的列（mash_hit 交替用 combo_1／combo_2 兩列）
@@ -97,13 +98,17 @@ function drawBubble(g, x0, y0, key, now, reduced) {
 // ---------------- 武者（程式繪製／Sprite Sheet） ----------------
 const Fighter = (() => {
   const A = ART.spriteAtlas, WA = ART.weaponVariantAtlas, F = PAL.fighters;
-  const CA = CONFIG.clashAtlas;
+  const CA = CONFIG.clashAtlas, XA = CONFIG.extraAtlas;
   // 正式圖檔由 assets.js 預載（public/fist/ 下）：基礎 500×800、武器 500×500、拼刀加購 500×450；缺檔就用程式繪製
   //   sheets[i] 可用 Renderer.useSheet 手動覆蓋；沒覆蓋就讀預載好的圖
   const manual = [null, null], PK = ["p1", "p2"];
   const baseOf = i => manual[i] ?? Assets.get(A.imageByPlayer[PK[i]]);
   const weapOf = i => Assets.get(WA.imageByPlayer[PK[i]]);
   const clashOf = i => Assets.get(CA.imageByPlayer[PK[i]]);
+  const extraOf = i => Assets.get(XA.imageByPlayer[PK[i]]);
+  // 加購動作：拼刀專用圖集或開牌／勝利圖集；圖不在就回傳 null
+  const addonFor = (state, i) => (CA.animations[state] ? (clashOf(i) && { img: clashOf(i), an: CA.animations[state] }) : XA.animations[state] ? (extraOf(i) && { img: extraOf(i), an: XA.animations[state] }) : null) || null;
+  const addonFrame = (an, t) => { const n = Math.floor(t * an.fps); return an.playback === "loop" ? n % an.frames : Math.min(n, an.frames - 1); };
   // 受擊閃白：把那一格 sprite 畫到小畫布、整塊染白（保留角色輪廓），再貼回去
   let tint = null;
   function whiteCell(img, sx, sy) {
@@ -118,8 +123,7 @@ const Fighter = (() => {
   const STATES_BASE = new Set([...Object.keys(A.animations), "mash_hit"]);       // 基礎圖集畫得出來的動作
   function atlasAnim(state, alt) { return A.animations[ATLAS_ROW_OF(state) ?? (alt ? "combo_2" : "combo_1")]; }
   function frameOf(state, t, f, view) {
-    const an = CA.animations[state] ?? atlasAnim(state, f.anim.alt);
-    if (CA.animations[state]) { const n = Math.floor(t * an.fps); return an.playback === "loop" ? n % an.frames : Math.min(n, an.frames - 1); }
+    const an = atlasAnim(state, f.anim.alt);
     if (!an) return 0;
     const n = Math.floor(t * an.fps);
     if (an.playback === "loop") return n % an.frames;
@@ -253,20 +257,19 @@ const Fighter = (() => {
   }
   return {
     frameOf, sheets: manual, baseOf, clashOf,
+    has: (state, i) => !!addonFor(state, i),
     // 解析這一幀要畫哪張圖：回傳 { img, row, anim }（anim＝加購圖集動作名；沒有就照基礎圖集）或 null（程式繪製）
     //   state 可以是引擎動作（clash_rock…）或畫面層覆寫的加購動作（reveal_win／clash_charge／victory）
     draw(ctx, f, state, t, x, y, face, opt = {}) {
       g = ctx; OX = Math.round(x); OY = Math.round(y); FACE = face < 0 ? -1 : 1;
-      const base = baseOf(f.i), add = clashOf(f.i);
-      let addAnim = null;
-      const map = CA.stateMap[state];
-      if (map) {
-        if (map.atlas === "clash" && add) addAnim = f.anim.alt && map.alt ? map.alt : map.anim;
-        else if (map.atlas === "base" && base) state = map.anim;
-        else if (base) state = CLASH_FALLBACK[state];                     // 有基礎圖、沒加購圖：借最接近的基礎動作
-      } else if (CA.animations[state]) { if (add) addAnim = state; else state = opt.fallbackState ?? "idle"; }
-      if (addAnim) state = addAnim;
-      const n = frameOf(state, t, f, opt.view);
+      const base = baseOf(f.i), ad = addonFor(state, f.i);
+      if (!ad) {
+        if (CLASH_FALLBACK[state] && base) state = CLASH_FALLBACK[state];      // 有基礎圖、沒拼刀圖：借最接近的基礎動作
+        else if (XA.animations[state] || state === "clash_charge") state = opt.fallbackState ?? "idle";
+      }
+      let n = ad ? clamp(opt.frame ?? addonFrame(ad.an, t), 0, ad.an.frames - 1) : frameOf(state, t, f, opt.view);
+      if (ad && ad.an.flashFrame === n && REDUCED) n = Math.min(ad.an.frames - 1, n + 1);   // 減少動態：跳過閃白格
+      if (ad?.an.renderOffsetY) OY += ad.an.renderOffsetY[n] ?? 0;            // 崩山重砸的跳躍：只位移圖，腳底錨點不動
       const rot = state === "knockback" ? (f.rot || t * 10) : state === "roll" ? t * 22 : 0;
       // 以腳底錨點 (pivot) 為原點水平翻轉：ctx.scale(facing, 1)，轉身、換位、落地時腳底不會左右瞬移
       const blit = (img, col, row) => {
@@ -283,7 +286,7 @@ const Fighter = (() => {
       if (rot) { g.translate(OX, OY - 14); g.rotate(state === "roll" ? face * rot : -face * rot); g.translate(-OX, -(OY - 14)); }
       g.imageSmoothingEnabled = false;
       let drawn = false;
-      if (addAnim) drawn = blit(add, n, CA.animations[addAnim].row);              // 拼刀／開牌／勝利加購圖集
+      if (ad) drawn = blit(ad.img, n, ad.an.row);                                  // 拼刀專用／開牌勝利加購圖集
       else if (base && STATES_BASE.has(state)) {
         const an = atlasAnim(state, f.anim.alt), wsh = weapOf(f.i);
         let img = base, row = an.row, col = n;
@@ -343,19 +346,16 @@ const CLASH_FX = {
   speed(g, p, a) { g.globalAlpha = a * 0.5; g.fillStyle = "#DDE8FF"; for (let i = 0; i < 9; i++) { const y = 70 + ((i * 37 + Math.floor(p.life * 300)) % 140); g.fillRect(((i * 97) % CONFIG.W), y, 40, 1); } },
   streak(g, p, a) { g.globalAlpha = a; g.fillStyle = "#5FE6FF"; const x = Math.min(p.x0, p.x1), w = Math.abs(p.x1 - p.x0); g.fillRect(Math.round(x), CONFIG.floorY - 26, Math.round(w), 3); g.fillStyle = "#FFFFFF"; g.fillRect(Math.round(x), CONFIG.floorY - 25, Math.round(w), 1); },
   slam(g, p, a, k) {
-    if (VFX.draw(g, "vfx_win_rock_slam", k * p.max, p.x, p.y)) return;
     const r = 8 + k * 70; g.globalAlpha = a; g.strokeStyle = "#FF6A3D"; g.lineWidth = 3; g.beginPath(); g.ellipse(p.x, p.y, r, r * 0.25, 0, 0, Math.PI * 2); g.stroke();
     g.strokeStyle = "#FFB15A"; g.lineWidth = 1; g.beginPath(); g.ellipse(p.x, p.y, r * 0.6, r * 0.15, 0, 0, Math.PI * 2); g.stroke();
     g.globalAlpha = a * 0.8; g.fillStyle = "#FF6A3D"; g.fillRect(Math.round(p.x - 6 * a), p.y - 90, Math.round(12 * a), 90);   // 由上而下的砸擊光柱
   },
   cross(g, p, a, k) {
-    if (VFX.draw(g, "vfx_win_scissors_cross", k * p.max, p.x, p.y)) return;
     const r = 10 + k * 48; g.globalAlpha = a; g.translate(p.x, p.y); g.rotate(Math.PI / 4);
     g.fillStyle = "#5FE6FF"; g.fillRect(-r, -3, r * 2, 6); g.fillRect(-3, -r, 6, r * 2);
     g.fillStyle = "#FFFFFF"; g.fillRect(-r * 0.8, -1, r * 1.6, 2); g.fillRect(-1, -r * 0.8, 2, r * 1.6);
   },
   pbeam(g, p, a, k) {
-    if (VFX.draw(g, "vfx_win_paper_beam", k * p.max, p.x + p.dir * 8, p.y, p.dir)) return;
     const len = 30 + Math.min(1, k * 3) * 520, h = 22 * a + 6, x = p.dir > 0 ? p.x + 8 : p.x - 8 - len;
     g.globalAlpha = a * 0.9; g.fillStyle = "#3ED27A"; g.fillRect(Math.round(x), Math.round(p.y - h / 2), Math.round(len), Math.round(h));
     g.fillStyle = "#C8FFD8"; g.fillRect(Math.round(x), Math.round(p.y - h / 6), Math.round(len), Math.max(1, Math.round(h / 3)));
@@ -402,7 +402,7 @@ export class Renderer {
         case "hitstop": {
           const d = e.ms ?? FX.hitstopMs[e.ev] ?? 0, px = e.shake ?? FX.cameraShakePx[e.ev] ?? 0;
           if (d > 0 && now * 1000 + d > this.freezeUntil * 1000) { this.freezeUntil = now + ms(d); this.frozen = null; }
-          this.kick(px, ms(d) + 0.06, now, e.vertical);
+          this.kick(px, e.shakeMs ? ms(e.shakeMs) : ms(d) + 0.06, now, e.vertical);
           break;
         }
         case "step": if (e.bump) { this.spark((cellX(e.from) + cellX(e.to)) / 2, CONFIG.floorY - 22, PAL.fx.impact.spark, 4, 1.6); this.popup((cellX(e.from) + cellX(e.to)) / 2, CONFIG.floorY - 52, "頂撞！", PAL.fx.impact.spark, 9); this.kick(1, 0.06, now); } break;
@@ -412,7 +412,7 @@ export class Renderer {
         // （開牌結果改由畫面中央的大字顯示，不在頭上另外冒小字）
         case "clash":
           if (e.wave) { this.fx.push({ k: "wave", x: e.x, life: 0.55, max: 0.55 }); this.popup(e.x, CONFIG.floorY - 72, "平分！各自彈開", PAL.fx.impact.core, 12); this.kick(3, 0.16, now); }
-          else { if (!this.sprite("vfx_sparks", e.x, CONFIG.floorY - 26)) this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.core, 8, 2.4); this.vspark(e.x, CONFIG.floorY - 26, 6); this.popup(e.x, CONFIG.floorY - 64, "叮！", PAL.fx.impact.core, 16); }
+          else { if (!this.sprite("vfx_clash_spark", e.x, CONFIG.floorY - 26) && !this.sprite("vfx_sparks", e.x, CONFIG.floorY - 26)) this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.core, 8, 2.4); this.vspark(e.x, CONFIG.floorY - 26, 6); this.popup(e.x, CONFIG.floorY - 64, "叮！", PAL.fx.impact.core, 16); }
           break;
         case "gauge": if (e.full) { this.gaugeFullAt = now; this.kick(2, 0.12, now); } else if (e.gauge > 0) this.gaugeAt = now; break;
         case "hit": {
@@ -436,16 +436,18 @@ export class Renderer {
         case "clash_start": this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
         case "clash_first": {                                                     // ⚡ 先手：金色十字星芒＋徽章（畫在劍格上方）
           this.kick(1, 0.08, now); this.firstAt = now;
-          const f = view.fighters[e.p]; this.fx.push({ k: "star", x: f.x + f.face * 9, y: CONFIG.floorY - 24, dir: f.face, life: 0.45, max: 0.45 });   // 對齊刀柄／手部
+          const f = view.fighters[e.p], FD = CONFIG.clashAtlas.animations.clash_first_draw, A = ART.spriteAtlas;
+          const sx = f.x + f.face * (FD.starCellPx[0] - A.pivot.x), sy = CONFIG.floorY + (FD.starCellPx[1] - A.pivot.y);   // 拔刀格（第 2 格）的刀柄位置
+          if (!(Fighter.clashOf(e.p) && this.sprite("vfx_first_draw_star", sx, sy, f.face, null, FD.starFrame / FD.fps))) this.fx.push({ k: "star", x: f.x + f.face * 9, y: CONFIG.floorY - 24, dir: f.face, life: 0.45, max: 0.45 });
           break;
         }
         case "clash_dash": this.fx.push({ k: "speed", life: e.dur + 0.1, max: e.dur + 0.1 }); break;
         case "clash_cut": {
-          if (e.winner < 0) this.vspark(e.x, CONFIG.floorY - 26, 10);            // 平刀：火花垂直噴發
+          if (e.winner < 0) { this.sprite("vfx_clash_spark", e.x, CONFIG.floorY - 26); this.vspark(e.x, CONFIG.floorY - 26, 10); }   // 平刀：火花垂直噴發
           else {                                                                  // 勝刀：火花＋刀光（朝敗方），敗方白閃 1 幀後滑
             const w = view.fighters[e.winner], dir = Math.sign(view.fighters[1 - e.winner].x - w.x) || 1;
-            if (!this.sprite("vfx_sparks", e.x, CONFIG.floorY - 26, dir)) this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.spark, 10 + e.n * 2, 2.6);
-            this.sprite("vfx_slash", e.x, CONFIG.floorY - 26, dir); this.flashF[1 - e.winner] = 1;
+            if (!this.sprite("vfx_clash_spark", e.x, CONFIG.floorY - 26, dir) && !this.sprite("vfx_sparks", e.x, CONFIG.floorY - 26, dir)) this.spark(e.x, CONFIG.floorY - 26, PAL.fx.impact.spark, 10 + e.n * 2, 2.6);
+            if (!Fighter.clashOf(1 - e.winner)) { this.sprite("vfx_slash", e.x, CONFIG.floorY - 26, dir); this.flashF[1 - e.winner] = 1; }   // 有拼刀圖：clash_recoil 第 0 格本身就是閃白
           }
           if (e.impact && !REDUCED) this.impactLeft = e.impact;                    // 第 5 刀：黑白反色衝擊幀
           const me = view.seat, res = e.winner < 0 ? "平" : me >= 0 ? (e.winner === me ? "勝" : "敗") : `P${e.winner + 1} 勝`;
@@ -458,10 +460,16 @@ export class Renderer {
           else this.finText = { text: `【${F.name}】`, sub: `${e.score[0]} : ${e.score[1]}`, at: now, color: FIN_COLOR[e.main] };
           break;
         }
-        case "clash_pass": { const w = view.fighters[e.p]; this.fx.push({ k: "streak", x0: w.x - (e.x - w.x), x1: e.x, life: 0.22, max: 0.22 }); this.sprite("vfx_slash", (w.x + e.x) / 2, CONFIG.floorY - 26, Math.sign(e.x - w.x) || 1); break; }
+        case "clash_pass": { const w = view.fighters[e.p]; this.fx.push({ k: "streak", x0: w.x - (e.x - w.x), x1: e.x, life: 0.22, max: 0.22 }); this.sprite("vfx_slash", (w.x + e.x) / 2, CONFIG.floorY - 26, Math.sign(e.x - w.x) || 1);
+          const L = view.fighters[1 - e.p], V = CONFIG.vfx.vfx_win_scissors_cross;      // 穿身那刻記下對手胸口；炸開格（burstFrame）對齊命中
+          this.crossAt = this.sprite("vfx_win_scissors_cross", L.x, CONFIG.floorY - 22, Math.sign(L.x - w.x) || 1, null, (view.clash?.hitAt ?? view.t) - view.t - V.burstFrame / V.fps);
+          break; }
         case "clash_finisher": {
           const fy = CONFIG.floorY;
-          if (e.main === "rock") { this.fx.push({ k: "slam", x: e.x, y: fy, age: 0, life: 0.5, max: 0.5 }); for (let i = 0; i < 10; i++) this.fx.push({ k: "debris", x: e.x + (Math.random() - 0.5) * 40, y: fy, vx: (Math.random() - 0.5) * 200, vy: -120 - Math.random() * 160, life: 0.5, max: 0.5 }); }
+          if (e.main === "rock" && this.sprite("vfx_win_rock_slam", e.x, fy, e.toward)) this.zoneDebris(e.x);                    // 震地裂岩：貼敗方腳底
+          else if (e.main === "scissors" && this.crossAt) this.crossAt = false;                                                // 十字已在穿身時排好
+          else if (e.main === "paper" && this.sprite("vfx_win_paper_beam", e.wx + e.toward * (CONFIG.clashMode.finisher.paper.palmCellPx[0] - ART.spriteAtlas.pivot.x), fy + (CONFIG.clashMode.finisher.paper.palmCellPx[1] - ART.spriteAtlas.pivot.y), e.toward)) {}   // 從勝方掌心往朝向發射
+          else if (e.main === "rock") { this.fx.push({ k: "slam", x: e.x, y: fy, age: 0, life: 0.5, max: 0.5 }); for (let i = 0; i < 10; i++) this.fx.push({ k: "debris", x: e.x + (Math.random() - 0.5) * 40, y: fy, vx: (Math.random() - 0.5) * 200, vy: -120 - Math.random() * 160, life: 0.5, max: 0.5 }); }
           else if (e.main === "scissors") this.fx.push({ k: "cross", x: e.x, y: fy - 24, age: 0, life: 0.45, max: 0.45 });
           else this.fx.push({ k: "pbeam", x: e.wx, y: fy - 22, dir: e.toward, age: 0, life: 0.55, max: 0.55 });
           break;
@@ -473,12 +481,13 @@ export class Renderer {
   }
   kick(px, dur, now, vertical = false) { if (REDUCED || !px) return; if (px >= this.shake.amp || now > this.shake.until) this.shake = { amp: px, until: now + dur, vertical }; }
   // 特效圖：有圖就排進 fx（依 CONFIG.vfx[key].layer 前後分層）並回傳 true；沒圖回傳 false，呼叫端照舊用程式繪製
-  sprite(key, x, y, dir = 1, clip = null) {
+  sprite(key, x, y, dir = 1, clip = null, wait = 0) {
     if (!VFX.has(key)) return false;
     const d = VFX.duration(key, clip);
-    this.fx.push({ k: "vs", key, x, y, dir, clip, layer: CONFIG.vfx[key].layer, life: d, max: d });
+    this.fx.push({ k: "vs", key, x, y, dir, clip, layer: CONFIG.vfx[key].layer, life: d, max: d, wait: Math.max(0, wait) });
     return true;
   }
+  zoneDebris(x) { for (let i = 0; i < 10; i++) this.fx.push({ k: "debris", x: x + (Math.random() - 0.5) * 40, y: CONFIG.floorY, vx: (Math.random() - 0.5) * 200, vy: -120 - Math.random() * 160, life: 0.5, max: 0.5 }); }
   vspark(x, y, n) { for (let i = 0; i < n; i++) this.fx.push({ k: "spark", x: x + (Math.random() - 0.5) * 4, y, vx: (Math.random() - 0.5) * 30, vy: -(140 + Math.random() * 160) * (i % 2 ? 1 : -0.6), life: 0.25 + Math.random() * 0.15, max: 0.4, color: PAL.fx.impact.core }); }
   spark(x, y, color, n, speed) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * speed * 50; this.fx.push({ k: "spark", x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 25, life: 0.18 + Math.random() * 0.18, max: 0.36, color }); } }
   ring(x, y, color) { this.fx.push({ k: "ring", x, y, life: 0.3, max: 0.3, color }); }
@@ -537,6 +546,7 @@ export class Renderer {
   }
   updateFx(vdt, dt) {
     for (const p of this.fx) {
+      if (p.wait > 0) { p.wait -= vdt; continue; }                       // 延遲出現的特效（對齊動畫的某一格）；頓幀時一起凍結
       if (p.k === "beam") continue;
       if (p.k === "text" || p.k === "banner" || p.k === "emote") { p.life -= dt; if (p.k === "text") p.y -= 18 * dt; continue; }
       p.life -= vdt;
@@ -619,12 +629,43 @@ export class Renderer {
   }
   animTime(view, f) { return view.phase === PH.WINDOW || view.phase === PH.SELECT ? f.anim.t * CONFIG.window.slowmo : f.anim.t; }   // 終結擇起就進慢動作（只影響畫面）
   stateFor(view, f) {
-    if (Fighter.clashOf(f.i)) {                                // 有加購圖：開牌壓制／受壓、五連斬蓄勢、比賽勝利
-      if (view.phase === PH.REVEAL && view.rps && view.rps.winner >= 0) return view.rps.winner === f.i ? "reveal_win" : "reveal_lose";
-      if (view.phase === PH.CLASH_INPUT && f.anim.state === "idle") return "clash_charge";
-      if (view.phase === PH.GAMEOVER && view.winner === f.i && !f.out) return "victory";
+    {                                                          // 有加購圖：開牌壓制／受壓、五連斬蓄勢、比賽勝利
+      const want = view.phase === PH.REVEAL && view.rps && view.rps.winner >= 0 ? (view.rps.winner === f.i ? "reveal_win" : "reveal_lose")
+        : view.phase === PH.CLASH_INPUT && f.anim.state === "idle" ? "clash_charge"
+        : view.phase === PH.GAMEOVER && view.winner === f.i && !f.out ? "victory" : null;
+      if (want && Fighter.has(want, f.i)) return want;
     }
     return view.phase === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal) && f.anim.state.startsWith("stance_") ? "stance_hidden" : f.anim.state;   // 藏招：雙方都回到收手黑影
+  }
+  // 拼刀圖集的「對時」：回傳 { state, frame, y } 覆寫，或 null（照引擎動作播）
+  //   · 對砍：下一刀前 contactFrame/fps 秒開始播那一刀的前搖，判定那一刻剛好是接觸格；判定後從接觸格往後播
+  //   · 勝方大招：fxAt→hitAt 之間把 0..impactFrame-1 等比例攤開（居合：衝刺期間播到 crossFrame 穿身格），命中那刻＝impactFrame
+  clashPose(view, f) {
+    const C = view.clash, CA = CONFIG.clashAtlas.animations;
+    if (!C || !Fighter.clashOf(f.i)) return null;
+    if (view.phase === PH.CLASH_ANIM && C.stage === "cuts" && C.cutAt) {
+      const k = C.cut, g = k < C.cutAt.length ? C.seq[f.i]?.[k] : null;
+      if (g) {
+        const an = CA["clash_" + g], lead = C.cutAt[k] - view.t, wind = an.contactFrame / an.fps;
+        if (lead <= wind) return { state: "clash_" + g, frame: an.contactFrame - Math.ceil(lead * an.fps - 1e-6) };
+      }
+      const st = f.anim.state;
+      if (CA[st]?.contactFrame !== undefined) return { state: st, frame: CA[st].contactFrame + Math.floor(f.anim.t * CA[st].fps) };
+      return null;
+    }
+    const R = C.result;
+    if (!R || R.winner !== f.i) return null;
+    const st = "clash_win_" + R.main, an = CA[st], y = CONFIG.floorY;     // 大招期間腳底固定在地面（跳躍靠圖內位移）
+    if (view.phase === PH.CLASH_ANIM) {
+      if (view.t < C.fxAt) return { state: st, frame: 0, y };
+      const Fm = CONFIG.clashMode.finisher[R.main], span = Math.max(0.01, C.hitAt - C.fxAt), e = view.t - C.fxAt;
+      let fr;
+      if (an.crossFrame !== undefined && Fm.dash) fr = e < Fm.dash ? (e / Fm.dash) * an.crossFrame : an.crossFrame + ((e - Fm.dash) / Math.max(0.01, span - Fm.dash)) * (an.impactFrame - an.crossFrame);
+      else fr = (e / span) * an.impactFrame;
+      return { state: st, frame: Math.min(an.impactFrame - 1, Math.floor(fr)), y };
+    }
+    if (view.phase === PH.RESOLVE && view.round?.type === "clash") return { state: st, frame: an.impactFrame + Math.floor(view.t * an.fps), y: f.y };
+    return null;
   }
   // 驗收用：50×50 格框（綠）＋腳底錨點 (24, 40)（紅點）
   drawSpriteBox(f) {
@@ -661,10 +702,12 @@ export class Renderer {
       if (f.out) continue;
       let x = f.x, y = f.y;
       ctx.fillStyle = "rgba(10,15,26,.55)"; ctx.fillRect(Math.round(x) - 10, CONFIG.floorY, 20, 2);
-      const state = this.stateFor(view, f), t = this.animTime(view, f);
+      const pose = this.clashPose(view, f);
+      const state = pose?.state ?? this.stateFor(view, f), t = this.animTime(view, f), frame = pose?.frame;
+      if (pose?.y !== undefined) y = pose.y;
       if (f.redGlow && !REDUCED) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(performance.now() / 50); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 14, Math.round(y) - 42, 28, 42); ctx.globalAlpha = 1; }   // 紅光強化：全身泛紅
-      Fighter.draw(ctx, f, state, t, x, y, f.face, { rim: this.rimT[f.i] > 0 && !REDUCED, view });
-      if (this.flashF[f.i] > 0) { this.flashF[f.i]--; if (!REDUCED) Fighter.draw(ctx, f, state, t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity, view }); }   // 受擊閃白：只亮 1 幀
+      Fighter.draw(ctx, f, state, t, x, y, f.face, { rim: this.rimT[f.i] > 0 && !REDUCED, view, frame });
+      if (this.flashF[f.i] > 0) { this.flashF[f.i]--; if (!REDUCED) Fighter.draw(ctx, f, state, t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity, view, frame }); }   // 受擊閃白：只亮 1 幀
       if (CONFIG.DEBUG_SPRITE_BOX) this.drawSpriteBox(f);
       if (f.deny > 0) { ctx.globalAlpha = Math.min(1, f.deny * 3); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 8, Math.round(y) - 46, 16, 1); ctx.globalAlpha = 1; }
     }
@@ -672,7 +715,7 @@ export class Renderer {
   drawFx(now, layer) {
     const ctx = this.ctx;
     for (const p of this.fx) {
-      if ((p.layer ?? (p.k === "beam" || p.k === "crack" ? "back" : "front")) !== layer) continue;
+      if (p.wait > 0 || (p.layer ?? (p.k === "beam" || p.k === "crack" ? "back" : "front")) !== layer) continue;
       const a = p.life !== undefined ? clamp(p.life / p.max, 0, 1) : 1;
       if (p.k === "spark") { ctx.globalAlpha = a; ctx.fillStyle = p.color; ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2); }
       else if (p.k in CLASH_FX) { ctx.save(); CLASH_FX[p.k](ctx, p, a, 1 - a); ctx.restore(); }

@@ -164,10 +164,11 @@ Create a red-finisher sprite strip for the attached original fighter using exact
 |---|---|---|
 | `fighter_p1.png`／`fighter_p2.png` | 500×800（16 列） | 基礎 16 動作（`spriteAtlas`） |
 | `fighter_p1_weapons.png`／`fighter_p2_weapons.png` | 500×500（10 列） | 大剪刀／大布袋攻擊變體 |
-| `fighter_p1_v3_addon.png`／`fighter_p2_v3_addon.png` | 500×450（9 列） | 拼刀／開牌／勝利加購（`clashAtlas`） |
+| `fighter_p1_clash.png`／`fighter_p2_clash.png` | 500×500（10 列） | 拼刀專用（`clashAtlas`，規格 `clash_art_spec.json` v2.0.0） |
+| `fighter_p1_v3_addon.png`／`fighter_p2_v3_addon.png` | 500×450（9 列） | 只用其中的開牌壓制／受壓、勝利收勢（`extraAtlas`） |
 
-加購 9 列：0 `reveal_win`(4)、1 `reveal_lose`(4)、2 `clash_charge`(4，循環)、3 `clash_first_draw`(6)、4 `clash_dash`(4)、5 `clash_slash_a`(5)、6 `clash_slash_b`(5)、7 `clash_heavy`(8)、8 `victory`(6)。
-引擎拼刀動作對照（`clashAtlas.stateMap`）：每一刀交替 slash_a／slash_b；三種主招大招共用 `clash_heavy`（差別靠特效）；`clash_recoil` 用基礎 `hitstun`、`clash_draw` 用基礎 `clash`。
+拼刀 10 列：0 `clash_charge`、1 `clash_first_draw`（第 2 格噴拔刀星芒）、2 `clash_dash`、3–5 `clash_rock/scissors/paper`（接觸格 3/2/3）、6 `clash_recoil`（第 0 格閃白）、7–9 `clash_win_rock/scissors/paper`（第 5 格命中；崩山重砸逐格 Y 位移只動圖、腳底不動；居合第 3 格穿身）。
+對時：每一刀在判定前先播前搖，判定那刻＝接觸格；大招前搖依引擎時間等比例攤開，命中那刻＝第 5 格。
 
 **特效**（橫條，規格同 `vfx_spec.json`）：
 
@@ -176,6 +177,11 @@ Create a red-finisher sprite strip for the attached original fighter using exact
 | `vfx_red_crack.png` | 96×32 | 6（0–2 預警循環、3–5 地裂） | 角色後方 | 紅招危險區（一格 96px＝兩格擂台），pivot (48, 12) |
 | `vfx_ko_pillar.png` | 64×270 | 6 | 角色後方 | 場外擊飛光柱，右側出界自動翻轉，pivot (32, 269) |
 | `vfx_sparks.png` | 48×48 | 5 | 角色前方 | 打擊、拼刀、彈反火花（也當作 clash_spark） |
-| `vfx_slash.png` | 64×64 | 5 | 角色前方 | 刀光（終結命中、拼刀勝刀、居合穿身），依攻擊方向翻轉 |
+| `vfx_slash.png` | 64×64 | 5 | 角色前方 | 刀光（終結命中、居合穿身），依攻擊方向翻轉 |
+| `vfx_clash_spark.png` | 48×48 | 5 | 角色前方 | 拼刀相撞火花（每刀、小拼刀「叮！」） |
+| `vfx_first_draw_star.png` | 24×24 | 4 | 角色前方 | 拔刀星芒：拔刀第 2 格出現在格內 (27, 28) |
+| `vfx_win_rock_slam.png` | 96×64 | 6 | 角色前方 | 震地裂岩：pivot (48, 44) 貼敗方腳底 |
+| `vfx_win_scissors_cross.png` | 96×96 | 6 | 角色前方 | 延遲十字斬：穿身時記下敗方胸口，第 2 格炸開＝命中 |
+| `vfx_win_paper_beam.png` | 128×64 | 6 | 角色前方 | 翠綠氣功波：pivot (3, 32) 對勝方掌心（格內 42, 23），往朝向延伸 |
 
-**尚未交付（目前用程式繪製）**：`vfx_first_draw_star.png`（48×48×6）、`vfx_win_rock_slam.png`（128×64×8，貼敗方腳底）、`vfx_win_scissors_cross.png`（96×96×8，敗方中心）、`vfx_win_paper_beam.png`（192×48×8，勝方正前方、依朝向翻轉）。放進資料夾就會自動換上。
+三種大招的頓幀／震動照規格：崩山 96ms／4px／155ms、居合 65ms／2px／90ms、氣功 82ms／3px／135ms。

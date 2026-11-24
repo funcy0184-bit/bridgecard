@@ -1496,9 +1496,9 @@ export const CONFIG = {
     winDamage: 24, firstBonus: 6,                    // 勝方大招 +24%（持先手再 +6%）
     // 主招專屬勝利動畫：windup＝出招前搖（勝方演出時間），angle／mult＝擊飛角度與倍率
     finisher: {
-      rock: { name: "崩山重砸", windup: 0.45, angle: 72, mult: 1.25 },                     // 跳起垂直重砸：高拋物線
-      scissors: { name: "居合十字斬", windup: 0.30, dash: 0.12, angle: 28, mult: 1.45 },   // 0.12s 穿身＋靜止 0.18s 後炸開
-      paper: { name: "零距離氣功轟飛", windup: 0.42, angle: 10, mult: 1.5, skid: true },   // 水平掃出：落地後還會滑行
+      rock: { name: "崩山重砸", windup: 0.45, angle: 72, mult: 1.25, hitstopMs: 96, shakePx: 4, shakeMs: 155 },                     // 跳起垂直重砸：高拋物線
+      scissors: { name: "居合十字斬", windup: 0.30, dash: 0.12, angle: 28, mult: 1.45, hitstopMs: 65, shakePx: 2, shakeMs: 90 },   // 0.12s 穿身＋靜止 0.18s 後炸開
+      paper: { name: "零距離氣功轟飛", windup: 0.42, angle: 10, mult: 1.5, skid: true, hitstopMs: 82, shakePx: 3, shakeMs: 135, palmCellPx: [42, 23] },   // 水平掃出：落地後還會滑行
     },
     letterboxPx: 18, dim: 0.6,                       // 電影黑邊、背景壓暗
   },
@@ -1558,47 +1558,45 @@ export const CONFIG = {
   status: { criticalAlt: "一擊必飛！！", altEverySec: 0.9, flashEverySec: 1.3, flashMs: 90, popMs: 220, jitter: { teetering: { px: 1, hz: 6 }, critical: { px: 2, hz: 22 } } },
   // ---- 美術驗收：畫出每個角色的 50×50 格框（綠）與腳底錨點 (24, 40)（紅點）；遊戲中可用 __fist.CONFIG.DEBUG_SPRITE_BOX = true 即時切換 ----
   DEBUG_SPRITE_BOX: false,
-  // ---- 拼刀／開牌／勝利加購圖集（實際交付：fighter_p*_v3_addon.png，500×450、9 列×最多 10 格；格距、透明邊、腳底錨點同 spriteAtlas）----
+  // ---- 拼刀專用圖集（clash_art_spec.json v2.0.0）：fighter_p*_clash.png，500×500、10 列；格距、透明邊、腳底錨點 (24, 40) 同 spriteAtlas ----
+  //   contactFrame＝刀刃接觸那一格（對砍時這一格對齊每一刀的判定時刻）；impactFrame＝大招命中那一格（對齊引擎的命中時刻）
   clashAtlas: {
+    imageByPlayer: { p1: "fighter_p1_clash.png", p2: "fighter_p2_clash.png" }, imageWidth: 500, imageHeight: 500,
+    animations: {
+      clash_charge: { row: 0, frames: 4, fps: 10, playback: "loop" },                                   // 按刀蓄勢（五連斬輸入中）
+      clash_first_draw: { row: 1, frames: 6, fps: 20, playback: "hold_last", starFrame: 2, starCellPx: [27, 28] },   // 先手拔刀：第 2 格噴拔刀星芒
+      clash_dash: { row: 2, frames: 4, fps: 24, playback: "hold_last" },                                // 拼刀衝刺
+      clash_rock: { row: 3, frames: 5, fps: 18, playback: "hold_last", contactFrame: 3 },                // 石頭重砸
+      clash_scissors: { row: 4, frames: 5, fps: 24, playback: "hold_last", contactFrame: 2 },            // 雙刃斜斬
+      clash_paper: { row: 5, frames: 5, fps: 18, playback: "hold_last", contactFrame: 3 },               // 布掌風推擊
+      clash_recoil: { row: 6, frames: 4, fps: 20, playback: "hold_last", flashFrame: 0 },                // 閃白彈開（第 0 格就是閃白；減少動態從第 1 格起）
+      clash_win_rock: { row: 7, frames: 8, fps: 16, playback: "hold_last", impactFrame: 5, renderOffsetY: [0, 0, -7, -14, -9, 0, 0, 0] },   // 崩山重砸（跳躍只位移圖、腳底錨點不動）
+      clash_win_scissors: { row: 8, frames: 8, fps: 22, playback: "hold_last", impactFrame: 5, crossFrame: 3 },     // 居合十字斬（第 3 格穿身）
+      clash_win_paper: { row: 9, frames: 8, fps: 16, playback: "hold_last", impactFrame: 5 },           // 零距離氣功轟飛（0–3 格蓄氣）
+    },
+  },
+  // ---- 開牌／勝利加購圖集：fighter_p*_v3_addon.png，500×450、9 列（拼刀動作改用上面的專用圖集）----
+  extraAtlas: {
     imageByPlayer: { p1: "fighter_p1_v3_addon.png", p2: "fighter_p2_v3_addon.png" }, imageWidth: 500, imageHeight: 450,
     animations: {
       reveal_win: { row: 0, frames: 4, fps: 12, playback: "hold_last" },          // 開牌壓制
       reveal_lose: { row: 1, frames: 4, fps: 12, playback: "hold_last" },         // 開牌受壓
-      clash_charge: { row: 2, frames: 4, fps: 10, playback: "loop" },             // 五連斬輸入中蓄勢
-      clash_first_draw: { row: 3, frames: 6, fps: 20, playback: "hold_last" },    // ⚡ 先手拔刀
-      clash_dash: { row: 4, frames: 4, fps: 16, playback: "hold_last" },          // 衝刺交會
-      clash_slash_a: { row: 5, frames: 5, fps: 24, playback: "hold_last" },       // 上段劈砍（奇數刀）
-      clash_slash_b: { row: 6, frames: 5, fps: 24, playback: "hold_last" },       // 下段反撩（偶數刀）
-      clash_heavy: { row: 7, frames: 8, fps: 20, playback: "hold_last" },         // 迴旋重斬（三種主招大招共用，差異靠 VFX）
       victory: { row: 8, frames: 6, fps: 10, playback: "hold_last" },             // 勝利收勢
     },
-    // 引擎動作 → 圖集動作（atlas: "clash"＝加購圖、"base"＝基礎圖；alt 交替）
-    stateMap: {
-      clash_dash: { atlas: "clash", anim: "clash_dash" },
-      clash_rock: { atlas: "clash", anim: "clash_slash_a", alt: "clash_slash_b" },
-      clash_scissors: { atlas: "clash", anim: "clash_slash_a", alt: "clash_slash_b" },
-      clash_paper: { atlas: "clash", anim: "clash_slash_a", alt: "clash_slash_b" },
-      clash_first_draw: { atlas: "clash", anim: "clash_first_draw" },
-      clash_win_rock: { atlas: "clash", anim: "clash_heavy" },
-      clash_win_scissors: { atlas: "clash", anim: "clash_heavy" },
-      clash_win_paper: { atlas: "clash", anim: "clash_heavy" },
-      clash_recoil: { atlas: "base", anim: "hitstun" },
-      clash_draw: { atlas: "base", anim: "clash" },
-    },
   },
-  // ---- 特效圖（一張橫條、由左到右；規格同 public/fist/vfx_spec.json）。layer：back＝畫在角色後面、front＝角色前面 ----
-  //   pivot＝貼齊點（格內像素）；沒有 pivot 就用 anchor：foot＝底邊中點、center＝正中、front＝左緣中點（往朝向延伸）
+  // ---- 特效圖（一張橫條、由左到右）。layer：back＝角色後方、front＝角色前方；pivot＝貼齊點（格內像素） ----
   vfx: {
-    vfx_sparks: { file: "vfx_sparks.png", frameW: 48, frameH: 48, frames: 5, fps: 24, anchor: "center", layer: "front" },
-    vfx_slash: { file: "vfx_slash.png", frameW: 64, frameH: 64, frames: 5, fps: 24, anchor: "center", layer: "front" },
+    vfx_sparks: { file: "vfx_sparks.png", frameW: 48, frameH: 48, frames: 5, fps: 24, pivot: [24, 24], layer: "front" },
+    vfx_slash: { file: "vfx_slash.png", frameW: 64, frameH: 64, frames: 5, fps: 24, pivot: [32, 32], layer: "front" },
     vfx_red_crack: { file: "vfx_red_crack.png", frameW: 96, frameH: 32, frames: 6, fps: 16, pivot: [48, 12], layer: "back",
       clips: { warning: { start: 0, end: 2, loop: true }, impact: { start: 3, end: 5, loop: false } } },
     vfx_ko_pillar: { file: "vfx_ko_pillar.png", frameW: 64, frameH: 270, frames: 6, fps: 16, pivot: [32, 269], layer: "back" },
-    // 以下尚未交付：缺檔時 Console 警告並用程式繪製
-    vfx_first_draw_star: { file: "vfx_first_draw_star.png", frameW: 48, frameH: 48, frames: 6, fps: 20, anchor: "center", layer: "front" },
-    vfx_win_rock_slam: { file: "vfx_win_rock_slam.png", frameW: 128, frameH: 64, frames: 8, fps: 20, anchor: "foot", layer: "front" },
-    vfx_win_scissors_cross: { file: "vfx_win_scissors_cross.png", frameW: 96, frameH: 96, frames: 8, fps: 24, anchor: "center", layer: "front" },
-    vfx_win_paper_beam: { file: "vfx_win_paper_beam.png", frameW: 192, frameH: 48, frames: 8, fps: 20, anchor: "front", layer: "front" },
+    // clash_art_spec.json v2.0.0
+    vfx_clash_spark: { file: "vfx_clash_spark.png", frameW: 48, frameH: 48, frames: 5, fps: 24, pivot: [24, 24], layer: "front" },           // 拼刀相撞火花
+    vfx_first_draw_star: { file: "vfx_first_draw_star.png", frameW: 24, frameH: 24, frames: 4, fps: 24, pivot: [12, 12], layer: "front" },   // 拔刀星芒
+    vfx_win_rock_slam: { file: "vfx_win_rock_slam.png", frameW: 96, frameH: 64, frames: 6, fps: 18, pivot: [48, 44], layer: "front" },       // 震地裂岩：貼敗方腳底
+    vfx_win_scissors_cross: { file: "vfx_win_scissors_cross.png", frameW: 96, frameH: 96, frames: 6, fps: 24, pivot: [48, 46], layer: "front", burstFrame: 2 },   // 延遲十字斬：第 2 格炸開＝命中
+    vfx_win_paper_beam: { file: "vfx_win_paper_beam.png", frameW: 128, frameH: 64, frames: 6, fps: 20, pivot: [3, 32], layer: "front" },     // 翠綠氣功波：從勝方掌心往朝向延伸
   },
   // ---- 線上：暱稱、表情（固定 8 個，不開放自由打字）、新手引導（房主預設） ----
   profile: { nameMax: 8, storageKey: "fist.name" },

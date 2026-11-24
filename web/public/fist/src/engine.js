@@ -320,7 +320,7 @@ export class Engine {
       this.round = { att: R.winner, def: 1 - R.winner, type: "clash", result: "clash", gesture: R.main, winGesture: R.main, zone: [], dirs: [], main: R.main };
       this.emit("clash_finisher", { winner: R.winner, main: R.main, name: F.name, damage: dmg, first: cm.first === R.winner, x: lose.x, y: lose.y, wx: win.x, toward: away });
       this.emit("hit", { p: lose.i, kind: "clash", damage: dmg, x: lose.x, toward: away, main: R.main });
-      this.emit("hitstop", { ev: "finisher_red", ms: R.main === "rock" ? 140 : 120, shake: R.main === "rock" ? 6 : 4, vertical: R.main === "rock" });
+      this.emit("hitstop", { ev: "finisher_red", ms: F.hitstopMs, shake: F.shakePx, shakeMs: F.shakeMs, vertical: R.main === "rock" });   // 頓幀／震動照美術規格
       this.emit("clash_end", { winner: R.winner, score: cm.score.slice(), first: cm.first, damage: dmg, main: R.main, tiebreak: R.tiebreak });
       this.glide(win, 0.32, 4, 0.2); win.face = away;                     // 收招、滑回自己的格子
       this.go(PH.RESOLVE);
