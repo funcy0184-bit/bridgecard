@@ -14,7 +14,7 @@ const ctx = await browser.newContext({ viewport: { width: 1000, height: 600 }, p
 const P = await ctx.newPage();
 const errors = []; P.on("pageerror", e => errors.push(String(e))); P.on("console", m => { if (m.type() === "error" && !/WebSocket|ws:\/\/|fighter_p|404/.test(m.text())) errors.push(m.text()); });
 const shot = async n => { if (OUT) await P.screenshot({ path: `${OUT}/${n}.png` }); };
-const V = () => P.evaluate(() => { const v = __fist.view; return v && { phase: v.phase, t: v.t, f: v.fighters.map(f => ({ pos: f.pos, power: f.power, damage: f.damage, stun: f.stun, stance: f.stance })), r: v.round }; });
+const V = () => P.evaluate(() => { const v = __fist.view; return v && { phase: v.phase, t: v.t, f: v.fighters.map(f => ({ pos: f.pos, streak: f.streak, damage: f.damage, stun: f.stun, stance: f.stance })), r: v.round }; });
 const waitPh = (ph, ms = 8000) => P.waitForFunction(p => __fist.view?.phase === p, ph, { timeout: ms, polling: 10 });
 const key = async (k, hold = 40) => { await P.keyboard.down(k); await sleep(hold); await P.keyboard.up(k); };
 const objective = () => P.textContent("#objective");
@@ -46,30 +46,33 @@ await tw(() => __fist.view.fighters[1].stance === "scissors");
 await key("a");                                                     // 石頭剋剪刀
 await tw(() => document.getElementById("objective").textContent.startsWith("2/4"));
 ok((await objective()).startsWith("2/4"), `改出石頭剋剪刀 → 關卡 2：${await objective()}`);
-await waitPh("PHASE_MASH");
-for (let i = 0; i < 12; i++) { await key(["a", "s", "d"][i % 3], 15); await sleep(10); }
-await tw(() => document.getElementById("objective").textContent.includes("防守"));
-ok((await objective()).includes("防守"), "打滿 4 次追加 → 換防守");
-await waitPh("PHASE_FINISHER_WINDOW"); await sleep(400); await shot("tut2-blue");
-await key("a");                                                     // 0.4s 才按也來得及
-await tw(() => document.getElementById("objective").textContent.startsWith("3/4"));
-ok((await objective()).startsWith("3/4"), `慢動作 0.8s 內彈反 → 關卡 3：${await objective()}`);
 await tw(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[1].stance === "rock");
-ok(await P.evaluate(() => __fist.view.gauge === 1), "關卡 3：蓄力從 ⚔️ 1/2 開始");
+ok(await P.evaluate(() => __fist.view.fighters[0].streak === 2), "關卡 2：你已連勝 2/3");
+await key("d");                                                     // 布剋石頭 → 第 3 勝
+await waitPh("PHASE_BURST"); await sleep(250); await shot("tut2-burst");
+await waitPh("PHASE_COMBO_PREP");
+const prepCards = await P.evaluate(() => [...document.querySelectorAll('.kgroup[data-seat="0"] .kcard')].map(c => c.className + "|" + c.querySelector(".ksub").textContent));
+ok(prepCards.every(c => !c.includes("locked")) && prepCards[1].includes("第 1 拳"), "四套拳選拳：三張卡都能按、中卡標「第 1 拳」");
+await key("a");
+ok(await P.evaluate(() => __fist.view.round.gesture === "rock"), "第 1 拳選石頭");
+await tw(() => document.getElementById("objective").textContent.startsWith("3/4"), 10000);
+ok((await objective()).startsWith("3/4"), `四拳打完 → 關卡 3：${await objective()}`);
+await waitPh("PHASE_COMBO_CUE"); await sleep(300); await shot("tut3-cue");
+const cue = await P.evaluate(() => [...document.querySelectorAll('.kgroup[data-seat="0"] .kcard')].map(c => c.className));
+ok(cue[0].includes("parry"), "反擊窗：攻方亮剪刀 → 你的「✊ 石頭」卡發光");
+await key("a");                                                     // 0.3s 才按也來得及
+await tw(() => document.getElementById("objective").textContent.startsWith("4/4"), 6000);
+ok((await objective()).startsWith("4/4"), `反擊成功 → 關卡 4：${await objective()}`);
+await tw(() => __fist.view?.phase === "PHASE_RPS" && __fist.view.fighters[1].stance === "rock");
+ok(await P.evaluate(() => __fist.view.gauge === 1), "關卡 4：蓄力從 ⚔️ 1/2 開始");
 await key("a");                                                     // 故意平手
 await waitPh("PHASE_CLASH_INPUT");
-await sleep(150); await shot("tut3-clash");
+await sleep(150); await shot("tut4-clash");
 for (const k of ["a", "s", "d", "a", "s"]) await key(k, 25);
 await tw(() => __fist.view?.clash?.first === 0, 3000);
 ok(await P.evaluate(() => __fist.view.clash?.first === 0 && __fist.view.clash.count[0] === 5), "搶先填完 5 格：⚡ 先手");
-await waitPh("PHASE_CLASH_ANIM"); await sleep(1300); await shot("tut3-cuts");
-await tw(() => document.getElementById("objective").textContent.startsWith("4/4"), 12000);
-ok((await objective()).startsWith("4/4"), `看完五刀對砍 → 關卡 4：${await objective()}`);
-await waitPh("PHASE_FINISHER_WINDOW"); await sleep(120); await shot("tut4-red");
-const v4 = await V();
-ok(v4.f[0].pos === 7 && v4.f[0].power === 0 && v4.f[0].damage >= 125 && v4.r.type === "red" && JSON.stringify(v4.r.dirs) === "[-1]", "關卡 4：格 7、瀕死、0 氣、紅招只亮 ◀");
-await key("a");
-await P.waitForFunction(() => document.getElementById("menu").hidden === false, null, { timeout: 8000 }).catch(() => {});
+await waitPh("PHASE_CLASH_ANIM"); await sleep(1300); await shot("tut4-cuts");
+await P.waitForFunction(() => document.getElementById("menu").hidden === false, null, { timeout: 15000 }).catch(() => {});
 ok(await P.isVisible("#menu"), "四關完成：回到大廳");
 
 console.log("跳過教學");
@@ -86,49 +89,53 @@ for (const lv of ["easy", "mid", "master"]) {
     const v = await V();
     if (!v) { await sleep(50); continue; }
     if (v.phase === "PHASE_RPS" && v.t > 0.2 && v.t < 0.3) await key(["a", "s", "d"][Math.floor(Math.random() * 3)]);
-    if (v.phase === "PHASE_MASH" && v.r?.att === 0) await key(["a", "s", "d"][Math.floor(Math.random() * 3)], 15);
+    if (v.phase === "PHASE_COMBO_CUE" && v.r?.def === 0 && v.t < 0.1) await key(["a", "s", "d"][Math.floor(Math.random() * 3)], 15);
     if (v.f[1].stance && v.phase === "PHASE_RPS" && v.t < 2.2) aiActed = true;
-    const done = await P.evaluate(() => __fist.view?.phase === "PHASE_RESOLVE");
-    if (done) { rounds++; await P.waitForFunction(() => __fist.view?.phase !== "PHASE_RESOLVE", null, { timeout: 4000 }).catch(() => {}); }
+    const done = await P.evaluate(() => ["PHASE_STRIKE", "PHASE_CLASH", "PHASE_RESOLVE"].includes(__fist.view?.phase));   // 一輪猜拳有結果（重擊／平手／結算）
+    if (done) { rounds++; await P.waitForFunction(() => __fist.view?.phase === "PHASE_RPS", null, { timeout: 8000 }).catch(() => {}); }
     await sleep(30);
   }
-  ok(rounds >= 1 && aiActed, `${lv}：AI 有出招、打完 ${rounds} 回合攻防`);
+  ok(rounds >= 1 && aiActed, `${lv}：AI 有出招、打完 ${rounds} 回合`);
   if (lv === "master") await shot("ai-master");
   await P.keyboard.press("Escape"); await sleep(150);
 }
 
 console.log("同機雙人");
 await P.click('[data-go="local2p"]'); await waitPh("PHASE_RPS");
-await sleep(150); await key("a"); await key("k");
-await waitPh("PHASE_MASH");
+await sleep(400);
+const top = await P.evaluate(() => __fist.renderer.promptFor(__fist.view));
+ok(top?.text.includes("出拳") && await P.evaluate(() => __fist.renderer.bigNum.v === "3" || __fist.renderer.bigNum.v === "2"), `頂部大字「${top?.text}」＋中央大倒數 ${await P.evaluate(() => __fist.renderer.bigNum.v)}`);
+await shot("local2p-rps");
+await key("a"); await key("k");
+await waitPh("PHASE_STRIKE");
 const v2 = await V();
-ok(v2.r.att === 0, "P1 按 A（石）、P2 按 K（剪）：P1 贏拳進連打");
-const cards = seat => P.evaluate(s => { const g = document.querySelector(`.kgroup[data-seat="${s}"]`); return { mash: !g.querySelector(".kmash").hidden, cards: [...g.querySelectorAll(".kcard")].map(c => ({ label: c.querySelector(".kl").textContent, cls: c.className, key: c.querySelector(".kk").textContent })) }; }, seat);
+ok(v2.r.att === 0 && v2.f[0].streak === 1, "P1 按 A（石）、P2 按 K（剪）：P1 贏拳、連勝 1/3 → 單發重擊");
+await tw(() => __fist.renderer.callout?.text.includes("連勝"), 2000);
+ok(await P.evaluate(() => __fist.renderer.callout?.text.includes("連勝 1/3")), `中央回饋大字：${await P.evaluate(() => __fist.renderer.callout?.text)}`);
+const cards = seat => P.evaluate(s => { const g = document.querySelector(`.kgroup[data-seat="${s}"]`); return { cards: [...g.querySelectorAll(".kcard")].map(c => ({ label: c.querySelector(".kl").textContent, cls: c.className, key: c.querySelector(".kk").textContent, sub: c.querySelector(".ksub").textContent })) }; }, seat);
+// 四套拳：攻方 P1 選拳、守方 P2 鎖住；拳種亮出後守方剋制鍵發光
+await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, streak: 3 }, { pos: 4 }], phase: "PHASE_COMBO_PREP", round: { att: 0 } }));
 await sleep(60);
-const m0 = await cards(0), m1 = await cards(1);
-ok(m0.mash && m1.cards.every(c => c.cls.includes("locked")), "連打：攻方 P1 變成「🔥 狂敲連打！」大卡、守方 P2 三張鎖住");
-await shot("local2p-mash");
-await waitPh("PHASE_FINISHER_WINDOW");
+const p0 = await cards(0), p1 = await cards(1);
+ok(p0.cards.every(c => !c.cls.includes("locked")) && p1.cards.every(c => c.cls.includes("locked")) && p1.cards[1].sub === "準備反擊", "選拳期：攻方 P1 三張可按、守方 P2 鎖住（標「準備反擊」）");
+await key("a", 20);                                                 // P1 出石頭
+await waitPh("PHASE_COMBO_CUE"); await sleep(60);
 let w1 = await cards(1);
-ok(w1.cards.map(c => c.label).join("|") === "✊ 石頭|✌️ 剪刀|🖐️ 布" && w1.cards[2].cls.includes("parry"), `藍招（石頭）：守方 P2 的克制鍵「🖐️ 布 / ${w1.cards[2].key}」發光`);
+ok(w1.cards[2].cls.includes("parry") && w1.cards[2].sub === "反擊！", `拳種石頭：守方 P2 的剋制鍵「🖐️ 布 / ${w1.cards[2].key}」發光`);
 const coach2p = await P.textContent("#coach");
-ok(await P.isVisible("#coach") && coach2p.includes("P2") && coach2p.includes("彈反"), `新手引導（同機）：${coach2p}`);
+ok(await P.isVisible("#coach") && coach2p.includes("P2") && coach2p.includes("反擊"), `新手引導（同機）：${coach2p}`);
+await shot("local2p-cue");
 await P.click("#gearBtn");
 await P.click('#settingsPop [data-go="hints"]');
 await sleep(60); w1 = await cards(1);
-ok(!w1.cards.some(c => c.cls.includes("parry")) && (await P.textContent('#settingsPop [data-go="hints"]')).includes("關"), "⚙️ 出招提示：關 → 克制鍵不再發光");
+ok(!w1.cards.some(c => c.cls.includes("parry")) && (await P.textContent('#settingsPop [data-go="hints"]')).includes("關"), "⚙️ 出招提示：關 → 剋制鍵不再發光");
 await P.click('#settingsPop [data-go="hints"]');
 await P.click('#settingsPop [data-go="guide"]'); await sleep(60);
 ok(await P.isHidden("#coach"), "⚙️ 新手引導：關 → 提示那一行消失");
 await P.click('#settingsPop [data-go="guide"]'); await P.click("#gearBtn");
 ok(await P.evaluate(() => __fist.showHints && __fist.renderer.showHints), "再按一次：提示開回來（存在這台瀏覽器）");
-// 紅招：守方站崖邊只亮可翻滾的方向
-await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 6, power: 2 }, { pos: 7, power: 0, damage: 110 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 0, red: true } }));
-await sleep(60); const r1 = await cards(1);
-ok(r1.cards[0].label === "◀ 左翻" && !r1.cards[0].cls.includes("locked") && r1.cards[1].cls.includes("locked") && r1.cards[2].cls.includes("locked"), "紅招：守方只亮「◀ 左翻」，中、右鎖住");
-await shot("local2p-red");
 // 猜拳：過熱的鍵反灰、按下去抖一下；正常的鍵按下有壓縮回饋
-await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 5, power: 1, heat: "rock" }], phase: "PHASE_RPS" }));
+await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, heat: "paper" }, { pos: 5, heat: "rock" }], phase: "PHASE_RPS" }));
 await sleep(80);
 let h0 = await cards(0), h1 = await cards(1);
 ok(h0.cards[2].cls.includes("heat") && h0.cards[2].label === "♨️ 過熱" && h1.cards[0].cls.includes("heat"), "P1 過熱布、P2 過熱石：各自那張卡反灰蓋「♨️ 過熱」");
@@ -138,7 +145,7 @@ await P.waitForFunction(() => __fist.view.fighters[0].stance === "rock", null, {
 ok(nope.includes("nope") && pressed.includes("pressed") && await P.evaluate(() => __fist.view.fighters[0].stance === "rock"), "按過熱的布：卡片抖一下不算；按石頭：壓縮回饋、出石頭");
 await shot("local2p-heat");
 // 拼刀預輸入：三張都能按（過熱不限制），顯示填了幾格
-await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 5, power: 1 }], phase: "PHASE_CLASH_INPUT" }));
+await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, heat: "paper" }, { pos: 5 }], phase: "PHASE_CLASH_INPUT" }));
 await sleep(80); await key("d", 20); await sleep(60);
 h0 = await cards(0);
 ok(h0.cards.every(c => !c.cls.includes("heat") && !c.cls.includes("locked")) && (await P.evaluate(() => document.querySelector('.kgroup[data-seat="0"] .kcard[data-btn="M"] .ksub').textContent)) === "劍格 1/5", "拼刀：三張卡都能按（過熱不限制），顯示「劍格 1/5」");

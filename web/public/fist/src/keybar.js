@@ -165,15 +165,16 @@ export class KeyBar {
       const n = view.clash?.count?.[seat] ?? 0;
       set(C.rps, n >= CONFIG.CLASH_SEQUENCE_LENGTH ? "locked" : "normal");
       cards.M.sub = `劍格 ${n}/${CONFIG.CLASH_SEQUENCE_LENGTH}`;
-    } else if (ph === PH.MASH && r) {
-      if (r.att === seat) return { cards, mash: true };
-    } else if (ph === PH.SELECT && r) {
-      if (r.att === seat) { set(C.rps); if (f.power >= CONFIG.select.redCost) cards[r.winKey].sub = "長按＝紅光"; }
-    } else if (ph === PH.WINDOW && r?.type && r.def === seat) {
-      if (r.done) set(r.type === "red" ? C.roll : C.rps, "locked");                   // 判定窗只認第一下：按過就鎖
-      else if (r.type === "blue") { set(C.rps); if (this.showHints && r.gesture) cards[KEY_OF[COUNTER[r.gesture]]].state = "parry"; }
-      else { set(C.roll, "locked"); if (r.dirs.includes(-1)) cards.L.state = "normal"; if (r.dirs.includes(1)) cards.R.state = "normal"; }
-    } else if (ph === PH.WINDOW && r?.type === "red") set(C.roll, "locked");
+    } else if (ph === PH.COMBO_PREP && r?.att === seat) {                       // 四套拳：攻方選這一拳（最後按的算）
+      set(C.rps);
+      if (r.gesture) cards[KEY_OF[r.gesture]].state = "chosen";
+      cards.M.sub = `第 ${r.n} 拳`;
+    } else if (ph === PH.COMBO_PREP && r?.def === seat) {
+      set(C.rps, "locked"); cards.M.sub = "準備反擊";
+    } else if (ph === PH.COMBO_CUE && r?.def === seat) {                        // 反擊窗：只認第一下，按過就鎖
+      if (r.done) set(C.rps, "locked");
+      else { set(C.rps); if (this.showHints && r.gesture) { const k = KEY_OF[COUNTER[r.gesture]]; cards[k].state = "parry"; cards[k].sub = "反擊！"; } }
+    }
     return { cards };
   }
 }

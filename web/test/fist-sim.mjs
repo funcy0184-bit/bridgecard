@@ -7,7 +7,7 @@ import { mulberry32 } from "../public/fist/src/engine.js";
 
 const N = Number(process.argv[2] ?? 60), STEP = 1 / 120;
 const levels = ["easy", "mid", "master"];
-const tally = { games: 0, rounds: 0, clash: 0, clashMode: 0, clashFirst: 0, clashWin: 0, heatDeny: 0, reveal: 0, parry: 0, roll: 0, red: 0, ko: 0, extra: 0, maxCombo: 0, phases: new Set(), wins: {}, timeoutGames: 0 };
+const tally = { games: 0, rounds: 0, clash: 0, clashMode: 0, clashFirst: 0, clashWin: 0, heatDeny: 0, reveal: 0, counter: 0, strike: 0, burst: 0, comboFull: 0, ko: 0, phases: new Set(), wins: {}, timeoutGames: 0 };
 const secs = [], secsBy = {};
 const bad = [];
 for (let g = 0; g < N; g++) {
@@ -30,15 +30,15 @@ for (let g = 0; g < N; g++) {
       if (ev.type === "rps_result") tally.reveal++;
       if (ev.type === "deny" && ev.why === "heat") { tally.heatDeny++; bad.push(`第 ${g} 場：AI 按了過熱的鍵`); }
       if (ev.type === "rps_result" && ev.heat.some((h, i) => h && ev.stances[i] === h)) bad.push(`第 ${g} 場：出了過熱的招 ${ev.stances}／${ev.heat}`);
-      if (ev.type === "parry") tally.parry++;
-      if (ev.type === "roll") tally.roll++;
-      if (ev.type === "red_ready") { tally.red++; }
+      if (ev.type === "counter") tally.counter++;
+      if (ev.type === "combo_start") tally.burst++;
+      if (ev.type === "combo_end" && ev.how === "full") tally.comboFull++;
       if (ev.type === "ko") tally.ko++;
-      if (ev.type === "hit" && ev.kind === "extra") { tally.extra++; tally.maxCombo = Math.max(tally.maxCombo, ev.combo); }
+      if (ev.type === "hit" && ev.kind === "strike") tally.strike++;
     }
     const [a, b] = e.f;
     if (!a.out && !b.out && a.pos === b.pos) bad.push(`第 ${g} 場：兩人同格 ${a.pos}（${e.phase}）`);
-    for (const f of e.f) { if (f.power < 0 || f.power > 3) bad.push(`第 ${g} 場：力量 ${f.power}`); if (f.damage < 0) bad.push(`第 ${g} 場：損傷 ${f.damage}`); }
+    for (const f of e.f) { if (f.streak < 0 || f.streak > 3) bad.push(`第 ${g} 場：連勝 ${f.streak}`); if (f.damage < 0) bad.push(`第 ${g} 場：損傷 ${f.damage}`); }
     if (bad.length > 5) break;
   }
   if (e.phase !== PH.GAMEOVER) { tally.timeoutGames++; bad.push(`第 ${g} 場（${la} vs ${lb}）600 秒沒打完，停在 ${e.phase}`); }

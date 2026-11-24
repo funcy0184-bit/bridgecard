@@ -4,7 +4,7 @@
 import { CONFIG } from "./config.js";
 import { PH, GLABEL, GICON } from "./engine.js";
 
-export const FLOW = "✊ 猜拳 → 👀 開牌 → 🔥 連打 → 🎯 終結技 → 🛡️ 彈反／🔴 翻滾（平手累積 2 次 ⚔️ 五連斬拼刀）";
+export const FLOW = "✊ 猜拳 → 👀 開牌 → 💥 連勝 1、2 重擊 → 🔥 連勝 3 四套拳 → 🛡️ 逐拳反擊（平手累積 2 次 ⚔️ 五連斬拼刀）";
 
 export function coachText(v, seat) {
   if (!v) return "";
@@ -26,19 +26,20 @@ export function coachText(v, seat) {
     }
     case PH.CLASH_ANIM: return v.clash?.result ? "⚔️ 勝負已分：主招大招！" : "⚔️ 五刀由慢到快對砍：贏刀多的放大招，同分看 ⚡ 先手";
     case PH.CLASH: return (v.gauge ?? 0) > 0 ? `⚔️ 叮！平手彈開，拼刀蓄力 ${v.gauge}/${v.gaugeMax}` : "⚔️ 平分！各自彈開，馬上下一輪";
-    case PH.MASH:
+    case PH.STRIKE:
       if (!r) return "";
-      if (!me) return `🔥 ${P(r.att)} 贏拳！狂按任意鍵追加連擊（最多 4 拳）`;
-      return r.att === seat ? "🔥 你贏拳了！狂點追加連擊（最多 4 拳）" : "😣 被壓著打！下一步準備接招";
-    case PH.SELECT:
+      if (!me) return `💥 ${P(r.att)} 連勝 ${v.fighters[r.att].streak}/${v.streakTarget}：單發重擊，連贏 ${v.streakTarget} 次進四套拳`;
+      return r.att === seat ? `💥 連勝 ${v.fighters[seat].streak}/${v.streakTarget}！再贏 ${v.streakTarget - v.fighters[seat].streak} 次就進四套拳` : "😣 被重擊推向崖邊：下一輪贏回來就能斷他的連勝";
+    case PH.BURST: return "🔥 連勝爆發！攻方連出 4 拳，守方每拳都有一次反擊機會";
+    case PH.COMBO_PREP:
       if (!r) return "";
-      if (!me) return `🎯 ${P(r.att)} 選終結技（按住贏拳鍵 0.3 秒＝紅光）・${P(r.def)} 準備接招`;
-      return r.att === seat ? `🎯 選終結技：點一張換手勢・按住「${GLABEL[r.winGesture] ?? ""}」0.3 秒＝紅光（要 2 氣）` : "👀 對手選招中：等一下看頭頂藍框或腳下紅區";
-    case PH.WINDOW:
-      if (!r?.type) return "";
-      if (!me) return r.type === "blue" ? `🛡️ ${P(r.def)}：按剋制藍框的拳彈反（只有一次）` : `🔴 ${P(r.def)}：紅光擋不住，往箭頭方向翻滾`;
-      if (r.def !== seat) return "⏳ 看對手接不接得住…";
-      return r.type === "blue" ? "🛡️ 藍框！按剋制它的拳彈反（只有一次機會）" : "🔴 紅光擋不住！往亮起的方向翻滾";
+      if (!me) return `🎯 ${P(r.att)} 選第 ${r.n} 拳（${P(r.def)} 看不到）`;
+      return r.att === seat ? `🎯 按一招決定第 ${r.n} 拳出什麼（不按就隨機），對手看不到` : `🛡️ 第 ${r.n} 拳來了：拳種亮出後按「剋制它」的拳反擊`;
+    case PH.COMBO_CUE:
+      if (!r) return "";
+      if (!me) return `🛡️ ${P(r.def)}：按剋制頭頂拳種的拳反擊（只認第一下）`;
+      return r.def === seat ? "🛡️ 看攻方頭頂的拳種，按剋制它的拳！只認第一下" : "⏳ 看對手接不接得住…";
+    case PH.COMBO_HIT: return "";
     default: return "";
   }
 }

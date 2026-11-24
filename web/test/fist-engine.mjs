@@ -1,6 +1,6 @@
 // 拳刃交鋒 engine.js 規則驗收（純邏輯，node 直接跑：node test/fist-engine.mjs）
-//   v3：沒有走位；猜拳 2.8s → 開牌停頓 0.55s → 連打／終結擇／判定窗 0.8s；武器過熱；平手累積 2 次 → 拼刀五連斬（先手獎勵、主招大招）
-//   延續 v2 的核心檢查：藏招保密、放開再按、判定窗單次鎖死、紅招蓄力與翻滾、擊飛公式、KO、延遲寬容、越打越快、flow 不吞事件
+//   v4：沒有走位；猜拳 2.8s → 開牌停頓 0.55s → 連勝 1、2 單發重擊／連勝 3 四套拳逐拳反擊；武器過熱；平手累積 2 次 → 拼刀五連斬
+//   （v3 的連打／終結擇／紅光翻滾已依需求移除，那幾段改成檢查新規則；藏招保密、過熱、拼刀、延遲寬容、越打越快照舊）
 import { Engine, PH } from "../public/fist/src/engine.js";
 import { CONFIG } from "../public/fist/src/config.js";
 
@@ -15,15 +15,16 @@ const has = (e, type, f = () => true) => e.log.some(x => x.type === type && f(x)
 const S = (a, b, extra = {}) => ({ p: [a, b], ...extra });
 const near = (a, b) => Math.abs(a - b) < 1e-6;
 
-console.log("開局：沒有走位，直接猜拳；力量 1 格");
+console.log("開局：沒有走位，直接猜拳；連勝 0/3");
 {
   const e = make(S({ pos: 3 }, { pos: 5 }));
   ok(e.phase === PH.RPS && near(e.dur, 2.8) && near(e.reveal, 2.2), `第一個階段就是猜拳：${e.dur}s（亮招 ${e.reveal}s＋藏招 ${+(e.dur - e.reveal).toFixed(2)}s）`);
-  ok(e.f.every(f => f.power === 1), "開局力量 1 格");
+  ok(e.f.every(f => f.streak === 0) && e.viewFor(0).streakTarget === 3, "開局雙方連勝 0/3");
+  ok(PH.MASH === undefined && PH.SELECT === undefined && PH.WINDOW === undefined, "狂敲連打／終結擇／紅光判定窗已移除");
   ok(PH.MOVE === undefined, "走位階段已移除");
 }
 
-console.log("猜拳 → 開牌停頓 → 連打；藏招保密");
+console.log("猜拳 → 開牌停頓 → 連勝重擊；藏招保密");
 {
   const e = make(S({ pos: 3 }, { pos: 5 }));
   run(e, 0.3); tap(e, 0, "L"); tap(e, 1, "R");                              // 亮招：P1 石、P2 布
@@ -36,28 +37,20 @@ console.log("猜拳 → 開牌停頓 → 連打；藏招保密");
   ok(near(e.dur, CONFIG.reveal.dur) && has(e, "rps_result", x => x.winner === 0 && x.stances.join() === "rock,scissors"), `開牌停頓 ${e.dur}s：石頭壓制剪刀，P1 贏`);
   ok(e.viewFor(1).rps?.winner === 0 && e.viewFor(1).rps.stances[1] === "scissors", "開牌停頓時雙方畫面都看得到結果");
   run(e, CONFIG.reveal.dur - 0.05);
-  ok(e.phase === PH.REVEAL, "停頓期間還沒進連打（給大腦消化）");
-  until(e, () => e.phase === PH.MASH);
-  ok(e.round.att === 0 && e.round.winGesture === "rock", "停頓完才進連打：P1 攻方");
+  ok(e.phase === PH.REVEAL, "停頓期間還沒出手（給大腦消化）");
+  until(e, () => e.phase === PH.STRIKE);
+  ok(e.round.att === 0 && e.round.winGesture === "rock" && e.f[0].streak === 1, "停頓完：P1 連勝 1/3 → 單發重擊（不進連打）");
 }
 
 console.log("武器過熱");
 {
   const e = make(S({ pos: 3 }, { pos: 5 }));
   run(e, 0.3); tap(e, 0, "R"); tap(e, 1, "L");                              // P1 布、P2 石 → P1 贏
-  until(e, () => e.phase === PH.MASH);
+  until(e, () => e.phase === PH.STRIKE);
   ok(e.f[0].heat === "paper" && e.f[1].heat === "rock" && has(e, "heat", x => x.heat.join() === "paper,rock"), "分出勝負：雙方剛出的那招過熱（P1 布、P2 石）");
   ok(e.viewFor(0).fighters[1].heat === "rock" && e.viewFor(1).fighters[0].heat === "paper", "過熱是公開資訊：雙方都看得到對方禁用哪招");
-  const before = e.f[1].damage;
-  for (let i = 0; i < 8; i++) tap(e, 0, "R", 0.01);                         // 一直按過熱的布鍵
-  until(e, () => e.phase === PH.SELECT);
-  ok(e.round.extra === 4 && e.f[1].damage > before, "連打：過熱的鍵照樣算數（追加打滿 4 拳）");
-  until(e, () => e.phase === PH.WINDOW);
-  ok(e.round.gesture === "paper", "終結手勢：贏拳的布");
-  tap(e, 1, "M");                                                            // 守方剪刀彈反
-  ok(e.round.result === "parry", "判定窗：照常彈反");
   until(e, () => e.phase === PH.RPS);
-  ok(e.f[0].power === 2 && e.f[1].power === 2, "一輪攻防結算：雙方各回 1 氣");
+  ok(e.f[1].damage === CONFIG.strike.damage && e.f[1].pos === 6 && has(e, "hit", x => x.kind === "strike") && has(e, "round_end"), `單發重擊：+${CONFIG.strike.damage}%、推 1 格（5 → ${e.f[1].pos}），直接回猜拳`);
   run(e, 0.2);
   e.log = [];
   tap(e, 0, "R");                                                            // 下一輪 P1 想再出布
@@ -82,18 +75,18 @@ console.log("拼刀蓄力：整場累積平手 2 次才觸發（不用連續）"
   until(e, () => e.phase === PH.CLASH || e.phase === PH.CLASH_INPUT);
   ok(e.phase === PH.CLASH && e.gauge === 1 && has(e, "gauge", x => x.gauge === 1 && !x.full) && has(e, "clash", x => !x.wave), "第 1 次平手：小拼刀「叮！」彈開，蓄力 1/2");
   until(e, () => e.phase === PH.RPS);
-  ok(e.f.every(f => f.power === 1), "小拼刀不回氣");
-  run(e, 0.3); tap(e, 0, "L"); tap(e, 1, "M");                              // 中間分出一次勝負（P2 彈反、沒人落台）：蓄力不歸零
-  until(e, () => e.phase === PH.MASH);
+  ok(e.f.every(f => f.damage === 0 && f.streak === 0) && !has(e, "round_end"), "小拼刀：沒傷害、不算一輪攻防");
+  run(e, 0.3); tap(e, 0, "L"); tap(e, 1, "M");                              // 中間分出一次勝負（重擊、沒人落台）：蓄力不歸零
+  until(e, () => e.phase === PH.STRIKE);
   ok(e.gauge === 1 && e.f[0].heat === "rock", "中間有一輪分出勝負：蓄力保留 1/2（累積、不用連續）");
-  until(e, () => e.phase === PH.WINDOW); tap(e, 1, "R");
   until(e, () => e.phase === PH.RPS);
-  ok(e.gauge === 1 && !has(e, "ko") && has(e, "parry"), "那輪結束（彈反、沒人落台）蓄力仍是 1/2");
+  ok(e.gauge === 1 && !has(e, "ko") && e.f[0].streak === 1, "那輪結束（重擊、沒人落台）蓄力仍是 1/2、P1 連勝 1/3");
   run(e, 0.3); tap(e, 0, "M"); tap(e, 1, "M");
   ok(e.f[0].heat === "rock" && e.f[1].heat === "scissors", "（P2 過熱剪刀時按剪刀會被擋；P1 剪刀合法）");
   tap(e, 1, "R"); tap(e, 0, "R");                                           // 布對布
-  until(e, () => e.phase === PH.CLASH || e.phase === PH.CLASH_INPUT || e.phase === PH.MASH);
+  until(e, () => e.phase === PH.CLASH || e.phase === PH.CLASH_INPUT || e.phase === PH.STRIKE);
   ok(e.phase === PH.CLASH_INPUT && e.gauge === 2 && has(e, "gauge", x => x.gauge === 2 && x.full), "第 2 次平手：蓄力 2/2 集滿 → 五連斬");
+  ok(e.f[0].streak === 1, "平手不重置連勝（P1 仍是 1/3）");
   const keep = CONFIG.CLASH_TRIGGER_TIES; CONFIG.CLASH_TRIGGER_TIES = 1;
   const q = make(S({ pos: 3 }, { pos: 5 })); run(q, 0.3); tap(q, 0, "L"); tap(q, 1, "L");
   until(q, () => q.phase === PH.CLASH || q.phase === PH.CLASH_INPUT);
@@ -135,7 +128,7 @@ console.log("拼刀模式：五連斬預輸入（蓄力 1/2 開局，再平手�
   ok(has(e, "clash_pass") && e.f[1].damage === 30, "青光穿身（clash_pass）後才命中");
   ok(e.f[0].heat === null && e.f[1].heat === null && e.gauge === 0 && has(e, "gauge", x => x.gauge === 0), "拼刀結算：過熱全部清除、蓄力歸零");
   until(e, () => e.phase === PH.RPS);
-  ok(e.f[0].power === 2 && e.f[1].power === 2, "拼刀有勝負＝一輪攻防：雙方各回 1 氣");
+  ok(has(e, "round_end"), "拼刀有勝負＝一輪攻防結束，回猜拳");
 }
 
 console.log("拼刀：主招規則、平分看先手、都沒先手白色衝擊波、超時補齊");
@@ -167,104 +160,134 @@ console.log("拼刀：主招規則、平分看先手、都沒先手白色衝擊�
   until(d, () => d.phase !== PH.CLASH_ANIM);
   ok(d.cm.first === -1 && !has(d, "clash_first") && has(d, "clash_end", x => x.winner === -1 && x.draw), "同時填完沒有先手；五刀全平 → 平局");
   ok(d.phase === PH.CLASH && has(d, "clash", x => x.wave) && d.gauge === 0, "平局：白色衝擊波彈開、蓄力歸零");
-  ok(until(d, () => d.phase === PH.RPS) && d.f.every(f => f.power === 1 && f.damage === 0), "平局各自彈開，直接下一輪猜拳（不回氣、沒損傷）");
+  ok(until(d, () => d.phase === PH.RPS) && d.f.every(f => f.damage === 0) && !has(d, "round_end"), "平局各自彈開，直接下一輪猜拳（沒損傷）");
   const t = setupClash();
   tap(t, 0, "L", 0.02);
   until(t, () => t.phase === PH.CLASH_ANIM, 5);
   ok(t.cm.seq.every(s => s.length === 5) && t.cm.seq[0][0] === "rock" && t.cm.first === -1, "3.5 秒到：P1 只填 1 格、P2 沒填，都被隨機補滿；沒人填滿＝沒有先手");
-  // 零距離氣功轟飛：水平掃出、貼地滑行；損傷高時滑出台外
-  const p = make(S({ pos: 3 }, { pos: 5, damage: 120 }, { gauge: 1 })); run(p, 0.3); tap(p, 0, "M"); tap(p, 1, "M"); until(p, () => p.phase === PH.CLASH_INPUT);
-  fill(p, 0, ["R", "R", "R", "R", "R"]); fill(p, 1, ["L", "L", "L", "L", "L"]);
-  until(p, () => p.phase !== PH.CLASH_ANIM);
-  ok(has(p, "clash_finisher", x => x.main === "paper" && x.name === "零距離氣功轟飛" && x.damage === 30), "零距離氣功轟飛：+30%");
-  const vyMax = Math.abs(p.f[1].vy);
-  until(p, () => has(p, "ko") || p.phase === PH.RPS, 6);
-  ok(has(p, "ko", x => x.p === 1), `120% 起手：被氣功水平轟出台外（${has(p, "skid") ? "落地滑行後掉落" : "直接飛出"}）`);
-  const p2 = make(S({ pos: 3 }, { pos: 5, damage: 0 }, { gauge: 1 })); run(p2, 0.3); tap(p2, 0, "M"); tap(p2, 1, "M"); until(p2, () => p2.phase === PH.CLASH_INPUT);
-  fill(p2, 0, ["R", "R", "R", "R", "R"]); fill(p2, 1, ["L", "L", "L", "L", "L"]);
-  until(p2, () => p2.phase === PH.RPS || has(p2, "ko"), 8);
-  ok(has(p2, "skid", x => x.p === 1) && !has(p2, "ko") && p2.f[1].pos !== p2.f[0].pos, "低損傷：落地後滑行一段、停在台上的格子");
-  ok(vyMax < 200, "氣功擊飛角度很平（水平掃出）");
+  // 三種大招：傷害、擊飛倍率、角度完全一樣（只差演出）
+  const launch = (a, b) => {
+    const x = make(S({ pos: 3 }, { pos: 5, damage: 40 }, { gauge: 1 })); run(x, 0.3); tap(x, 0, "M"); tap(x, 1, "M"); until(x, () => x.phase === PH.CLASH_INPUT);
+    fill(x, 0, a); fill(x, 1, b); until(x, () => x.phase !== PH.CLASH_ANIM);
+    const fin = x.log.find(e => e.type === "clash_finisher");
+    return { main: fin.main, dmg: fin.damage, vx: Math.abs(x.f[1].vx).toFixed(3), vy: x.f[1].vy.toFixed(3), x };
+  };
+  const L3 = [launch(["L", "L", "L", "L", "L"], ["M", "M", "M", "M", "M"]), launch(["M", "M", "M", "M", "M"], ["R", "R", "R", "R", "R"]), launch(["R", "R", "R", "R", "R"], ["L", "L", "L", "L", "L"])];
+  ok(L3.map(l => l.main).join() === "rock,scissors,paper", "三種主招都打得出來（崩山重砸／居合十字斬／零距離氣功轟飛）");
+  ok(L3.every(l => l.dmg === L3[0].dmg && l.vx === L3[0].vx && l.vy === L3[0].vy), `三種大招傷害 ${L3[0].dmg}%、擊飛速度完全相同（vx ${L3[0].vx}、vy ${L3[0].vy}）`);
+  for (const l of L3) until(l.x, () => l.x.phase === PH.RPS || has(l.x, "ko"), 6);
+  ok(L3.every(l => !has(l.x, "skid")), "氣功轟飛不再落地滑行");
 }
 
-console.log("放開再按（跨階段）／判定窗單次鎖死／判定窗 0.8s");
+console.log("連勝：連贏 3 次才進四套拳；輸一輪歸零；平手不動；重擊推到崖邊停住");
 {
-  const e = make(S({ pos: 3, power: 2 }, { pos: 4 }, { phase: PH.MASH, round: { att: 0, winGesture: "rock" } }));
-  e.input(0, "down", "L"); until(e, () => e.phase === PH.SELECT); run(e, 0.35);
-  ok(!e.round.red, "從連打一路按著進終結擇：不算長按（放開再按）");
-  const w = make(S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }));
-  ok(near(w.dur, 0.8), `終結判定窗 ${w.dur}s`);
-  tap(w, 1, "L"); tap(w, 1, "R");
-  ok(w.round.result === "hit" && has(w, "wrong"), "只認第一次按鍵：按錯就吃招，後面按對也沒用");
-  const late = make(S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }));
-  run(late, 0.7); tap(late, 1, "R");
-  ok(late.round.result === "parry", "0.7s 才按也來得及（新手友善）");
+  const e = make(S({ pos: 3 }, { pos: 5 }));
+  const round = (a, b) => { until(e, () => e.phase === PH.RPS && e.t > 0.1); tap(e, 0, a); tap(e, 1, b); until(e, () => [PH.STRIKE, PH.BURST, PH.CLASH, PH.CLASH_INPUT].includes(e.phase)); return e.phase; };
+  ok(round("L", "M") === PH.STRIKE && e.f.map(f => f.streak).join() === "1,0" && has(e, "streak", x => x.p === 0 && x.streak.join() === "1,0"), "P1 贏第 1 次：連勝 1/3、單發重擊");
+  until(e, () => e.phase === PH.RPS);
+  ok(round("M", "R") === PH.STRIKE && e.f[0].streak === 2, "P1 再贏：連勝 2/3、還是單發重擊");
+  until(e, () => e.phase === PH.RPS);
+  ok(e.f[1].pos === 7 && e.f[1].damage === 2 * CONFIG.strike.damage, `兩記重擊：P2 被推到崖邊格 ${e.f[1].pos}、+${e.f[1].damage}%`);
+  ok(round("R", "L") === PH.BURST && e.f[0].streak === 3 && has(e, "combo_start", x => x.att === 0), "連勝 3/3：🔥 連勝爆發 → 四套拳");
+  const b = make(S({ pos: 3, streak: 2 }, { pos: 5 }));
+  run(b, 0.3); tap(b, 0, "L"); tap(b, 1, "R");                              // P1 連勝 2 被 P2 斷掉
+  until(b, () => b.phase === PH.STRIKE);
+  ok(b.f[0].streak === 0 && b.f[1].streak === 1 && has(b, "streak", x => x.p === 0 && x.why === "broken"), "被斷連勝：P1 歸零、換 P2 從 1/3 算");
+  const t = make(S({ pos: 3, streak: 2 }, { pos: 5 }));
+  run(t, 0.3); tap(t, 0, "L"); tap(t, 1, "L"); until(t, () => t.phase === PH.CLASH);
+  ok(t.f[0].streak === 2, "平手：連勝不重置（2/3 保留）");
+  const w = make(S({ pos: 6 }, { pos: 7 }, { phase: PH.STRIKE, round: { att: 0, winGesture: "rock" } }));
+  until(w, () => w.phase === PH.RPS);
+  ok(w.f[1].pos === 7 && w.f[1].damage === CONFIG.strike.damage, "對手已在崖邊：重擊照樣加傷，但推不出台（撞崖邊停住）");
 }
 
-console.log("終結擇：長按贏拳鍵 0.3s＝紅光（要 2 氣）；未滿放開＝藍光不扣氣");
+console.log("四套拳：攻方選拳（守方看不到）→ 守方逐拳反擊（只認第一下）");
 {
-  const mk = power => make(S({ pos: 3, power }, { pos: 4 }, { phase: PH.MASH, round: { att: 0, winGesture: "rock" } }));
-  const e = mk(2); until(e, () => e.phase === PH.SELECT);
-  e.input(0, "down", "L"); run(e, 0.32);
-  ok(e.round.red && e.f[0].power === 0 && has(e, "red_ready"), "按住 0.3s：紅光強化，扣 2 氣");
-  const e2 = mk(2); until(e2, () => e2.phase === PH.SELECT); tap(e2, 0, "L", 0.15);
-  ok(!e2.round.red && e2.f[0].power === 2, "未滿 0.3s 放開：藍光，不扣氣");
-  const e3 = mk(1); until(e3, () => e3.phase === PH.SELECT); e3.input(0, "down", "L"); run(e3, 0.35);
-  ok(!e3.round.red, "只有 1 氣（開局值）：開不了紅光");
+  const C = CONFIG.combo;
+  const e = make(S({ pos: 3 }, { pos: 5 }, { phase: PH.BURST, round: { att: 0, winGesture: "rock" } }));
+  ok(near(e.dur, C.burstDur), `連勝爆發演出 ${C.burstDur}s`);
+  until(e, () => e.phase === PH.COMBO_PREP);
+  ok(e.round.n === 1 && near(e.dur, C.prepDur), `第 1 拳：攻方選拳 ${C.prepDur}s`);
+  tap(e, 0, "M"); tap(e, 0, "R");                                            // 改兩次：最後按的算
+  ok(e.viewFor(1).round.gesture === null && e.viewFor(-1).round.gesture === null && e.viewFor(0).round.gesture === "paper", "選拳期：守方（和共用畫面）看不到，攻方看得到自己選的布");
+  ok(e.log.filter(x => x.type === "combo_pick").every(x => x.private === 0), "選拳事件只送攻方");
+  tap(e, 1, "M");                                                            // 守方在選拳期亂按：不算
+  until(e, () => e.phase === PH.COMBO_CUE);
+  ok(e.round.gesture === "paper" && !e.round.done && near(e.dur, C.reactDur) && has(e, "combo_cue", x => x.n === 1 && x.gesture === "paper" && x.counter === "scissors"), `拳種亮出（布）：守方反擊窗 ${C.reactDur}s，選拳期亂按的不算`);
+  ok(e.viewFor(1).round.gesture === "paper" && e.viewFor(1).round.counter === "scissors", "反擊窗：守方看得到拳種與剋制手勢");
+  tap(e, 1, "L"); tap(e, 1, "M");                                            // 先按錯（石頭被布剋）再按對
+  ok(e.round.result === "hit" && has(e, "wrong", x => x.p === 1) && e.f[1].damage === C.hitDamage[0], `只認第一下：按錯就吃第 1 拳 +${C.hitDamage[0]}%，後面按對沒用`);
+  until(e, () => e.phase === PH.COMBO_PREP);
+  ok(e.round.n === 2, "吃拳後進第 2 拳");
+  until(e, () => e.phase === PH.COMBO_CUE);
+  ok(e.round.random && ["rock", "scissors", "paper"].includes(e.round.gesture), `攻方沒選：系統隨機出（${e.round.gesture}）`);
+  const late = make(S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0 } }));
+  tap(late, 0, "L"); until(late, () => late.phase === PH.COMBO_CUE); run(late, 0.8); tap(late, 1, "R");
+  ok(late.round.result === "counter", "0.8 秒才按也來得及（新手友善）");
+  const to = make(S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0 } }));
+  until(to, () => to.phase === PH.COMBO_HIT);
+  ok(has(to, "timeout", x => x.p === 1) && to.round.result === "hit", "沒按：逾時吃拳");
 }
 
-console.log("紅招：零氣閃避（翻滾穿過攻方）／按錯吃招擊飛 KO、重生清過熱");
+console.log("反擊成功：中斷剩下的拳、換位、反打；4 拳全吃：第 4 拳擊飛；結束後連勝歸零");
 {
-  const setup = S({ pos: 6, power: 2 }, { pos: 7, power: 0, damage: 130, heat: "rock" }, { phase: PH.WINDOW, round: { att: 0, red: true } });
-  const e = make(setup);
-  ok(JSON.stringify(e.round.zone) === "[6,7]" && JSON.stringify(e.round.dirs) === "[-1]", `崖邊：紅區 ${JSON.stringify(e.round.zone)}，只亮 ◀`);
-  tap(e, 1, "L");
-  ok(e.round.result === "roll" && e.f[1].pos === 5, `按 ◀（就算是過熱的鍵）翻滾 2 格到格 ${e.f[1].pos}`);
-  const e2 = make(setup);
-  tap(e2, 1, "M");
-  until(e2, () => has(e2, "ko"));
-  ok(has(e2, "ko", x => x.p === 1) && e2.f[1].stocks === CONFIG.stocks - 1, "按錯：吃紅招擊飛出界 KO，扣 1 命");
-  until(e2, () => e2.phase === PH.RPS);
-  ok(e2.f[1].damage === 0 && e2.f[0].pos === CONFIG.spawn[0] && e2.f[1].pos === CONFIG.spawn[1] && e2.f[1].heat === null, "掉命：重置中央、損傷歸零、過熱清除");
+  const C = CONFIG.combo;
+  const e = make(S({ pos: 3, streak: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0, n: 1 } }));   // 從第 2 拳開始
+  tap(e, 0, "M"); until(e, () => e.phase === PH.COMBO_CUE);                  // 剪刀
+  tap(e, 1, "L");                                                            // 石頭剋剪刀
+  ok(e.round.result === "counter" && has(e, "counter", x => x.p === 1 && x.n === 2) && e.phase === PH.RESOLVE, "第 2 拳按出剋制手勢：反擊成功，四套拳提早結束");
+  ok(e.f[0].pos === 5 && e.f[1].pos === 3 && e.f[0].damage === C.counterDamage, `換位＋反打 +${C.counterDamage}%、攻方被擊退到格 ${e.f[0].pos}`);
+  ok(e.f[0].streak === 0 && has(e, "combo_end", x => x.how === "countered"), "四套拳結束：攻方連勝歸零");
+  const full = make(S({ pos: 2, streak: 3 }, { pos: 3 }, { phase: PH.BURST, round: { att: 0, winGesture: "rock" } }));
+  until(full, () => full.phase === PH.RESOLVE, 10);
+  const hits = full.log.filter(x => x.type === "hit" && x.kind === "combo");
+  const sum = C.hitDamage.reduce((a, b) => a + b, 0);
+  ok(hits.length === 4 && hits[3].final && full.f[1].air && full.f[1].damage === sum, `守方完全沒按：吃好吃滿 4 拳（+${sum}%），第 4 拳擊飛`);
+  ok(hits.slice(0, 3).every(h => !h.final) && full.f[1].pos === 6, `第 1～3 拳每拳推 1 格（3 → ${full.f[1].pos}）`);
+  const R = CONFIG.resolve;
+  ok(near(hits[3].v, R.vBase * (1 + sum / R.damageDiv) * C.finalLaunch), `第 4 拳擊飛：V = vBase × (1 + ${sum}/${R.damageDiv}) × ${C.finalLaunch}`);
+  ok(full.f[0].streak === 0 && has(full, "combo_end", x => x.how === "full" && x.hits === 4), "打完四拳：攻方連勝歸零");
 }
 
-console.log("擊飛公式");
+console.log("落台：扣命、重生、損傷／過熱／蓄力／雙方連勝全歸零");
 {
-  const e = make(S({ pos: 3, power: 2 }, { pos: 4, power: 2, damage: 40 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }));
-  run(e, 0.85);
-  const ev = e.log.find(x => x.type === "finisher_hit"), R = CONFIG.resolve, d = 40 + CONFIG.finisherDamage;
-  ok(near(ev.v, R.vBase * (1 + d / R.damageDiv)), `藍光：V = vBase × (1 + ${d}/${R.damageDiv}) = ${ev.v.toFixed(1)}`);
-  const e2 = make(S({ pos: 3, power: 2 }, { pos: 4, power: 2, damage: 40 }, { phase: PH.WINDOW, round: { att: 0, red: true } }));
-  run(e2, 0.85);
-  ok(near(e2.log.find(x => x.type === "finisher_hit").v, R.vBase * (1 + d / R.damageDiv) * R.redMult), `紅光：再 × ${R.redMult}`);
+  const e = make(S({ pos: 6, streak: 3 }, { pos: 7, damage: 150, heat: "rock", streak: 0 }, { phase: PH.COMBO_PREP, round: { att: 0, n: 3 }, gauge: 1 }));
+  until(e, () => has(e, "ko"), 6);
+  ok(has(e, "ko", x => x.p === 1) && e.f[1].stocks === CONFIG.stocks - 1, "150% 吃第 4 拳：擊飛出界 KO，扣 1 命");
+  until(e, () => e.phase === PH.RPS);
+  ok(e.f[1].damage === 0 && e.f[0].pos === CONFIG.spawn[0] && e.f[1].pos === CONFIG.spawn[1] && e.f[1].heat === null && e.gauge === 0 && e.f.every(f => f.streak === 0), "重生：回中央、損傷歸零、過熱清除、蓄力與雙方連勝歸零");
 }
 
-console.log("站位只靠推擠、換位、翻滾");
+console.log("站位只靠推擠、換位、擊飛");
 {
-  const e = make(S({ pos: 3 }, { pos: 5 }, { phase: PH.MASH, round: { att: 0, winGesture: "rock" } }));
-  until(e, () => e.phase === PH.SELECT);
-  ok(e.f[1].pos === 7 && e.f[0].pos === 3, `贏拳連打保底兩拳把對手推 2 格（格 5 → ${e.f[1].pos}）`);
   const m = make(S({ pos: 3 }, { pos: 5 }));
   for (let i = 0; i < 200; i++) { m.input(0, "down", "L"); m.input(1, "down", "R"); m.step(STEP); m.input(0, "up", "L"); m.input(1, "up", "R"); m.step(STEP); }
   ok(m.f[0].pos === 3 && m.f[1].pos === 5, "猜拳時亂按方向鍵不會移動");
 }
 
-console.log("flow 中途 reset 不吞事件（教學用）");
+console.log("放開再按（跨階段）");
 {
-  const setupB = S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.WINDOW, round: { att: 1, gesture: "scissors" } });
-  const e = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.MASH, round: { att: 0, winGesture: "paper" } }), rng: () => 0.1, flow: from => (from === PH.MASH ? { reset: setupB } : undefined) });
-  e.log = [];
-  for (let i = 0; i < 10; i++) tap(e, 0, ["L", "M", "R"][i % 3], 0.01);
-  until(e, () => e.phase === PH.WINDOW);
-  ok(has(e, "mash_end", x => x.extra === 4), "連打結束時 flow 換段：mash_end（追加 4）仍有送出");
-  ok(e.phase === PH.WINDOW && e.round.att === 1, "且已換到下一段的設定");
+  const e = make(S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0 } }));
+  e.input(1, "down", "R"); run(e, 0.05);                                       // 守方在選拳期就按著布
+  until(e, () => e.phase === PH.COMBO_CUE); run(e, 0.05);
+  ok(!e.round.done, "從選拳期一路按著進反擊窗：不算（要放開再按）");
 }
 
-console.log("線上延遲寬容");
+console.log("flow 中途 reset 不吞事件（教學用）");
 {
-  const late = grace => { const x = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.WINDOW, round: { att: 0, gesture: "rock" } }), rng: () => 0.1, windowGrace: grace }); x.log = []; run(x, CONFIG.window.dur + 0.04); x.input(1, "down", "R"); run(x, STEP * 2); return x.round.result; };
-  ok(late(0) === "hit", `本機（無寬容）：${(CONFIG.window.dur + 0.04).toFixed(2)}s 才按 → 已逾時吃招`);
-  ok(late(CONFIG.net.windowGraceMs / 1000) === "parry", `線上（寬容 ${CONFIG.net.windowGraceMs}ms）：晚 40ms 抵達的正確按鍵仍算彈反`);
+  const setupB = S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 1 } });
+  const e = new Engine({ setup: S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0 } }), rng: () => 0.1, flow: from => (from === PH.COMBO_HIT ? { reset: setupB } : undefined) });
+  e.log = [];
+  until(e, () => e.phase === PH.COMBO_PREP && e.round.att === 1);
+  ok(has(e, "hit", x => x.kind === "combo" && x.n === 1), "吃拳後 flow 換段：hit 事件仍有送出");
+  ok(e.phase === PH.COMBO_PREP && e.round.att === 1, "且已換到下一段的設定");
+}
+
+console.log("線上延遲寬容（四套拳反擊窗）");
+{
+  const late = grace => { const x = new Engine({ setup: S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0 } }), rng: () => 0.1, windowGrace: grace }); x.log = []; x.input(0, "down", "L"); run(x, 0.05); x.input(0, "up", "L"); until(x, () => x.phase === PH.COMBO_CUE); run(x, x.dur + 0.04); x.input(1, "down", "R"); run(x, STEP * 2); return x.round.result; };
+  ok(late(0) === "hit", `本機（無寬容）：反擊窗結束後 40ms 才按 → 已逾時吃拳`);
+  ok(late(CONFIG.net.windowGraceMs / 1000) === "counter", `線上（寬容 ${CONFIG.net.windowGraceMs}ms）：晚 40ms 抵達的正確按鍵仍算反擊`);
 }
 
 console.log("越打越快");
@@ -281,10 +304,9 @@ console.log("越打越快");
   ok(durs[0][0] === 0 && durs[3][0] === 1 && durs[6][0] === 2 && durs[9][0] === 3, `每 3 回合升一級（等級 ${durs.map(d => d[0] + 1).join("")}）`);
   ok(near(durs[0][1], 2.8) && near(durs[0][2], 2.2), "Lv.1 猜拳 2.8s（亮招 2.2s）");
   ok(near(durs[9][2], Sp.fast.rpsReveal) && near(durs[9][1], Sp.fast.rpsReveal + Sp.fast.rpsHidden), `最快：亮招 ${Sp.fast.rpsReveal}s＋藏招 ${Sp.fast.rpsHidden}s`);
-  const f = new Engine({ setup: S({ pos: 3, power: 2 }, { pos: 4, power: 2 }, { phase: PH.MASH, round: { att: 0, winGesture: "rock" }, rounds: 12 }), rng: () => 0.1 }); f.log = [];
-  until(f, () => f.phase === PH.SELECT); f.input(0, "down", "L"); run(f, 0.34);
-  ok(f.round.red, "最快等級仍開得出紅光");
-  until(f, () => f.phase === PH.WINDOW); ok(near(f.dur, Sp.fast.window), `最快判定窗 ${f.dur}s`);
+  const f = new Engine({ setup: S({ pos: 3 }, { pos: 4 }, { phase: PH.COMBO_PREP, round: { att: 0 }, rounds: 12 }), rng: () => 0.1 }); f.log = [];
+  ok(near(f.dur, Sp.fast.comboPrep), `最快選拳 ${f.dur}s`);
+  until(f, () => f.phase === PH.COMBO_CUE); ok(near(f.dur, Sp.fast.comboReact), `最快反擊窗 ${f.dur}s`);
   const t = new Engine({ setup: S({ pos: 3 }, { pos: 5 }, { rounds: 12 }), speedUp: false });
   ok(t.speedLv === 0 && near(t.dur, 2.8), "教學（speedUp: false）不加速");
 }

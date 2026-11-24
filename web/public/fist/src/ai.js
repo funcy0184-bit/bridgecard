@@ -1,9 +1,9 @@
 // ai.js — 三難度 AI（新手木樁／道場師兄／讀心宗師）
 //   不作弊：
-//     · 只能拿 port.view() —— 就是 engine.viewFor(自己座位)，藏招時看不到對手換了什麼、看不到攻方還沒亮出的終結手勢
+//     · 只能拿 port.view() —— 就是 engine.viewFor(自己座位)，藏招時看不到對手換了什麼、看不到四套拳攻方還沒亮出的那一拳
 //     · 對手的資訊要經過「反應延遲」才看得到：AI 把每一幀的畫面存起來，決策時讀 reactionMs 之前的那一幀
-//     · 只能像真人一樣送按下／放開（同樣受放開再按、判定窗單次鎖死限制）
-//   自己的狀態（力量、過熱、是不是攻方）不用延遲：那是「自己知道的事」；過熱是公開資訊（雙方 HUD 都顯示）
+//     · 只能像真人一樣送按下／放開（同樣受放開再按、反擊窗單次鎖死限制）
+//   自己的狀態（連勝、過熱、是不是攻方）不用延遲：那是「自己知道的事」；過熱是公開資訊（雙方 HUD 都顯示）
 import { CONFIG } from "./config.js";
 import { PH, COUNTER, KEY_OF, GESTURE_OF, BEATS } from "./engine.js";
 
@@ -82,47 +82,27 @@ export class AIPlayer {
     for (let k = 0; k < CONFIG.CLASH_SEQUENCE_LENGTH; k++) { this.press(KEY_OF[this.pick(GESTURES)], at, 0.03); at += gap * (0.85 + this.rng() * 0.3); }
   }
 
-  // ---------- 連打：攻方狂按（按得多快看難度） ----------
-  [`on_${PH.MASH}`](v) {
+  // ---------- 四套拳・攻方：每一拳選一招（自己的回合：不用等反應）；宗師不連出同一招，比較難讀 ----------
+  [`on_${PH.COMBO_PREP}`](v) {
     const P = this.plan, r = v.round;
-    if (!r || r.att !== this.seat) return;
-    P.next ??= this.now + 0.06;
-    if (this.now >= P.next) {
-      const btns = ["L", "M", "R"];
-      P.i = ((P.i ?? 0) + 1) % 3;
-      this.press(btns[P.i], 0, 0.03);
-      P.next = this.now + (this.cfg.mashIntervalMs / 1000) * (0.85 + this.rng() * 0.3);
-    }
-  }
-
-  // ---------- 終結擇：攻方決定藍光或紅光（自己的回合：不用等反應） ----------
-  [`on_${PH.SELECT}`](v) {
-    const P = this.plan, r = v.round, me = this.me(v), op = this.opp(v);
     if (P.done || !r || r.att !== this.seat) return;
     P.done = true;
-    const canRed = me.power >= CONFIG.select.redCost, edge = op.pos === 1 || op.pos === CONFIG.cells;
-    let red = false;
-    if (this.level === "easy") red = canRed && this.rng() < 0.06;                           // 極少開紅招
-    else if (this.level === "mid") red = canRed && op.damage >= 80 && edge;                  // 對手 ≥ 80% 且站崖邊
-    else red = canRed && (op.damage >= 70 || (edge && op.damage >= 50));                     // 宗師：看準就收頭
-    if (red) this.press(r.winKey, 0.015, CONFIG.select.chargeTime + 0.05);
-    else if (this.level !== "easy" && this.rng() < 0.6) this.press(this.pick(["L", "M", "R"]), 0.05);   // 換個終結手勢
+    let g = this.pick(GESTURES);
+    if (this.level === "master" && g === this.lastCombo) g = this.pick(GESTURES.filter(x => x !== this.lastCombo));
+    this.lastCombo = g;
+    if (this.level === "easy" && this.rng() < 0.3) return;                // 新手偶爾發呆：交給系統隨機
+    this.press(KEY_OF[g], Math.min(v.dur - 0.08, 0.08 + this.rng() * 0.2));
   }
 
-  // ---------- 終結判定窗：守方（提示是公開的；反應時間＝defenseMs，成功率看難度） ----------
-  [`on_${PH.WINDOW}`](v) {
+  // ---------- 四套拳・守方：拳種亮出後 counterMs 左右按；counterRate 機率按對，其餘一半按錯、一半發呆 ----------
+  [`on_${PH.COMBO_CUE}`](v) {
     const P = this.plan, r = v.round;
-    if (P.done || !r || r.def !== this.seat || !r.type) return;
+    if (P.done || !r || r.def !== this.seat || !r.gesture) return;
     P.done = true;
-    const at = Math.min(v.dur - 0.05, (this.cfg.defenseMs + (this.rng() * 80 - 40)) / 1000);
-    if (r.type === "blue") {
-      const right = KEY_OF[COUNTER[r.gesture]];
-      if (this.rng() < this.cfg.parryRate) this.press(right, at);
-      else if (this.rng() < 0.5) this.press(this.pick(["L", "M", "R"].filter(b => b !== right)), at);   // 猜錯
-    } else {
-      if (r.dirs.length && this.rng() < this.cfg.rollRate) this.press(this.pick(r.dirs) < 0 ? "L" : "R", at);
-      else if (this.rng() < 0.5) this.press("M", at);
-    }
+    const at = Math.max(0.05, Math.min(v.dur - 0.05, (this.cfg.counterMs + (this.rng() * 80 - 40)) / 1000));
+    const right = KEY_OF[COUNTER[r.gesture]];
+    if (this.rng() < this.cfg.counterRate) this.press(right, at);
+    else if (this.rng() < 0.5) this.press(this.pick(["L", "M", "R"].filter(b => b !== right)), at);
   }
 }
 

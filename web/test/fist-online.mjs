@@ -99,35 +99,42 @@ ok(!rawLeak, "藏招期 P1 收到的原始封包裡完全找不到「scissors」
 const res = A.events.find(e => e.type === "rps_result");
 ok(res && res.stances[1] === "scissors" && res.winner === 0, `鎖定結算才一起公佈：P1 石頭 vs P2 剪刀 → P1 贏（${res?.stances}）`);
 
-console.log("連打：伺服器數按鍵、即時轉發守方");
+console.log("連勝：伺服器記連勝、公開同步；連勝 1、2 單發重擊");
 await until(() => A.msgs.some(m => m.t === "state" && m.view.phase === "PHASE_REVEAL"), 3000);
 ok(A.msgs.some(m => m.t === "state" && m.view.phase === "PHASE_REVEAL" && m.view.rps?.winner === 0), "開牌停頓：雙方都收到結果（P1 石頭壓制剪刀）");
-await until(() => phaseIs(A, "PHASE_MASH")() && phaseIs(B, "PHASE_MASH")(), 2000);    // 兩邊都收到才比（真實網路上會差幾十毫秒）
+await until(() => phaseIs(A, "PHASE_STRIKE")() && phaseIs(B, "PHASE_STRIKE")(), 2000);    // 兩邊都收到才比（真實網路上會差幾十毫秒）
 ok(A.view.fighters[0].heat === "rock" && B.view.fighters[0].heat === "rock" && A.view.fighters[1].heat === "scissors", "過熱同步：雙方都看得到 P1 禁用石頭、P2 禁用剪刀");
-for (let i = 0; i < 14; i++) await A.tap(["L", "M", "R"][i % 3], 12);
-await until(() => B.events.some(e => e.type === "mash_end"), 2000);
-const extras = B.events.filter(e => e.type === "hit" && e.kind === "extra");
-ok(extras.length === 4, `守方即時收到 ${extras.length} 次追加命中（狂按 14 下，伺服器卡在上限 4）`);
-const end = B.events.find(e => e.type === "mash_end");
-ok(end?.extra === 4 && end.combo === 6, `連打結算：保底 2 ＋ 追加 4 = ${end?.combo} HIT`);
-const dmg = B.view.fighters[1].damage;
+ok(A.view.fighters[0].streak === 1 && B.view.fighters[0].streak === 1 && B.events.some(e => e.type === "streak" && e.p === 0), "連勝同步：雙方都看到 P1 連勝 1/3");
+await until(() => B.events.some(e => e.type === "hit" && e.kind === "strike"), 2000);
+ok(B.events.some(e => e.type === "hit" && e.kind === "strike" && e.p === 1), "單發重擊：守方即時收到命中");
+// 再贏兩輪：P1 布 vs P2 石頭、P1 剪刀 vs P2 布（都避開過熱）→ 連勝 3/3
+for (const [a, b] of [["R", "L"], ["M", "R"]]) {
+  await until(() => phaseIs(A, "PHASE_RPS")() && A.view.t > 0.15 && phaseIs(B, "PHASE_RPS")(), 6000);
+  await A.tap(a); await B.tap(b);
+  await until(() => phaseIs(A, "PHASE_STRIKE")() || phaseIs(A, "PHASE_BURST")(), 5000);
+}
+await until(() => phaseIs(B, "PHASE_BURST")() || phaseIs(B, "PHASE_COMBO_PREP")(), 3000);
+ok(B.view.fighters[0].streak === 3 && B.events.some(e => e.type === "combo_start" && e.att === 0), "P1 連勝 3/3：雙方都收到「連勝爆發」");
 
-console.log("終結擇保密 → 判定窗延遲寬容");
-await until(phaseIs(A, "PHASE_FINISHER_SELECT"), 2000);
-await A.tap("R");                                                     // 攻方短按：普通終結改成布
+console.log("四套拳：選拳保密 → 反擊窗延遲寬容");
+await until(() => phaseIs(A, "PHASE_COMBO_PREP")(), 3000);
+const mark2 = B.msgs.length;
+await A.tap("R");                                                     // 攻方第 1 拳選布
 await sleep(80);
-ok(B.view.round.gesture === null && !B.events.some(e => e.type === "finisher_pick"), "守方在終結擇看不到攻方選了什麼");
-await until(phaseIs(B, "PHASE_FINISHER_WINDOW"), 2000);
-ok(B.view.round.gesture === "paper" && B.view.round.type === "blue", "判定窗亮起：手勢公開（布）");
-// 等到 0.5 秒倒數走完之後才按（模擬玩家在畫面內按到、封包晚 ~40ms 才到）
-const w = B.msgs.filter(m => m.t === "state" && m.view.phase === "PHASE_FINISHER_WINDOW")[0];
+const prepMsgs = B.msgs.slice(mark2).filter(m => m.t === "state" && m.view.phase === "PHASE_COMBO_PREP");
+ok(prepMsgs.length > 0 && prepMsgs.every(m => m.view.round.gesture === null) && !B.events.some(e => e.type === "combo_pick"), `選拳期守方收到的 ${prepMsgs.length} 張畫面看不到攻方選了什麼，也沒有 combo_pick 事件`);
+await until(phaseIs(B, "PHASE_COMBO_CUE"), 2000);
+ok(B.view.round.gesture === "paper" && B.events.some(e => e.type === "combo_cue" && e.gesture === "paper"), "拳種亮出：守方這時才看到布");
+// 等到反擊窗倒數走完之後才按（模擬玩家在畫面內按到、封包晚 ~25ms 才到）
+const w = B.msgs.filter(m => m.t === "state" && m.view.phase === "PHASE_COMBO_CUE")[0];
+const dmgA = A.view.fighters[0].damage;
 await sleep(Math.max(0, w.phaseEndTime - w.serverTime + 25));
 B.send({ t: "input", type: "down", btn: "M" });                       // 剪刀剋布
-await until(() => B.events.some(e => ["parry", "timeout", "wrong"].includes(e.type)), 2000);
+await until(() => B.events.some(e => ["counter", "timeout", "wrong"].includes(e.type)), 2000);
 B.send({ t: "input", type: "up", btn: "M" });
-ok(B.events.some(e => e.type === "parry" && e.p === 1), "倒數歸零後 ~25ms 抵達的正確按鍵：伺服器寬容 80ms，判定彈反成功");
-await until(() => A.view.fighters[0].damage === 10, 2000);                 // 原攻方的畫面隔一個網路延遲才到
-ok(A.view.fighters[0].damage === 10 && B.view.fighters[1].damage === dmg, `反擊 +10%（P1 ${A.view.fighters[0].damage}%）`);
+ok(B.events.some(e => e.type === "counter" && e.p === 1), "倒數歸零後 ~25ms 抵達的正確按鍵：伺服器寬容 80ms，判定反擊成功");
+await until(() => A.view.fighters[0].damage === dmgA + 10, 2000);         // 原攻方的畫面隔一個網路延遲才到
+ok(A.view.fighters[0].damage === dmgA + 10 && A.view.fighters[0].streak === 0, `反擊 +10%（P1 ${A.view.fighters[0].damage}%），四套拳結束、P1 連勝歸零`);
 
 console.log("暱稱、表情、房主設定");
 {

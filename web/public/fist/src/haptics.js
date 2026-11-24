@@ -47,15 +47,13 @@ export const Haptics = {
     const mine = p => me === null || p === me;
     for (const e of events) {
       if (e.type === "hit") {
-        if (e.kind === "counter" || e.kind === "clash") continue;   // 彈反反擊交給 parry、拼刀重砍交給 clash_end                              // 彈反反擊：跟 parry 同一刻，交給 parry 的「噠噠」，不然會被蓋掉
-        else if (me !== null && e.p === me) this.buzz(e.kind === "extra" ? H.takeExtra : H.takeBase);
-        else this.buzz(e.kind === "extra" ? H.dealExtra : H.dealBase);
-      } else if (e.type === "finisher_hit") {
-        if (me !== null && e.p === me) this.buzz(e.red ? H.takeRed : H.takeFinisher, true);
-        else this.buzz(e.red ? H.dealRed : H.dealFinisher, true);
-      } else if (e.type === "parry") this.buzz(mine(e.p) ? H.parryMe : H.gotParried, true);
+        if (e.kind === "counter" || e.kind === "clash") continue;   // 反擊交給 counter、拼刀大招交給 clash_finisher（同一刻，避免互相蓋掉）
+        const took = me !== null && e.p === me;
+        if (e.final) this.buzz(took ? H.takeFinisher : H.dealFinisher, true);   // 第 4 拳擊飛
+        else this.buzz(took ? H.takeBase : H.dealBase);                         // 重擊、第 1～3 拳
+      } else if (e.type === "counter") this.buzz(mine(e.p) ? H.counterMe : H.gotCountered, true);
+      else if (e.type === "combo_start") this.buzz(H.burst, true);
       else if (e.type === "clash") this.buzz(H.clash);
-      else if (e.type === "roll" && mine(e.p)) this.buzz(H.roll);
       else if (e.type === "clash_cut") this.buzz(H.clash);
       else if (e.type === "clash_finisher") this.buzz(me !== null && e.winner !== me ? H.takeRed : H.dealRed, true);   // 拼刀大招＝最重的震動
       else if (e.type === "ko") this.buzz(me !== null && e.p === me ? H.koMe : H.koThem, true);

@@ -46,7 +46,7 @@ keybar.onInput = (seat, type, btn) => {
 };
 // 比賽結束：點畫面再來一場（線上走房間面板的 Rematch）
 $("screen").addEventListener("pointerdown", () => { if (mode && mode !== "online" && latest.view?.phase === PH.GAMEOVER) startMode(mode, opts); });
-const touchText = t => (touch ? t.replace(/A／S／D/g, "三顆鍵").replace(/按 A（◀）/g, "點 ◀ 左翻").replace(/按 A（✊ 石頭）/g, "點 ✊ 石頭").replace(/按 D 出/g, "點").replace(/用 A 出/g, "點").replace(/試按 D/g, "試點 🖐️").replace(/也按 A 出/g, "也點").replace(/：按 A/g, "：點 ✊").replace(/連按 3 下/g, "連點 3 下") : t);
+const touchText = t => (touch ? t.replace(/A／S／D/g, "三顆鍵").replace(/按 A（◀）/g, "點 ◀ 左翻").replace(/按 A（✊ 石頭）/g, "點 ✊ 石頭").replace(/按 D 出/g, "點").replace(/用 A 出/g, "點").replace(/試按 D/g, "試點 🖐️").replace(/也按 A 出/g, "也點").replace(/：按 A/g, "：點 ✊").replace(/連按 (\d+) 下/g, "連點 $1 下") : t);
 const TEAM = ["#FFF0C3", "#C6F9D8"];
 
 // ---------------- 出招提示開關（存在這台瀏覽器；線上也只影響本機畫面） ----------------
@@ -293,7 +293,7 @@ function frame(nowMs) {
 function debugText(v) {
   const r = v.round;
   return [`${v.phase} t=${v.t.toFixed(2)}/${v.dur}`,
-    ...v.fighters.map(f => `P${f.i + 1} 格${f.pos} 氣${f.power} ${f.damage}% 命${f.stocks} 過熱${f.heat ?? "-"} ${f.stance ?? "-"} ${f.anim.state}`),
+    ...v.fighters.map(f => `P${f.i + 1} 格${f.pos} 連勝${f.streak} ${f.damage}% 命${f.stocks} 過熱${f.heat ?? "-"} ${f.stance ?? "-"} ${f.anim.state}`),
     r ? `攻P${r.att + 1} 贏拳${r.winGesture} 終結${r.gesture ?? "?"} 紅${r.red} 連打${r.hits}+${r.extra} ${r.type ?? ""} ${r.result ?? ""}` : "",
     `Sprite：P1 ${renderer.hasSheet(0) ? "PNG" : "程式繪製"}／P2 ${renderer.hasSheet(1) ? "PNG" : "程式繪製"}`,
     net ? `線上：P${net.seat + 1}　${net.lobby?.status ?? "-"}　${net.rtt ?? "-"}ms` : ""].join("\n");

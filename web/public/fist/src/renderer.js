@@ -8,7 +8,7 @@
 //     開牌壓制／受壓、勝利收勢讀 fighter_p*_v3_addon.png（CONFIG.extraAtlas）；
 //     勝利大招特效有 vfx_win_*.png 就照 CONFIG.vfx 播放，沒有就用程式繪製（橘紅重砸、青色居合十字、綠色氣功光束）
 import { ART, CONFIG } from "./config.js";
-import { PH, PH_LABEL, GLABEL, GNAME, GICON, cellX } from "./engine.js";
+import { PH, PH_LABEL, GLABEL, GNAME, GICON, COUNTER, cellX } from "./engine.js";
 import { Assets } from "./assets.js";
 
 export const ANIM_STATES = [
@@ -130,7 +130,7 @@ const Fighter = (() => {
     if (an.playback === "hold_last") return Math.min(n, an.frames - 1);
     if (an.playback === "tail_loop") return n < an.frames ? n : an.loopStartFrame + ((n - an.loopStartFrame) % (an.frames - an.loopStartFrame));
     if (state === "finisher_blue" || state === "finisher_red") {                 // 0–7 格對應判定窗，第 8 格在命中事件上
-      if (!f.fin) { const k = view?.phase === PH.WINDOW ? clamp(view.t / view.dur, 0, 0.999) : 0; return Math.floor(k * (an.keyFrames.windupLast + 1)); }
+      if (!f.fin) { const k = view?.phase === PH.COMBO_CUE ? clamp(view.t / view.dur, 0, 0.999) : 0; return Math.floor(k * (an.keyFrames.windupLast + 1)); }
       return Math.min(an.frames - 1, an.keyFrames.contact + Math.floor(t * an.fps * 0.5));
     }
     return Math.min(an.frames - 1, (an.keyFrames.contact ?? 0) + n);             // event_driven：事件發生時從接觸格開始
@@ -372,6 +372,7 @@ export class Renderer {
     this.fx = []; this.trails = [[], []]; this.trailClock = [0, 0]; this.lastXY = [null, null];
     this.freezeUntil = 0; this.frozen = null; this.shake = { amp: 0, until: 0 };
     this.flashF = [0, 0]; this.rimT = [0, 0]; this.keyFlash = { L: 0, M: 0, R: 0 }; this.combo = null;
+    this.callout = null; this.goFlash = -9; this.bigNum = { v: null, at: 0 }; this.streakAt = [-9, -9]; this.cueAt = -9;   // v4：中央回饋大字、出招！、大倒數、連勝燈
     this.cam = { zoom: 1, x: CONFIG.W / 2, y: CONFIG.H / 2 };
     this.lb = 0; this.impactLeft = 0; this.gaugeAt = -9; this.gaugeFullAt = -9; this.tiebreakAt = -9; this.finText = null;   // 拼刀：黑邊、衝擊幀、蓄力閃爍
     this.stars = Array.from({ length: 46 }, () => ({ x: (Math.random() * CONFIG.W) | 0, y: (Math.random() * 110) | 0, tw: Math.random() * 6 }));
@@ -385,7 +386,7 @@ export class Renderer {
   hasSheet(seat) { return !!Fighter.baseOf(seat); }
   setNames(n) { this.names = n; }
   keyPress(btn) { this.keyFlash[btn] = 0.12; }
-  reset() { this.lb = 0; this.impactLeft = 0; this.finText = null; this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null })); }
+  reset() { this.callout = null; this.goFlash = -9; this.lb = 0; this.impactLeft = 0; this.finText = null; this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null })); }
   resize(availW = innerWidth, availH = innerHeight) {
     const dpr = globalThis.devicePixelRatio || 1, fit = Math.min(availW / CONFIG.W, availH / CONFIG.H);
     this.scale = fit >= 1 ? Math.floor(fit) : fit;          // 整數倍率；視窗剩下的空間留邊
@@ -407,7 +408,6 @@ export class Renderer {
         }
         case "step": if (e.bump) { this.spark((cellX(e.from) + cellX(e.to)) / 2, CONFIG.floorY - 22, PAL.fx.impact.spark, 4, 1.6); this.popup((cellX(e.from) + cellX(e.to)) / 2, CONFIG.floorY - 52, "頂撞！", PAL.fx.impact.spark, 9); this.kick(1, 0.06, now); } break;
         case "lock": { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 58, "鎖定", PAL.hud.muted, 8); break; }
-        case "deny": if (e.why === "power") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 58, "沒氣了", "#FFAA63", 8); } break;
         case "hide": this.trails = [[], []]; break;                                           // 藏招第一幀：清掉殘影
         // （開牌結果改由畫面中央的大字顯示，不在頭上另外冒小字）
         case "clash":
@@ -417,21 +417,41 @@ export class Renderer {
         case "gauge": if (e.full) { this.gaugeFullAt = now; this.kick(2, 0.12, now); } else if (e.gauge > 0) this.gaugeAt = now; break;
         case "hit": {
           this.flashF[e.p] = 1;                                                   // 受擊閃白 1 幀
-          const n = e.kind === "extra" ? 4 + e.n * 2 : 6;
-          if (!this.sprite("vfx_sparks", e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24 - (e.kind === "extra" ? Math.random() * 10 : 0), e.toward ?? 1)) this.spark(e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24 - (e.kind === "extra" ? Math.random() * 10 : 0), e.kind === "extra" ? PAL.fx.impact.core : PAL.fx.impact.spark, n, e.kind === "extra" ? 2.8 : 2.2);
-          this.popup(e.x, CONFIG.floorY - 58 - (e.kind === "extra" ? e.n * 3 : 0), `+${+e.damage.toFixed(1)}%`, PAL.fx.impact.core, e.kind === "extra" ? 8 : 10);
-          if (e.combo !== undefined && view.round) this.combo = { n: e.combo, at: now, x: view.fighters[view.round.att].x, extra: e.kind === "extra" };
+          const big = e.kind === "strike" || e.final || e.kind === "counter", n = big ? 10 : 6;
+          if (!this.sprite("vfx_sparks", e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24, e.toward ?? 1)) this.spark(e.x - (e.toward ?? 1) * 8, CONFIG.floorY - 24, PAL.fx.impact.spark, n, 2.4);
+          if (big) this.sprite("vfx_slash", e.x, CONFIG.floorY - 24, e.toward ?? 1);
+          this.popup(e.x, CONFIG.floorY - 60, `+${+e.damage.toFixed(1)}%`, PAL.fx.impact.core, big ? 12 : 10);
+          const me = view.seat, took = me >= 0 && e.p === me;
+          if (e.kind === "strike") this.say(took ? "😣 吃了一記重擊" : "💥 連勝重擊！", `+${e.damage}%・往崖邊推 1 格`, "#FFB15A", now);
+          else if (e.kind === "combo") {
+            const why = this.miss && now - this.miss.at < 0.3 ? `${this.miss.why}！` : "";
+            this.say(e.final ? `💥 ${why}第 ${e.n} 拳・擊飛！` : took ? `😣 ${why}吃第 ${e.n} 拳` : `👊 第 ${e.n} 拳命中！`, `+${e.damage}%${e.final ? "・強力擊飛" : `・還剩 ${CONFIG.combo.hits - e.n} 拳`}`, e.final ? PAL.fx.red.core : "#FFB15A", now, e.final ? 1.1 : 0.8);
+            this.miss = null;
+          }
           break;
         }
-        case "red_ready": { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 70, "紅光強化！", PAL.fx.red.rim, 12); this.kick(2, 0.1, now); break; }
-        case "parry": this.sprite("vfx_sparks", e.x, CONFIG.floorY - 24); this.rimT = [ms(FX.parryFlash.durationMs), ms(FX.parryFlash.durationMs)]; this.ring(e.x, CONFIG.floorY - 24, PAL.fx.impact.core); this.popup(e.x, CONFIG.floorY - 72, "完美彈反！", PAL.hud.focusOutline, 14); break;
-        case "roll": this.zoneBlast(e.zone); this.popup(cellX(e.to), CONFIG.floorY - 58, "閃過！", PAL.fx.safeArrow.fill, 12); break;
-        case "finisher_hit": if (e.red) this.zoneBlast(e.zone); this.flashF[e.p] = 1; this.sprite("vfx_slash", e.x, CONFIG.floorY - 24, view.fighters[e.att]?.face ?? 1); this.spark(e.x, CONFIG.floorY - 24, e.red ? PAL.fx.red.core : PAL.fx.impact.spark, e.red ? 12 : 7, 3); this.popup(e.x, CONFIG.floorY - 64, `+${e.damage}%`, e.red ? PAL.fx.red.core : PAL.fx.blue.core, 12); break;
+        case "counter": {                                                         // 反擊成功：沿用彈反的白框閃光＋鈴聲
+          this.sprite("vfx_sparks", e.x, CONFIG.floorY - 24); this.rimT = [ms(FX.parryFlash.durationMs), ms(FX.parryFlash.durationMs)]; this.ring(e.x, CONFIG.floorY - 24, PAL.fx.impact.core);
+          const me = view.seat;
+          this.say(me === e.p ? "🛡️ 反擊成功！" : me === e.att ? "😱 被反擊了！" : `🛡️ P${e.p + 1} 反擊成功！`, `第 ${e.n} 拳就斷掉連打・換位反打`, PAL.hud.focusOutline, now);
+          this.kick(3, 0.15, now);
+          break;
+        }
+        case "wrong": case "timeout": if (e.n) this.miss = { why: e.type === "wrong" ? "按錯" : "來不及", at: now }; break;   // 併進下一個「吃拳」大字
+        case "streak": {
+          this.streakAt[e.p] = now;
+          const n = e.streak[e.p], T = view.streakTarget ?? CONFIG.STREAK_TARGET, who = view.seat < 0 ? `P${e.p + 1} ` : e.p === view.seat ? "" : "對手";
+          if (e.why === "broken") { this.broke = { who: view.seat < 0 ? `P${e.p + 1} ` : e.p === view.seat ? "你的" : "對手", at: now }; break; }
+          const cut = this.broke && now - this.broke.at < 0.1 ? `・${this.broke.who}連勝中斷` : ""; this.broke = null;   // 同一刻斷掉的連勝併進副標
+          if (e.why === "win") this.say(n >= T ? `🔥 ${who}連勝 ${n}/${T}！` : `🔥 ${who}連勝 ${n}/${T}`, (n >= T ? "連勝爆發！進入四套拳" : `再贏 ${T - n} 次進四套拳`) + cut, n >= T ? PAL.fx.red.core : "#FFB15A", now);
+          break;
+        }
+        case "combo_start": this.say("🔥 連勝爆發！", "四連擊開始！", PAL.fx.red.core, now, 1.1); this.kick(3, 0.2, now); this.trails = [[], []]; break;
+        case "combo_cue": this.cueAt = now; break;
         case "land": this.spark(e.x, CONFIG.floorY, PAL.platform.topEdge, 4, 1.2); break;
         case "ko": if (!this.sprite("vfx_ko_pillar", e.x, CONFIG.H - 1, e.x > CONFIG.W / 2 ? -1 : 1)) this.fx.push({ k: "beam", x: e.x, at: now, max: ms(FX.koBlast.durationMs) });   // 光柱依出界的左右邊緣翻轉 this.kick(FX.cameraShakePx.ko, 0.2, now); this.popup(clamp(e.x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22); this.trails = [[], []]; break;
-        case "round_end": this.popup(CONFIG.W / 2, 110, "雙方 +1 氣", PAL.hud.powerFill, 9); break;
         case "speed_up": this.banner(`⚡ 加速！速度 Lv.${e.lv + 1}`, PAL.fx.red.rim); this.kick(1, 0.1, now); break;
-        case "phase": if (e.phase === PH.RPS) this.combo = null; break;
+        case "phase": if (e.phase === PH.RPS) this.combo = null; if (e.phase === PH.REVEAL) this.goFlash = now; break;   // 猜拳倒數 3、2、1 之後：「出招！」
         case "deny": if (e.why === "heat") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 60, "♨️ 過熱！", "#FF9A62", 9); } break;
         case "clash_start": this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
         case "clash_first": {                                                     // ⚡ 先手：金色十字星芒＋徽章（畫在劍格上方）
@@ -488,6 +508,8 @@ export class Renderer {
     return true;
   }
   zoneDebris(x) { for (let i = 0; i < 10; i++) this.fx.push({ k: "debris", x: x + (Math.random() - 0.5) * 40, y: CONFIG.floorY, vx: (Math.random() - 0.5) * 200, vy: -120 - Math.random() * 160, life: 0.5, max: 0.5 }); }
+  // 中央回饋大字（連勝、重擊、吃拳、反擊）：彈出放大、停一下、淡出
+  say(text, sub, color, now, life = 0.95) { this.callout = { text, sub, color, at: now, life }; }
   vspark(x, y, n) { for (let i = 0; i < n; i++) this.fx.push({ k: "spark", x: x + (Math.random() - 0.5) * 4, y, vx: (Math.random() - 0.5) * 30, vy: -(140 + Math.random() * 160) * (i % 2 ? 1 : -0.6), life: 0.25 + Math.random() * 0.15, max: 0.4, color: PAL.fx.impact.core }); }
   spark(x, y, color, n, speed) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * speed * 50; this.fx.push({ k: "spark", x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 25, life: 0.18 + Math.random() * 0.18, max: 0.36, color }); } }
   ring(x, y, color) { this.fx.push({ k: "ring", x, y, life: 0.3, max: 0.3, color }); }
@@ -521,13 +543,11 @@ export class Renderer {
     const vert = amp && this.shake.vertical, sx = amp && !vert ? Math.round((Math.random() * 2 - 1) * amp) : 0, sy = amp ? Math.round((Math.random() * 2 - 1) * amp * (vert ? 1.6 : 1)) : 0;
     ctx.setTransform(cam.zoom, 0, 0, cam.zoom, Math.round(CONFIG.W / 2 - cam.x * cam.zoom) + sx, Math.round(CONFIG.H / 2 - cam.y * cam.zoom) + sy);
     this.drawStage(world);
-    this.drawHazardFill(view, now);
     this.drawTrails(world);
     this.drawSpotlight(view);
     this.drawFx(now, "back");                                 // 角色後方：紅招地裂、KO 光柱
     this.drawFighters(world);                                 // 角色本體（含殘影、受擊閃白）
     this.drawFx(now, "front");                                // 角色前方：火花、刀光、先手金星、主招大招
-    this.drawHazardEdges(view);
     this.drawStanceBubbles(view, now);
     this.drawTelegraphs(view, now);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -570,8 +590,8 @@ export class Renderer {
     });
   }
   updateCam(view, dt) {
-    const c = this.cam, [a, b] = view.fighters, clash = view.phase === PH.CLASH_ANIM && view.clash, focus = view.phase === PH.MASH || !!clash;
-    const target = clash ? view.clash.zoom ?? 1 : focus ? CONFIG.feel.zoomMash : 1;      // 連打推近；拼刀逐刀推近 1.22→1.45
+    const c = this.cam, [a, b] = view.fighters, clash = view.phase === PH.CLASH_ANIM && view.clash, focus = [PH.BURST, PH.COMBO_PREP, PH.COMBO_CUE, PH.COMBO_HIT].includes(view.phase) || !!clash;
+    const target = clash ? view.clash.zoom ?? 1 : focus ? CONFIG.feel.zoomCombo : 1;      // 四套拳推近；拼刀逐刀推近 1.22→1.45
     const tx = focus ? (a.x + b.x) / 2 : CONFIG.W / 2, ty = focus ? CONFIG.floorY - 46 : CONFIG.H / 2;
     const k = 1 - Math.exp((clash ? 16 : CONFIG.feel.zoomLerp) * -dt);
     c.zoom += (target - c.zoom) * k; c.x += (tx - c.x) * k; c.y += (ty - c.y) * k;
@@ -605,29 +625,8 @@ export class Renderer {
     }
     for (const f of view.fighters) if (!f.out && !f.air) { const c = clamp(Math.floor((f.x - L) / W), 0, CONFIG.cells - 1); ctx.globalAlpha = 0.35; ctx.fillStyle = PAL.fighters["p" + (f.i + 1)].highlight; ctx.fillRect(L + c * W + 1, Y, W - 2, 1); ctx.globalAlpha = 1; }
   }
-  cue(view) { const r = view.round; return view.phase === PH.WINDOW && r && r.type ? r : null; }
-  drawHazardFill(view, now) {
-    const r = this.cue(view);
-    if (!r || r.type !== "red") return;
-    const ctx = this.ctx, T = ART.telegraphs.redRoll, Y = CONFIG.floorY, W = CONFIG.cellW, band = ART.stage.dangerTopBandHeightPx;
-    if (r.zone.length && VFX.draw(ctx, "vfx_red_crack", view.t, (cellX(Math.min(...r.zone)) + cellX(Math.max(...r.zone))) / 2, Y, 1, "warning")) return;   // 紅招預警：地裂圖 warning 片段循環（角色後方）
-    const step = REDUCED ? 0 : Math.floor(view.t * 1000 / T.hazardHatchStepMs);
-    for (const c of r.zone) {
-      const x = CONFIG.stageX + (c - 1) * W;
-      ctx.globalAlpha = T.hazardFillOpacity; ctx.fillStyle = PAL.fx.red.floorFill; ctx.fillRect(x, Y, W, 16); ctx.globalAlpha = 1;
-      ctx.fillStyle = PAL.fx.red.outline; ctx.fillRect(x, Y, W, band);
-      ctx.fillStyle = PAL.fx.red.hatch;
-      for (let yy = 0; yy < band; yy++) for (let xx = 0; xx < W; xx++) if (((xx + yy + step) % T.hazardHatchPeriodPx) < 2) ctx.fillRect(x + xx, Y + yy, 1, 1);
-    }
-  }
-  drawHazardEdges(view) {
-    const r = this.cue(view);
-    if (!r || r.type !== "red" || !r.zone.length || VFX.has("vfx_red_crack")) return;   // 地裂圖自帶外框
-    const ctx = this.ctx, Y = CONFIG.floorY, W = CONFIG.cellW, a = Math.min(...r.zone), b = Math.max(...r.zone), x0 = CONFIG.stageX + (a - 1) * W, x1 = CONFIG.stageX + b * W;
-    ctx.fillStyle = PAL.fx.red.outline; ctx.fillRect(x0 - 1, Y - 2, x1 - x0 + 2, 1); ctx.fillRect(x0 - 1, Y + 16, x1 - x0 + 2, 1);
-    ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(x0, Y - 1, x1 - x0, 1); ctx.fillRect(x0, Y + 15, x1 - x0, 1); ctx.fillRect(x0, Y - 1, 1, 17); ctx.fillRect(x1 - 1, Y - 1, 1, 17);
-  }
-  animTime(view, f) { return view.phase === PH.WINDOW || view.phase === PH.SELECT ? f.anim.t * CONFIG.window.slowmo : f.anim.t; }   // 終結擇起就進慢動作（只影響畫面）
+  cue(view) { const r = view.round; return view.phase === PH.COMBO_CUE && r?.gesture ? r : null; }
+  animTime(view, f) { return view.phase === PH.COMBO_CUE ? f.anim.t * CONFIG.combo.slowmo : f.anim.t; }   // 反擊窗：畫面慢動作（只影響畫面）   // 終結擇起就進慢動作（只影響畫面）
   stateFor(view, f) {
     {                                                          // 有加購圖：開牌壓制／受壓、五連斬蓄勢、比賽勝利
       const want = view.phase === PH.REVEAL && view.rps && view.rps.winner >= 0 ? (view.rps.winner === f.i ? "reveal_win" : "reveal_lose")
@@ -705,7 +704,6 @@ export class Renderer {
       const pose = this.clashPose(view, f);
       const state = pose?.state ?? this.stateFor(view, f), t = this.animTime(view, f), frame = pose?.frame;
       if (pose?.y !== undefined) y = pose.y;
-      if (f.redGlow && !REDUCED) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(performance.now() / 50); ctx.fillStyle = PAL.fx.red.rim; ctx.fillRect(Math.round(x) - 14, Math.round(y) - 42, 28, 42); ctx.globalAlpha = 1; }   // 紅光強化：全身泛紅
       Fighter.draw(ctx, f, state, t, x, y, f.face, { rim: this.rimT[f.i] > 0 && !REDUCED, view, frame });
       if (this.flashF[f.i] > 0) { this.flashF[f.i]--; if (!REDUCED) Fighter.draw(ctx, f, state, t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity, view, frame }); }   // 受擊閃白：只亮 1 幀
       if (CONFIG.DEBUG_SPRITE_BOX) this.drawSpriteBox(f);
@@ -740,26 +738,19 @@ export class Renderer {
     ctx.fillStyle = PAL.fx.ko.core; ctx.fillRect(Math.round(p.x - w * 0.14), top, Math.max(1, Math.round(w * 0.28)), h);
     ctx.globalAlpha = 1;
   }
-  // 藍框（攻方腳底上 55px）與紅招安全箭頭（防方腳邊 ±14、−7），倒數由滿退去、最後 0.15s 紅閃
+  // 四套拳拳種提示：攻方頭頂藍框亮出這一拳（彈出放大），外框倒數由滿退去、最後 0.15s 紅閃
   drawTelegraphs(view, now) {
     const r = this.cue(view);
     if (!r) return;
     const ctx = this.ctx, left = clamp((view.dur - view.t) / view.dur, 0, 1), urgent = view.dur - view.t <= CONFIG.countdown.urgentSec, blink = urgent && Math.floor(now * 20) % 2 === 0;
-    if (r.type === "blue") {
-      const att = view.fighters[r.att], T = ART.telegraphs.blueParry, S = T.frameSizePx[0];
-      const x = Math.round(att.x) - S / 2, y = CONFIG.floorY + T.offsetPx[1] - S / 2, C = PAL.fx.blue;
-      this.roundRect(x - 1, y - 1, S + 2, S + 2, C.outline); this.roundRect(x, y, S, S, "#0E2747");
-      this.perimeter(x, y, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2);
-      if (r.gesture) drawGestureGlyph(ctx, GESTURE_GLYPH[r.gesture], x + 5, y + 5, C.core, C.rim);   // 頭頂只顯示攻擊手勢，不顯示克制答案
-    } else {
-      const def = view.fighters[r.def], T = ART.telegraphs.redRoll;
-      for (const d of r.dirs) {
-        const ax = Math.round(def.x + d * T.safeArrowOffsetAbsPx[0] - T.safeArrowSizePx[0] / 2), ay = Math.round(CONFIG.floorY + T.safeArrowOffsetAbsPx[1] - T.safeArrowSizePx[1] / 2);
-        drawBitmap(ctx, d < 0 ? GLYPH.left : GLYPH.right, ax, ay - 2, blink ? PAL.fx.red.rim : PAL.fx.safeArrow.fill, PAL.fx.safeArrow.outline);
-        ctx.fillStyle = PAL.fx.safeArrow.outline; ctx.fillRect(ax - 3, ay + 10, 18, 4);
-        ctx.fillStyle = blink ? PAL.fx.red.rim : PAL.fx.safeArrow.fill; ctx.fillRect(ax - 2, ay + 11, Math.round(16 * left), 2);
-      }
-    }
+    const att = view.fighters[r.att], T = ART.telegraphs.blueParry, S = T.frameSizePx[0], C = PAL.fx.blue;
+    const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.cueAt) * 6), sc = 1 + pop * 0.6;
+    const cx = Math.round(att.x), cy = CONFIG.floorY + T.offsetPx[1];
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-S / 2, -S / 2);
+    this.roundRect(-1, -1, S + 2, S + 2, C.outline); this.roundRect(0, 0, S, S, "#0E2747");
+    this.perimeter(0, 0, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2);
+    drawGestureGlyph(ctx, GESTURE_GLYPH[r.gesture], 5, 5, C.core, C.rim);
+    ctx.restore();
   }
   // 架式氣泡（showHints）：亮招期顯示各自已擺的拳種、藏招期雙方都變 ❓；位置固定在腳底上 55px，靠太近時 P2 往上錯開
   drawStanceBubbles(view, now) {
@@ -864,35 +855,95 @@ export class Renderer {
         if (i < f.stocks) { ctx.fillStyle = team.primary; ctx.fillRect(sx, sy, sw, sh); ctx.fillStyle = team.highlight; ctx.fillRect(sx, sy, sw, 1); }
         else { ctx.fillStyle = team.shadow; ctx.fillRect(sx, sy, sw, 1); ctx.fillRect(sx, sy + sh - 1, sw, 1); ctx.fillRect(sx, sy, 1, sh); ctx.fillRect(sx + sw - 1, sy, 1, sh); }
       }
-      const [pw, ph] = H.powerSizePx;
-      for (let i = 0; i < H.powerCount; i++) {
-        const px = right ? ax - pw - i * (pw + gap) : ax + i * (pw + gap), py = ay + 40;
-        if (i < f.power) { ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(px - 1, py - 1, pw + 2, ph + 2); ctx.fillStyle = PAL.hud.powerFill; ctx.fillRect(px, py, pw, ph); }
-        else { ctx.fillStyle = PAL.hud.powerEmpty; ctx.fillRect(px, py, pw, 1); ctx.fillRect(px, py + ph - 1, pw, 1); ctx.fillRect(px, py, 1, ph); ctx.fillRect(px + pw - 1, py, 1, ph); }
+      // 連勝燈 0/3：亮燈＝已連贏幾次；剛亮的那顆彈一下；集滿（四套拳中）整排閃
+      const T = view.streakTarget ?? CONFIG.STREAK_TARGET, lw = 10, lh = 7, pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.streakAt[f.i]) * 4);
+      for (let i = 0; i < T; i++) {
+        const lx = right ? ax - lw - i * (lw + 3) : ax + i * (lw + 3), ly = ay + 40, lit = i < f.streak, fresh = lit && i === f.streak - 1 && pop > 0;
+        const grow = fresh ? Math.round(pop * 2) : 0;
+        ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(lx - 1 - grow, ly - 1 - grow, lw + 2 + grow * 2, lh + 2 + grow * 2);
+        if (lit) { const full = f.streak >= T && Math.floor(now * 8) % 2 === 0; ctx.fillStyle = full ? "#FFF1B8" : "#FF8A3D"; ctx.fillRect(lx - grow, ly - grow, lw + grow * 2, lh + grow * 2); ctx.fillStyle = "#FFD27A"; ctx.fillRect(lx - grow, ly - grow, lw + grow * 2, 2); }
+        else { ctx.fillStyle = "#2A2F3D"; ctx.fillRect(lx, ly, lw, lh); }
       }
     }
-    this.drawPhaseBar(view, now);
   }
   digitsWidth(text) { return [...text].reduce((s, ch) => s + (DIGIT[ch]?.[0].length ?? 4) * 4 + 3, 0) - 3; }
-  urgent(view) { const left = view.dur - view.t; return view.phase === PH.WINDOW ? left <= CONFIG.countdown.urgentSec : (view.phase === PH.RPS || view.phase === PH.CLASH_INPUT) && left <= CONFIG.countdown.phaseTickLast; }
-  timed(view) { return view.dur > 0 && [PH.RPS, PH.CLASH_INPUT, PH.MASH, PH.SELECT, PH.WINDOW].includes(view.phase); }
-  drawPhaseBar(view, now) {
-    if (!this.timed(view)) return;
-    const ctx = this.ctx, ph = view.phase, fin = ph === PH.WINDOW, left = clamp(view.dur - view.t, 0, view.dur), k = left / view.dur;
-    const W = fin ? CONFIG.countdown.bigBarW : 120, H = fin ? 7 : 5, x = Math.round(CONFIG.W / 2 - W / 2), y = 26;
-    const urgent = this.urgent(view), blink = urgent && Math.floor(now * 20) % 2 === 0;
-    let color = PAL.hud.powerFill;
-    if (fin) color = view.round?.type === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim;
-    if (ph === PH.MASH) color = PAL.fx.impact.spark;
-    if (ph === PH.SELECT) color = view.round?.charging ? PAL.fx.red.rim : PAL.fx.blue.rim;
-    if (ph === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal)) color = PAL.hud.muted;
-    if (urgent) color = blink ? PAL.fx.red.rim : PAL.hud.focusOutline;
-    ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(x - 2, y - 2, W + 4, H + 4);
-    ctx.fillStyle = PAL.hud.plate; ctx.fillRect(x - 1, y - 1, W + 2, H + 2);
-    ctx.fillStyle = color; ctx.fillRect(x, y, Math.round(W * k), H);
-    ctx.fillStyle = PAL.hud.plate;
-    for (let s = 0.1; s < view.dur - 1e-6; s += 0.1) ctx.fillRect(x + Math.round(W * (s / view.dur)), y, 1, H);
-    if (ph === PH.RPS) { ctx.fillStyle = PAL.hud.focusOutline; ctx.fillRect(x + Math.round(W * (1 - (view.reveal ?? CONFIG.rps.reveal) / view.dur)), y - 3, 1, H + 6); }
+  urgent(view) { const left = view.dur - view.t; return view.phase === PH.COMBO_CUE ? left <= CONFIG.countdown.urgentSec : (view.phase === PH.RPS || view.phase === PH.CLASH_INPUT || view.phase === PH.COMBO_PREP) && left <= CONFIG.countdown.phaseTickLast; }
+  timed(view) { return view.dur > 0 && [PH.RPS, PH.CLASH_INPUT, PH.COMBO_PREP, PH.COMBO_CUE].includes(view.phase); }
+  // ---- 頂部大型提示（v4）：面板＝「現在要幹嘛」大字＋倒數條；中央＝大號倒數（3、2、1 → 出招！）；回饋大字 ----
+  promptFor(view) {
+    const ph = view.phase, r = view.round, me = view.seat, P = i => `P${i + 1}`;
+    const hidden = ph === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal);
+    const dm = view.fighters.some(f => this.shownDamage(f) >= PAL.damageBands[PAL.damageBands.length - 1].minInclusive);
+    const gold = PAL.hud.powerFill, blue = PAL.fx.blue.rim, red = PAL.fx.red.rim, cyan = "#5FE6FF", orange = "#FFB15A";
+    switch (ph) {
+      case PH.RPS: return hidden ? { text: "🤫 藏招！最後機會換拳", color: PAL.hud.label } : { text: dm ? "⚡ 絕命對峙！出拳！" : me < 0 ? "✊ 雙方出拳！" : "✊ 出拳！按一招擺架式", color: dm ? red : gold };
+      case PH.REVEAL: return { text: "👀 開牌！", color: gold };
+      case PH.CLASH: return { text: (view.gauge ?? 0) > 0 ? `⚔️ 叮！平手（蓄力 ${view.gauge}/${view.gaugeMax}）` : "⚔️ 平分！各自彈開", color: cyan };
+      case PH.CLASH_INPUT: return { text: `⚔️ 五連斬！連按 ${CONFIG.CLASH_SEQUENCE_LENGTH} 招`, color: cyan };
+      case PH.CLASH_ANIM: return { text: view.clash?.result ? "⚔️ 主招大招！" : "⚔️ 五刀對砍", color: cyan };
+      case PH.STRIKE: return { text: !r ? "" : me === r.att ? "💥 連勝重擊！" : me === r.def ? "😣 吃一記重擊" : `💥 ${P(r.att)} 連勝重擊`, color: orange };
+      case PH.BURST: return { text: "🔥 連勝爆發！四連擊開始！", color: PAL.fx.red.core };
+      case PH.COMBO_PREP: return { text: !r ? "" : me === r.att ? `🎯 第 ${r.n} 拳：按一招決定出什麼！` : me === r.def ? `🛡️ 第 ${r.n} 拳來了，準備反擊…` : `🎯 ${P(r.att)} 第 ${r.n} 拳選拳中`, color: orange };
+      case PH.COMBO_CUE: {
+        if (!r) return null;
+        const ans = r.gesture ? GNAME[COUNTER[r.gesture]] : "";
+        if (me === r.def || me < 0) return { text: `🛡️ ${me < 0 ? P(r.def) + " " : ""}反擊！${this.showHints && ans ? `按 ${ans}` : "按剋制它的拳"}`, color: blue };
+        return { text: `👊 第 ${r.n} 拳出手：看對手接不接得住`, color: blue };
+      }
+      case PH.COMBO_HIT: return { text: r ? `👊 第 ${r.n} 拳命中` : "", color: orange };
+      default: return null;
+    }
+  }
+  drawTopPrompt(g, view, now) {
+    const P = this.promptFor(view), ph = view.phase, timed = this.timed(view), left = Math.max(0, view.dur - view.t);
+    const urgent = timed && this.urgent(view), blink = urgent && Math.floor(now * 20) % 2 === 0;
+    const W = 240, x0 = CONFIG.W / 2 - W / 2, y0 = 3, H = timed ? 36 : 26;
+    if (P?.text) {
+      const fresh = this.callout && now - this.callout.at < 0.25;                  // 有回饋時面板框閃一下
+      g.save();
+      g.fillStyle = "rgba(10,14,24,.9)"; g.fillRect(x0, y0, W, H);
+      g.lineWidth = fresh ? 2.5 : 1.5; g.strokeStyle = blink ? PAL.fx.red.rim : fresh ? "#FFFFFF" : P.color; g.strokeRect(x0 + 0.5, y0 + 0.5, W - 1, H - 1);
+      g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "900 14px sans-serif";
+      let size = 14; while (size > 10 && g.measureText(P.text).width > W - 14) { size -= 1; g.font = `900 ${size}px sans-serif`; }
+      g.fillStyle = PAL.fighters.outline; g.fillText(P.text, CONFIG.W / 2 + 1, y0 + 18 + 1); g.fillStyle = P.color; g.fillText(P.text, CONFIG.W / 2, y0 + 18);
+      if (timed) {                                                                 // 倒數條：粗、對比高，藏招期變灰、最後一小段紅閃
+        const bw = W - 24, bx = x0 + 12, by = y0 + 25, k = clamp(left / view.dur, 0, 1);
+        let c = ph === PH.COMBO_CUE ? PAL.fx.blue.rim : ph === PH.CLASH_INPUT ? "#5FE6FF" : ph === PH.COMBO_PREP ? "#FFB15A" : PAL.hud.powerFill;
+        if (ph === PH.RPS && view.t >= (view.reveal ?? CONFIG.rps.reveal)) c = PAL.hud.muted;
+        if (urgent) c = blink ? PAL.fx.red.rim : PAL.hud.focusOutline;
+        g.fillStyle = "#1B2132"; g.fillRect(bx, by, bw, 6); g.fillStyle = c; g.fillRect(bx, by, Math.round(bw * k), 6);
+        if (ph === PH.RPS) { g.fillStyle = PAL.hud.focusOutline; g.fillRect(bx + Math.round(bw * (1 - (view.reveal ?? CONFIG.rps.reveal) / view.dur)), by - 2, 1.5, 10); }   // 藏招開始的刻度
+      }
+      g.restore();
+    }
+    if (view.speedLv > 0 && timed) { g.textAlign = "center"; g.font = "bold 8px sans-serif"; g.fillStyle = PAL.fx.red.rim; g.fillText(`⚡ 速度 Lv.${view.speedLv + 1}`, CONFIG.W / 2 + 62, 54); }
+    // 中央大號倒數：猜拳／五連斬顯示整數（3、2、1），四套拳反擊窗顯示小數；猜拳結束接「出招！」
+    let big = null, bigColor = PAL.hud.focusOutline;
+    const cutBusy = this.cutText && now - this.cutText.at < this.cutText.life;   // 五連斬開頭的大字還在：先不疊倒數
+    if (ph === PH.RPS || (ph === PH.CLASH_INPUT && !cutBusy)) big = String(Math.max(1, Math.ceil(left - 1e-6)));
+    else if (ph === PH.COMBO_CUE) { big = left.toFixed(1); bigColor = PAL.fx.blue.rim; }
+    const goAge = now - this.goFlash;
+    if (ph === PH.REVEAL && goAge < 0.55) { big = "出招！"; bigColor = PAL.hud.powerFill; }
+    if (big !== null) {
+      if (big !== this.bigNum.v) this.bigNum = { v: big, at: now };
+      const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.bigNum.at) * 5), sc = 1 + pop * 0.5;
+      g.save(); g.translate(CONFIG.W / 2, 84); g.scale(sc, sc);
+      g.textAlign = "center"; g.font = `900 ${big.length > 3 ? 26 : 30}px sans-serif`; g.lineJoin = "round";
+      g.lineWidth = 4; g.strokeStyle = PAL.fighters.outline; g.strokeText(big, 0, 0);
+      g.fillStyle = urgent && blink ? PAL.fx.red.rim : bigColor; g.fillText(big, 0, 0);
+      g.restore();
+    }
+    // 中央回饋大字（連勝、重擊、吃拳、反擊）
+    const C = this.callout;
+    if (C && now - C.at < C.life) {
+      const age = now - C.at, pop = REDUCED ? 0 : Math.max(0, 1 - age * 7), a = Math.min(1, (C.life - age) * 4);
+      g.save(); g.globalAlpha = a; g.translate(CONFIG.W / 2, 104); g.scale(1 + pop * 0.6, 1 + pop * 0.6);   // 在大倒數下方、角色頭上傷害數字上方
+      g.textAlign = "center"; g.font = "900 20px sans-serif"; g.lineJoin = "round";
+      g.fillStyle = "rgba(10,14,24,.72)"; g.fillRect(-140, -22, 280, C.sub ? 38 : 30);
+      g.lineWidth = 3; g.strokeStyle = PAL.fighters.outline; g.strokeText(C.text, 0, 0); g.fillStyle = C.color; g.fillText(C.text, 0, 0);
+      if (C.sub) { g.font = "bold 10px sans-serif"; g.fillStyle = PAL.hud.label; g.fillText(C.sub, 0, 13); }
+      g.restore();
+    }
   }
   // ---- 耐受度狀態字（% 數字下方；四級樣式依 ART.palette.damageBands，動態依 CONFIG.status） ----
   //   穩如泰山：靜止｜腳步微晃：受擊彈跳縮放｜搖搖欲墜！：持續 ±1px 低頻抖動＋微弱火花｜瀕死！！：±2px 高頻震動＋紅白閃爍＋黑煙
@@ -941,23 +992,12 @@ export class Renderer {
         g.font = "bold 8px sans-serif"; g.fillStyle = "#FF9A62"; g.fillText(`♨️ ${who}：${GICON[f.heat]}`, right ? 464 : 16, 92); g.font = "bold 7px sans-serif";
       }
     }
-    g.textAlign = "center";
-    const fin = ph === PH.WINDOW, left = Math.max(0, view.dur - view.t);
-    let label = PH_LABEL[ph] ?? "";
-    const deathmatch = view.fighters.some(f => this.shownDamage(f) >= PAL.damageBands[PAL.damageBands.length - 1].minInclusive);
-    if (ph === PH.RPS) label = (deathmatch ? CONFIG.deathmatchTitle : label) + (view.t >= (view.reveal ?? CONFIG.rps.reveal) ? "・藏招" : "・亮招");
-    if (fin && r?.type) label = r.type === "red" ? "翻滾！紅招不可彈反" : "彈反！按克制手勢";
-    if (ph === PH.SELECT && r) label = "終結擇：短按選手勢｜長按贏拳鍵＝紅光";
-    g.font = `bold ${fin || (deathmatch && ph === PH.RPS) ? 12 : 10}px sans-serif`;
-    g.fillStyle = fin ? (r?.type === "red" ? PAL.fx.red.rim : PAL.fx.blue.rim) : deathmatch && ph === PH.RPS ? PAL.fx.red.rim : PAL.hud.label;
-    if (label) g.fillText(label, CONFIG.W / 2, 20);
-    if (this.timed(view)) {
-      const urgent = this.urgent(view);
-      g.font = `bold ${fin ? 13 : 9}px monospace`;
-      g.fillStyle = urgent ? (Math.floor(now * 20) % 2 ? PAL.fx.red.rim : PAL.hud.focusOutline) : PAL.hud.label;
-      g.fillText(left.toFixed(fin ? 2 : 1), CONFIG.W / 2, fin ? 48 : 43);
-      if (view.speedLv > 0) { g.font = "bold 8px sans-serif"; g.fillStyle = PAL.fx.red.rim; g.fillText(`⚡ Lv.${view.speedLv + 1}`, CONFIG.W / 2 + 74, 33); g.font = `bold ${fin ? 13 : 9}px monospace`; }   // 速度等級
+    for (const f of view.fighters) {                                    // 連勝燈旁的字：「🔥 連勝 2/3」
+      const right = f.i === 1, H = ART.hud.playerPanels, T = view.streakTarget ?? CONFIG.STREAK_TARGET, x = right ? H.p2.anchorX - T * 13 - 4 : H.p1.anchorX + T * 13 + 4;
+      g.textAlign = right ? "right" : "left"; g.font = "bold 8px sans-serif"; g.fillStyle = f.streak >= T ? "#FFF1B8" : f.streak ? "#FFB15A" : PAL.hud.muted;
+      g.fillText(`🔥 連勝 ${f.streak}/${T}`, x, 59);
     }
+    this.drawTopPrompt(g, view, now);
     // 開牌停頓：中央放大結果（🖐️ 布 壓制 ✊ 石頭！）
     if (ph === PH.REVEAL && view.rps) {
       const [s0, s1] = view.rps.stances, w = view.rps.winner, pop = Math.max(0, 1 - view.t * 5);
@@ -975,7 +1015,7 @@ export class Renderer {
     if (ph !== PH.GAMEOVER && ph !== PH.IDLE && view.gaugeMax) {
       const gv = view.gauge ?? 0, full = gv >= view.gaugeMax, fa = now - this.gaugeFullAt, fl = now - this.gaugeAt;
       const blink = !full && gv > 0 && fl < 1.2 && Math.floor(fl * 10) % 2 === 0, burst = full && fa < 0.6 ? 1 - fa / 0.6 : 0;
-      const gx = CONFIG.W / 2 - 74, gy = 33;
+      const gx = CONFIG.W / 2 - 62, gy = 54;                            // 頂部提示面板正下方左側
       if (burst && !REDUCED) { g.globalAlpha = burst; g.fillStyle = "#FFD45A"; g.beginPath(); g.arc(gx, gy - 3, 6 + (1 - burst) * 22, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
       g.save(); g.translate(gx, gy); if (burst) g.scale(1 + burst * 0.5, 1 + burst * 0.5);
       g.textAlign = "center"; g.font = "bold 8px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(`⚔️ ${gv}/${view.gaugeMax}`, 1, 1);
@@ -1017,13 +1057,6 @@ export class Renderer {
       g.restore();
     }
     // 連打 HIT COMBO 計數
-    if (this.combo && (ph === PH.MASH || ph === PH.SELECT || now - this.combo.at < 0.8)) {
-      const age = now - this.combo.at, pop = Math.max(0, 1 - age * 6), [sx, sy] = toScreen(this.combo.x, CONFIG.floorY - 74);
-      g.save(); g.translate(sx, sy); g.scale(1 + pop * 0.5, 1 + pop * 0.5);
-      g.font = "bold 13px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(`${this.combo.n} HIT COMBO!`, 1, 1);
-      g.fillStyle = this.combo.n >= 6 ? PAL.fx.red.core : PAL.fx.impact.spark; g.fillText(`${this.combo.n} HIT COMBO!`, 0, 0);
-      g.restore();
-    }
     for (const p of this.fx) {
       if (p.k === "text") {
         const a = clamp(p.life / p.max, 0, 1), [sx, sy] = toScreen(p.x, p.y);
@@ -1040,7 +1073,7 @@ export class Renderer {
         g.fillStyle = "#10121B"; g.textAlign = "center"; g.fillText(p.text, 0, big ? 1 : -2);
         g.restore();
       } else if (p.k === "banner") {
-        if (ph === PH.MASH && this.combo?.n) p.life = Math.min(p.life, 0.2);   // 連打開打：標題讓位給 HIT COMBO
+        if (this.callout && now - this.callout.at < this.callout.life) p.life = Math.min(p.life, 0.2);   // 中央大字出現：橫幅讓位
         const a = clamp(p.life / p.max, 0, 1);
         g.globalAlpha = Math.min(1, a * 2); g.textAlign = "center"; g.font = "bold 16px sans-serif";
         g.fillStyle = "rgba(16,24,39,.8)"; g.fillRect(0, 104, CONFIG.W, 28); g.fillStyle = p.color; g.fillText(p.text, CONFIG.W / 2, 124);

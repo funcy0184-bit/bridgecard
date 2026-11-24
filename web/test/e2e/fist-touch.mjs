@@ -47,24 +47,25 @@ for (const [name, dev] of [["iPhone 13 直拿", devices["iPhone 13"]], ["iPhone 
   if (OUT) await P.screenshot({ path: `${OUT}/touch-${dev.viewport.width}x${dev.viewport.height}.png` });
 
   // 猜拳：點過熱的 🖐️ 會被鎖住、點 ✊ 擺出石頭
-  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 1, heat: "paper" }, { pos: 6, power: 1 }], phase: "PHASE_RPS" }));
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, heat: "paper" }, { pos: 6 }], phase: "PHASE_RPS" }));
   await sleep(80); await tapCard(P, card(0, "R"));
   ok(await P.evaluate(() => __fist.view.fighters[0].stance === null), "點過熱的「♨️ 過熱」卡：鎖住出不了");
   await tapCard(P, card(0, "L"));
   await sleep(60);
   ok(await P.evaluate(() => __fist.view.fighters[0].stance === "rock"), "點「✊ 石頭」：擺出石頭架式");
-  // 連打：連點大卡 12 下 → 追加上限 4
-  await P.evaluate(() => { const t = __fist.transport; t.bots[0].attach({ view: () => t.engine.viewFor(1), input: () => {} }); t.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_MASH", round: { att: 0, winGesture: "rock" } }); });
+  // 四套拳：攻方點卡片選這一拳；守方點發光的剋制卡反擊
+  await P.evaluate(() => { const t = __fist.transport; t.bots[0].attach({ view: () => t.engine.viewFor(1), input: () => {} }); t.engine.reset({ p: [{ pos: 3, streak: 3 }, { pos: 4 }], phase: "PHASE_COMBO_PREP", round: { att: 0 } }); });
+  await sleep(40); await tapCard(P, card(0, "M"));
   await sleep(40);
-  ok(await P.isVisible(mash(0)), "連打：三張卡合成「🔥 狂敲連打！」大卡");
-  for (let i = 0; i < 12; i++) await tapCard(P, mash(0), 1, 12);
-  await waitPh(P, "PHASE_FINISHER_SELECT", 3000);
-  ok(await P.evaluate(() => __fist.view.round.extra === 4), "連點大卡：追加打滿 4 拳");
-  // 終結擇：按住 ✊ 0.3 秒以上 → 紅光
-  await ptr(P, card(0, "L"), "pointerdown", 2); await sleep(380);
-  const red = await P.evaluate(() => __fist.transport.engine.round.red);
-  await ptr(P, card(0, "L"), "pointerup", 2);
-  ok(red, "按住贏拳卡 0.38 秒：開出紅光強化");
+  ok(await P.evaluate(() => __fist.view.round.gesture === "scissors"), "四套拳選拳：點「✌️ 剪刀」決定這一拳");
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3 }, { pos: 4, streak: 3 }], phase: "PHASE_COMBO_PREP", round: { att: 1 } }));
+  await P.waitForFunction(() => __fist.view?.phase === "PHASE_COMBO_CUE", null, { timeout: 3000 });
+  await sleep(60);
+  const g = await P.evaluate(() => __fist.view.round.gesture), right = { rock: "R", scissors: "L", paper: "M" }[g];
+  ok(await P.evaluate(b => document.querySelector(`.kgroup[data-seat="0"] .kcard[data-btn="${b}"]`).className.includes("parry"), right), `反擊窗：攻方出${g}，剋制卡發光`);
+  await tapCard(P, card(0, right));
+  await P.waitForFunction(() => __fist.transport.engine.round?.result === "counter", null, { timeout: 2000 }).catch(() => {});
+  ok(await P.evaluate(() => __fist.transport.engine.round?.result === "counter"), "點發光的卡：反擊成功");
   // 比賽結束：點畫面重開
   await P.evaluate(() => { const e = __fist.transport.engine; e.winner = 0; e.go("PHASE_GAMEOVER", null, true); });
   await sleep(80);
@@ -82,7 +83,7 @@ for (const [name, dev] of [["iPhone 13 直拿", devices["iPhone 13"]], ["iPhone 
   await ptr(P, card(0, "L"), "pointerdown", 11); await ptr(P, card(1, "M"), "pointerdown", 12);
   await sleep(50);
   await ptr(P, card(0, "L"), "pointerup", 11); await ptr(P, card(1, "M"), "pointerup", 12);
-  await waitPh(P, "PHASE_MASH", 5000);                               // 猜拳 2.8s＋開牌停頓 0.55s
+  await waitPh(P, "PHASE_STRIKE", 5000);                             // 猜拳 2.8s＋開牌停頓 0.55s
   ok(await P.evaluate(() => __fist.view.round.att === 0), "兩根手指同時按：P1 石頭、P2 剪刀都算數，P1 贏拳");
   await ctx.close();
 }
@@ -97,27 +98,27 @@ console.log("震動（模擬 Android，記錄 navigator.vibrate 的震法）");
   const H = await P.evaluate(() => __fist.CONFIG.haptics);
   const vib = () => P.evaluate(() => window.__vib.splice(0).filter(p => p !== 6));      // 6ms 是按鍵小回饋，先濾掉
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  // 我打人：連打
-  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_MASH", round: { att: 0, winGesture: "rock" } }));
-  await vib();
-  for (let i = 0; i < 6; i++) await tapCard(P, mash(0), 1, 15);
-  await waitPh(P, "PHASE_FINISHER_SELECT", 3000);
+  // 我打人：連勝重擊
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3 }, { pos: 4 }], phase: "PHASE_STRIKE", round: { att: 0, winGesture: "rock" } }));
+  await vib(); await sleep(500);
   const deal = await vib();
-  ok(deal.some(p => same(p, H.dealBase)) && deal.some(p => same(p, H.dealExtra)), `打到對手：保底拳 ${H.dealBase}ms、追加拳 ${H.dealExtra}ms（實際 ${JSON.stringify(deal)}）`);
-  // 我被打：藍光終結沒接住
-  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
-  await vib(); await sleep(1100);                                    // 判定窗 0.8s 逾時才吃招
+  ok(deal.some(p => same(p, H.dealBase)), `重擊打到對手：${H.dealBase}ms（實際 ${JSON.stringify(deal)}）`);
+  // 我被打：四套拳第 4 拳沒接住（擊飛）
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3 }, { pos: 4, streak: 3 }], phase: "PHASE_COMBO_PREP", round: { att: 1, n: 3 } }));
+  await vib(); await sleep(1700);                                    // 選拳 0.55s＋反擊窗 0.9s 逾時才吃拳
   const take = await vib();
-  ok(take.some(p => same(p, H.takeFinisher)), `被終結技打到：重震 ${JSON.stringify(H.takeFinisher)}（實際 ${JSON.stringify(take)}）`);
-  // 完美彈反
-  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
-  await vib(); await tapCard(P, card(0, "R")); await sleep(120);
-  const parry = await vib();
-  ok(parry.length === 1 && same(parry[0], H.parryMe), `完美彈反：噠噠 ${JSON.stringify(H.parryMe)}（實際 ${JSON.stringify(parry)}）`);
+  ok(take.some(p => same(p, H.takeFinisher)), `第 4 拳擊飛：重震 ${JSON.stringify(H.takeFinisher)}（實際 ${JSON.stringify(take)}）`);
+  // 反擊成功
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3 }, { pos: 4, streak: 3 }], phase: "PHASE_COMBO_PREP", round: { att: 1 } }));
+  await P.waitForFunction(() => __fist.view?.phase === "PHASE_COMBO_CUE", null, { timeout: 3000 });
+  const cg = await P.evaluate(() => __fist.view.round.gesture);
+  await vib(); await tapCard(P, card(0, { rock: "R", scissors: "L", paper: "M" }[cg])); await sleep(120);
+  const ctr = await vib();
+  ok(ctr.length === 1 && same(ctr[0], H.counterMe), `反擊成功：噠噠 ${JSON.stringify(H.counterMe)}（實際 ${JSON.stringify(ctr)}）`);
   // 關掉震動
   await P.tap("#gearBtn"); await P.tap('#settingsPop [data-go="haptics"]'); await P.tap("#gearBtn");
-  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3, power: 2 }, { pos: 4, power: 2 }], phase: "PHASE_FINISHER_WINDOW", round: { att: 1, gesture: "rock" } }));
-  await vib(); await sleep(1100);                                    // 判定窗 0.8s 逾時才吃招
+  await P.evaluate(() => __fist.transport.engine.reset({ p: [{ pos: 3 }, { pos: 4, streak: 3 }], phase: "PHASE_COMBO_PREP", round: { att: 1, n: 3 } }));
+  await vib(); await sleep(1700);
   ok((await vib()).length === 0 && !(await P.evaluate(() => __fist.Haptics.on)), "⚙️ 震動：關 → 被打也不震");
   await P.evaluate(() => __fist.Haptics.set(true));
   await ctx.close();
@@ -134,6 +135,9 @@ console.log("互動教學（觸控說法）");
   await tapCard(P, card(0, "R"));
   await P.waitForFunction(() => document.getElementById("objective").textContent.includes("過熱"), null, { timeout: 5000 }).catch(() => {});
   ok((await P.textContent("#objective")).includes("過熱"), `點卡片出布就能過教學第一步：${await P.textContent("#objective")}`);
+  await P.evaluate(() => { const t = __fist.tutorial; t.load(3); t.goal = 1; t.emitObjective(); });   // 直接看關卡 4 的拼刀那一步
+  const t4 = await P.textContent("#objective");
+  ok(t4.includes("連點 5 下") && !t4.includes("連按"), `關卡 4 手機用詞：${t4}`);
   await ctx.close();
 }
 

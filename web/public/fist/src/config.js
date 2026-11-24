@@ -1467,11 +1467,15 @@ export const ART = {
 export const CONFIG = {
   W: ART.canvas.width, H: ART.canvas.height,
   cells: ART.stage.tileCount, cellW: ART.stage.tileWidthPx, stageX: ART.stage.leftX, floorY: ART.stage.surfaceY,
-  stocks: 3, powerMax: 3, powerStart: 1,          // 力量：開局 1 格、上限 3；每輪攻防結算各回 1（平手拼刀不回）；紅招花 2
+  stocks: 3,
   spawn: [3, 5],                                   // 開局與掉命後的站位（P1、P2）
 
-  // ---- 六階段（秒） ----
-  // （v3 移除走位階段：站位只靠贏拳推擠、彈反換位、紅招翻滾、擊飛落點）
+  // ================= 節奏秒數（全部集中在這裡，實測後直接改） =================
+  // v4 流程：猜拳 → 開牌 → 贏拳方連勝 +1
+  //   連勝 1、2：單發重擊（小傷＋推 1 格）→ 下一輪猜拳
+  //   連勝 3：🔥 連勝爆發 → 四套拳（每拳：攻方選拳 → 守方逐拳反擊）→ 連勝歸零
+  //   平手：不動連勝，累積拼刀蓄力（2 次 → 五連斬）
+  // （站位只靠重擊推擠、四套拳推擠、反擊換位、擊飛落點）
   rps: { dur: 2.8, reveal: 2.2 },                  // 前 2.2s 亮招前搖、後 0.6s 黑影藏招
   reveal: { dur: 0.55 },                           // 開牌停頓：鎖定瞬間停 0.55s，中央放大顯示誰壓制誰
   // 武器過熱：分出勝負後，雙方剛出的手勢下一輪猜拳不能選（拼刀結算、掉命重生後清除）
@@ -1494,39 +1498,50 @@ export const CONFIG = {
     resolvePause: 0.12,                              // 第 5 刀頓幀後，停一下再宣布勝負
     tiebreakSlow: 0.25,                              // 同分靠先手：「⚡ 先手絕殺！」金光慢動作
     winDamage: 24, firstBonus: 6,                    // 勝方大招 +24%（持先手再 +6%）
-    // 主招專屬勝利動畫：windup＝出招前搖（勝方演出時間），angle／mult＝擊飛角度與倍率
+    launch: { angle: 48, mult: 1.3 },                // ★ 三種大招共用同一組擊飛角度與倍率（致死率完全一樣）
+    // 主招專屬勝利動畫：只差演出（windup＝出招前搖、頓幀、震動），傷害與擊飛完全相同
     finisher: {
-      rock: { name: "崩山重砸", windup: 0.45, angle: 72, mult: 1.25, hitstopMs: 96, shakePx: 4, shakeMs: 155 },                     // 跳起垂直重砸：高拋物線
-      scissors: { name: "居合十字斬", windup: 0.30, dash: 0.12, angle: 28, mult: 1.45, hitstopMs: 65, shakePx: 2, shakeMs: 90 },   // 0.12s 穿身＋靜止 0.18s 後炸開
-      paper: { name: "零距離氣功轟飛", windup: 0.42, angle: 10, mult: 1.5, skid: true, hitstopMs: 82, shakePx: 3, shakeMs: 135, palmCellPx: [42, 23] },   // 水平掃出：落地後還會滑行
+      rock: { name: "崩山重砸", windup: 0.45, hitstopMs: 96, shakePx: 4, shakeMs: 155 },                     // 跳起垂直重砸
+      scissors: { name: "居合十字斬", windup: 0.30, dash: 0.12, hitstopMs: 65, shakePx: 2, shakeMs: 90 },   // 0.12s 穿身＋靜止 0.18s 後炸開
+      paper: { name: "零距離氣功轟飛", windup: 0.42, hitstopMs: 82, shakePx: 3, shakeMs: 135, palmCellPx: [42, 23] },   // 貼身轟出氣功波
     },
     letterboxPx: 18, dim: 0.6,                       // 電影黑邊、背景壓暗
   },
-  // 越打越快：整場每 3 回合（一次猜拳結算＝一回合）升一級，第 10 回合起最快；教學道場不加速
-  //   各階段時間 = 開局值 →（線性）→ fast 值；終結擇不低於 0.4 秒（長按紅光要 0.3 秒）、判定窗不低於 0.4 秒
-  speed: { roundsPerLevel: 3, maxLevel: 3, fast: { rpsReveal: 1.6, rpsHidden: 0.5, mash: 0.55, select: 0.4, window: 0.6 } },   // v3 放寬：最快也保留新手看得懂的時間                  // 前 1.3s 亮招、後 0.5s 藏招
-  clash: { dur: 0.75 },
-  mash: { dur: 0.65, baseHits: [0.12, 0.36], baseDamage: 7, pressesPerExtra: 2, extraDamage: 1.5, maxExtra: 4 },
-  select: { dur: 0.45, chargeTime: 0.3, redCost: 2 },
-  window: { dur: 0.8, slowmo: 0.3 },               // 終結判定窗放寬到 0.8s；slowmo 只影響畫面（終結擇就開始放慢）              // slowmo 只影響畫面動作速度
-  finisherDamage: 16,                              // 終結技命中（藍／紅）
-  parry: { counterDamage: 10, counterKnock: 1, hitstopMs: 150 },
-  roll: { cells: 2, time: 0.28 },
+  // 越打越快：整場每 3 回合（一次猜拳結算＝一回合）升一級，最多 Lv.4；教學道場不加速
+  //   各階段時間 = 開局值 →（線性）→ fast 值
+  speed: { roundsPerLevel: 3, maxLevel: 3, fast: { rpsReveal: 1.6, rpsHidden: 0.5, comboPrep: 0.45, comboReact: 0.75 } },
+  clash: { dur: 0.75 },                            // 小拼刀「叮！」／平分白浪彈開
+
+  // ---- 連勝：猜拳連贏 STREAK_TARGET 次才進四套拳；輸一輪或有人落台就歸零；平手不動 ----
+  STREAK_TARGET: 3,
+  strike: { dur: 0.7, hitAt: 0.22, damage: 8, push: 1, hitstopMs: 90 },   // 連勝 1、2：單發紮實重擊（+8%、推 1 格）
+
+  // ---- 四套拳（連勝爆發後）：每拳 = 攻方選拳 prepDur → 守方反擊窗 reactDur → 命中 impactDur ----
+  combo: {
+    hits: 4,
+    burstDur: 1.1,                                 // 「🔥 連勝爆發！四連擊開始！」大字演出
+    prepDur: 0.55,                                 // 攻方選這一拳出什麼（沒按＝系統隨機）；守方看不到
+    reactDur: 0.9,                                 // ★ 守方反擊時間（拳種亮出後，只認第一下；建議 0.85～1.0 實測再縮）
+    impactDur: 0.35,                               // 吃拳後停一下再進下一拳
+    hitDamage: [5, 5, 5, 9],                       // 第 1～4 拳各自傷害（%）
+    push: 1,                                       // 第 1～3 拳把守方往崖邊推幾格
+    finalLaunch: 1.15,                             // 第 4 拳擊飛倍率（擊飛公式再 × 這個）
+    counterDamage: 10, counterKnock: 1, counterHitstopMs: 150,   // 反擊成功：反打 +10%、擊退 1 格、頓幀
+    slowmo: 0.35,                                  // 反擊窗畫面慢動作倍率（只影響畫面）
+  },
   resolve: {
     minDur: 0.6,
-    vBase: 150,                                    // V = vBase × (1 + damage / damageDiv)，紅招再 × redMult
-    damageDiv: 100,                                // 一分鐘耐受度：110%～140% 以上才容易一發出場
-    redMult: 1.45,
+    vBase: 150,                                    // V = vBase × (1 + damage / damageDiv)
+    damageDiv: 100,                                // 110%～140% 以上才容易一發出場
     angleDeg: 48,
     gravity: 900,
     koMargin: 26,
     koPause: 0.9,
-    skidFriction: 900,                             // 氣功轟飛：貼地滑行的摩擦（損傷越高滑越遠）
   },
 
   // ---- 演出 ----
   countdown: { urgentSec: 0.15, tickEvery: 0.1, phaseTickLast: 0.3, bigBarW: 160 },
-  feel: { zoomMash: 1.14, zoomLerp: 8, mashExtraHitstopMs: 22, mashShakePx: [1, 2, 2, 3, 3] },
+  feel: { zoomCombo: 1.14, zoomLerp: 8 },          // 四套拳時鏡頭推近
   skin: "#E6B48A",
   cloth: { fill: "#C8A36B", shade: "#8B6B43", tie: "#5E4630" },   // 大布袋（程式繪製用；正式圖由武器圖集提供）
   names: ["P1 赭鋒", "P2 翠嵐"],
@@ -1541,18 +1556,18 @@ export const CONFIG = {
 
   // ---- AI 三難度（ai.js 讀這裡） ----
   ai: {
-    easy: { name: "新手木樁", reactionMs: 550, mashIntervalMs: 210, parryRate: 0.25, rollRate: 0.35, counterRead: 0.2, feint: false, hiddenSwitch: false, keepPower: 0, defenseMs: 380, clashMs: 560, readHeat: 0.2 },
-    mid: { name: "道場師兄", reactionMs: 350, mashIntervalMs: 115, parryRate: 0.55, rollRate: 0.7, counterRead: 0.5, feint: false, hiddenSwitch: false, keepPower: 1, defenseMs: 260, clashMs: 380, readHeat: 0.7 },
-    master: { name: "讀心宗師", reactionMs: 220, mashIntervalMs: 70, parryRate: 0.8, rollRate: 0.9, counterRead: 0.7, feint: true, hiddenSwitch: true, keepPower: 2, defenseMs: 190, clashMs: 150, readHeat: 0.9 },
+    //   counterRate＝四套拳每拳反擊成功率、counterMs＝看到拳種後多久按（要小於 combo.reactDur 才來得及）
+    easy: { name: "新手木樁", reactionMs: 550, counterRead: 0.2, feint: false, hiddenSwitch: false, counterRate: 0.25, counterMs: 650, clashMs: 560, readHeat: 0.2 },
+    mid: { name: "道場師兄", reactionMs: 350, counterRead: 0.5, feint: false, hiddenSwitch: false, counterRate: 0.5, counterMs: 450, clashMs: 380, readHeat: 0.7 },
+    master: { name: "讀心宗師", reactionMs: 220, counterRead: 0.7, feint: true, hiddenSwitch: true, counterRate: 0.75, counterMs: 280, clashMs: 150, readHeat: 0.9 },
   },
 
   // ---- 測試場景 ----
   scenarios: [
-    { name: "場景 1：中央對峙", p: [{ pos: 3, power: 2, damage: 0 }, { pos: 5, power: 2, damage: 0 }] },
-    { name: "場景 2：崖邊壓迫", p: [{ pos: 5, power: 2, damage: 0 }, { pos: 7, power: 2, damage: 90 }] },
-    { name: "場景 3：零力量閃紅招", p: [{ pos: 6, power: 2, damage: 0 }, { pos: 7, power: 0, damage: 110 }] },
+    { name: "場景 1：中央對峙", p: [{ pos: 3, damage: 0 }, { pos: 5, damage: 0 }] },
+    { name: "場景 2：崖邊壓迫", p: [{ pos: 5, damage: 0 }, { pos: 7, damage: 90 }] },
   ],
-  // ---- 出招提示（showHints：頭頂拳種氣泡、藏招 ❓、藍招克制鍵發光；線上只影響本機畫面） ----
+  // ---- 出招提示（showHints：頭頂拳種氣泡、藏招 ❓、四套拳反擊時剋制鍵發光；線上只影響本機畫面） ----
   hints: { default: true, storageKey: "fist.showHints" },
   // ---- 耐受度狀態字（分級、顏色、粒子讀 ART.palette.damageBands） ----
   status: { criticalAlt: "一擊必飛！！", altEverySec: 0.9, flashEverySec: 1.3, flashMs: 90, popMs: 220, jitter: { teetering: { px: 1, hz: 6 }, critical: { px: 2, hz: 22 } } },
@@ -1605,24 +1620,25 @@ export const CONFIG = {
   // ---- 震動（Android Chrome 的 navigator.vibrate；iPhone Safari 不開放，只能退而求其次給一下系統觸感） ----
   haptics: {
     storageKey: "fist.haptics", minGapMs: 35,
-    dealBase: 18, dealExtra: 10, takeBase: 32, takeExtra: 14,
-    dealFinisher: 30, takeFinisher: [45, 30, 70], takeRed: [80, 40, 110], dealRed: 45,
-    parryMe: [15, 45, 15], gotParried: 60, clash: 25, roll: 12, koMe: 160, koThem: [30, 40, 30],
+    dealBase: 18, takeBase: 32,                    // 單發重擊、四套拳第 1～3 拳
+    dealFinisher: 30, takeFinisher: [45, 30, 70],  // 四套拳第 4 拳擊飛
+    takeRed: [80, 40, 110], dealRed: 45,           // 拼刀大招
+    counterMe: [15, 45, 15], gotCountered: 60,     // 反擊成功／被反擊
+    burst: [20, 30, 20, 30, 60],                   // 連勝爆發
+    clash: 25, koMe: 160, koThem: [30, 40, 30],
   },
   deathmatchTitle: "⚡ 絕命對峙！",
   // ---- 底部鍵位卡文字 ----
   cards: {
     rps: { L: "✊ 石頭", M: "✌️ 剪刀", R: "🖐️ 布" },
-    mash: "🔥 狂敲連打！",
     heat: "♨️ 過熱",
-    roll: { L: "◀ 左翻", M: "", R: "▶ 右翻" },
   },
   // ---- 線上對戰（worker/gameRoom.js 與 WebSocketTransport 共用） ----
   net: {
     roomCodeLength: 4, codeAlphabet: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",   // 排除 0／O／1／I
     apiPath: "api/rooms", wsPath: "ws/",          // 相對於遊戲頁面網址
     tickHz: 120, broadcastHz: 30,                  // 伺服器引擎步進、畫面同步頻率
-    windowGraceMs: 80,                             // 終結判定窗：伺服器多收 80ms（延遲寬容）
+    windowGraceMs: 80,                             // 四套拳反擊窗：伺服器多收 80ms（延遲寬容，畫面倒數不變）
     readyCountdownSec: 3, reconnectSec: 15, pingEveryMs: 15000, roomIdleMin: 30,
   },
 };

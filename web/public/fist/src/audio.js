@@ -46,16 +46,8 @@ export const Sfx = {
   heavy() { tone(70, 0.3, 0.6, "sine", 0.35); noise(0.18, 0.5, 600, "lowpass"); noise(0.03, 0.3, 3000, "bandpass", 2); },
   parry() { tone(2350, 0.45, 0.22, "triangle"); tone(3520, 0.35, 0.12, "sine"); tone(1175, 0.2, 0.1, "square", 1, 0.02); noise(0.05, 0.3, 6000, "highpass"); },
   whoosh() { noise(0.22, 0.2, 800, "bandpass", 0.8, 0, 3200); },
-  chargeStart() {
-    if (!ok() || hum) return;
-    const t = ac.currentTime, o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
-    o.type = "sawtooth"; o2.type = "sine"; o.frequency.setValueAtTime(55, t); o.frequency.linearRampToValueAtTime(95, t + CONFIG.select.chargeTime); o2.frequency.setValueAtTime(110, t);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.14, t + 0.1);
-    f.type = "lowpass"; f.frequency.value = 500;
-    o.connect(f); o2.connect(f); f.connect(g); g.connect(master); o.start(t); o2.start(t);
-    hum = { o, o2, g };
-  },
-  chargeStop() { if (!hum) return; const t = ac.currentTime; hum.g.gain.cancelScheduledValues(t); hum.g.gain.setValueAtTime(Math.max(0.0001, hum.g.gain.value), t); hum.g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08); hum.o.stop(t + 0.1); hum.o2.stop(t + 0.1); hum = null; },
+  streak(n) { [523, 659, 784].slice(0, n).forEach((f, i) => tone(f, 0.12, 0.1, "triangle", 1, i * 0.06)); },   // 連勝：幾連勝就幾個升調音
+  burst() { tone(60, 0.5, 0.35, "sawtooth", 1.6); noise(0.3, 0.2, 300, "lowpass"); [660, 880, 1100, 1320].forEach((f, i) => tone(f, 0.1, 0.08, "square", 1, 0.1 + i * 0.07)); },
   redReady() { tone(60, 0.5, 0.35, "sawtooth", 1.6); noise(0.3, 0.2, 300, "lowpass"); },
   ko() { tone(55, 0.9, 0.7, "sine", 0.3); noise(0.8, 0.6, 400, "lowpass", 0.7, 0, 80); noise(0.25, 0.4, 2500, "bandpass", 1); tone(880, 0.6, 0.08, "triangle", 0.5, 0.05); },
   land() { noise(0.06, 0.18, 500, "lowpass"); tone(90, 0.08, 0.15, "sine", 0.6); },
@@ -105,27 +97,26 @@ function handle(events, view) {
       case "lock": case "stance": case "finisher_pick": Sfx.tick(); break;
       case "hide": Sfx.hide(); break;
       case "clash": e.wave ? Sfx.wave() : Sfx.ding(); break;
-      case "hit": e.kind === "extra" ? Sfx.jab(e.n) : Sfx.punch(e.kind === "counter" ? 1.1 : e.n === 1 ? 0.8 : 1); break;
-      case "charge_start": Sfx.chargeStart(); break;
-      case "charge_stop": Sfx.chargeStop(); break;
-      case "red_ready": Sfx.chargeStop(); Sfx.redReady(); break;
-      case "parry": Sfx.parry(); break;
-      case "roll": Sfx.whoosh(); break;
-      case "finisher_hit": Sfx.heavy(); break;
+      case "hit": e.final || e.kind === "strike" ? Sfx.heavy() : e.kind === "combo" ? Sfx.jab(e.n) : Sfx.punch(e.kind === "counter" ? 1.1 : 1); break;
+      case "streak": if (e.why === "win") Sfx.streak(e.streak[e.p]); break;
+      case "combo_start": Sfx.burst(); break;
+      case "combo_cue": Sfx.cueSoon(); break;
+      case "counter": Sfx.parry(); break;
+      case "wrong": Sfx.deny(); break;
       case "land": Sfx.land(); break;
       case "ko": Sfx.ko(); break;
       case "gameover": Sfx.win(); break;
-      case "phase": if (e.phase !== PH.SELECT) Sfx.chargeStop(); else Sfx.cueSoon(); break;   // 終結擇一開始就先給預告音
+
     }
   }
-  // 倒數嗒聲：終結判定窗每 0.1 秒一聲；猜拳／拼刀輸入最後 0.3 秒；最後一下比較尖
+  // 倒數嗒聲：四套拳反擊窗每 0.1 秒一聲；猜拳／拼刀輸入／選拳最後 0.3 秒；最後一下比較尖
   if (!view) return;
   if (view.phase !== lastPhase) { lastPhase = view.phase; lastTick = -1; }
   const C = CONFIG.countdown, left = view.dur - view.t;
-  if (view.phase === PH.WINDOW && view.round && !view.round.done) {
+  if (view.phase === PH.COMBO_CUE && view.round && !view.round.done) {
     const n = Math.ceil(left / C.tickEvery);
     if (n !== lastTick && n >= 1) { lastTick = n; Sfx.count(left <= C.urgentSec + 0.05); }
-  } else if ((view.phase === PH.RPS || view.phase === PH.CLASH_INPUT) && left > 0 && left <= C.phaseTickLast + 1e-6) {
+  } else if ((view.phase === PH.RPS || view.phase === PH.CLASH_INPUT || view.phase === PH.COMBO_PREP) && left > 0 && left <= C.phaseTickLast + 1e-6) {
     const n = Math.ceil(left / C.tickEvery);
     if (n !== lastTick) { lastTick = n; Sfx.count(n === 1); }
   }

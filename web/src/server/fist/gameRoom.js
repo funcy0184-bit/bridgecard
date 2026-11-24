@@ -1,8 +1,8 @@
 // gameRoom.js（拳刃交鋒）— 一個 4 碼房號 = 一個 GameRoom Durable Object
-//   · 權威伺服器：跑跟前端同一份 engine.js；瀏覽器只送按鍵，所有判定（猜拳、連打、彈反、翻滾、擊飛）都在這裡算
+//   · 權威伺服器：跑跟前端同一份 engine.js；瀏覽器只送按鍵，所有判定（猜拳、連勝、重擊、四套拳反擊、拼刀、擊飛）都在這裡算
 //   · 時間軸：房內計時器固定 1/120 秒推進引擎，各階段的切換都由伺服器時鐘決定；
 //            每則 state 附 serverTime 與 phaseEndTime，前端依此對齊倒數條
-//   · v3 規則（沒有走位）：猜拳 → 開牌停頓 PHASE_REVEAL → 連打／終結擇／判定窗；
+//   · v4 規則（沒有走位）：猜拳 → 開牌停頓 PHASE_REVEAL → 連勝 1、2 單發重擊 PHASE_STRIKE／連勝 3 四套拳 PHASE_COMBO_*；
 //     平手累積 2 次（view.gauge／gaugeMax，公開）→ 五連斬拼刀 PHASE_CLASH_INPUT（3.5 秒）→ PHASE_CLASH_ANIM（五刀＋主招大招）
 //       - 武器過熱：view.fighters[i].heat 公開同步給雙方（誰禁用哪招）
 //       - 拼刀蓄力：第 1 次平手只「叮！」彈開（gauge 事件），集滿才拼刀；拼刀結算或有人落台歸零
@@ -12,9 +12,9 @@
 //   · 隱藏資訊：每個座位只收 engine.viewFor(自己) ＋ 自己看得到的事件
 //       - 猜拳前 1.3 秒：架式（stance 事件）即時轉發給對手播前搖
 //       - 最後 0.5 秒藏招：只記錄、絕不轉發；對手畫面上的你永遠是「hidden」，直到鎖定結算（rps_result）一起公佈
-//       - 終結擇：攻方選的手勢、蓄力起手都不送守方，判定窗亮起才公開
-//   · 連打：攻方每一下按鍵都送上來，伺服器自己數「每 2 下追加 1 拳、上限 4 拳」，命中事件即時廣播給守方播火花與震動
-//   · 判定窗延遲寬容：引擎 windowGrace = 80ms（畫面倒數仍是 0.5 秒，伺服器多收 80ms 內抵達的按鍵）
+//       - 連勝：view.fighters[i].streak 公開同步（雙方 0/3 燈號）
+//       - 四套拳選拳：攻方這一拳選了什麼（combo_pick）只送攻方，view.round.gesture 對守方是 null；拳種亮出（combo_cue）才公開
+//   · 反擊窗延遲寬容：引擎 windowGrace = 80ms（畫面倒數不變，伺服器多收 80ms 內抵達的按鍵）
 //   · 房內流程：lobby（READY）→ countdown（3 秒）→ playing ⇄ paused（斷線 15 秒）→ over（Rematch／離開）
 //   · alarm()：房間閒置 30 分鐘後清掉，房號釋出
 //
@@ -105,7 +105,7 @@ export class GameRoom extends DurableObject {
 
   onMessage(conn, raw) {
     if (typeof raw !== "string" || raw.length > MAX_MSG) return;
-    const now = Date.now();                                      // 簡單限流：每秒最多 120 則（狂按連打也用不到這麼多）
+    const now = Date.now();                                      // 簡單限流：每秒最多 120 則（狂按也用不到這麼多）
     if (now - conn.win > 1000) { conn.win = now; conn.count = 0; }
     if (++conn.count > MSG_PER_SEC) return;
     let m; try { m = JSON.parse(raw); } catch { return; }
@@ -249,7 +249,7 @@ export class GameRoom extends DurableObject {
     const s = this.seats[seat];
     if (!s.ws || !this.engine) return;
     const view = this.engine.viewFor(seat), now = Date.now();
-    const vis = events.filter(e => e.private === undefined || e.private === seat);   // 藏招／終結擇／蓄力：對手的私密事件絕不轉發
+    const vis = events.filter(e => e.private === undefined || e.private === seat);   // 藏招／四套拳選拳：對手的私密事件絕不轉發
     this.send(s.ws, { t: "state", view, events: vis, serverTime: now, phaseEndTime: now + Math.max(0, view.dur - view.t) * 1000 });
   }
 
