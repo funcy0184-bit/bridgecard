@@ -1,5 +1,7 @@
 # 《拳刃交鋒》開發紀錄
 
+> 三方協作規格（GPT 美術／Gemini 企劃／Claude 程式）與手感重規劃：見 [fist/README.md](fist/README.md)。
+
 分支：`feature/fist-duel-proto`（不合併、不部署；上線需專案負責人同意）
 
 ## v2（線上對戰＋美術 v1.1／UI v1.2＋一分鐘耐受度）
