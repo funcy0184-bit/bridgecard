@@ -279,26 +279,73 @@
   },
   "palette": {
     "p1": {
-      "cloth": "#FFF0D7",
-      "shade": "#CD998B",
-      "shadow": "#78495A",
-      "trim": "#C73C49",
-      "lit": "#FF8965",
-      "skin": "#EEAA7D",
-      "skinlit": "#FFDCAB",
-      "hair": "#302431",
-      "hairlight": "#704154"
+      "shadow": "#713B29",
+      "primary": "#D58941",
+      "secondary": "#FFF0C3",
+      "highlight": "#FFF9E8"
     },
     "p2": {
-      "cloth": "#323849",
-      "shade": "#252938",
-      "shadow": "#171C2B",
-      "trim": "#316DC0",
-      "lit": "#87D9F0",
-      "skin": "#C58368",
-      "skinlit": "#F5C6A0",
-      "hair": "#1D263A",
-      "hairlight": "#425878"
-    }
+      "shadow": "#23544E",
+      "primary": "#4BB381",
+      "secondary": "#C6F9D8",
+      "highlight": "#ECFFF1"
+    },
+    "outline": "#10121B",
+    "neutralSteel": "#A9A9AC"
+  },
+  "characterDesign": {
+    "referenceCommit": "bbfdcd5c692c0e019bb42c3fee4703083a9e1a20",
+    "references": [
+      {
+        "file": "fighter_p1.png",
+        "gitBlob": "7d6a56486256860f880cd339da3116e6ae62b38c"
+      },
+      {
+        "file": "fighter_p2.png",
+        "gitBlob": "ca34eb19be0e315c8b21d208db9de70c780a9579"
+      }
+    ],
+    "frameAnchorPx": [
+      24,
+      40
+    ],
+    "idleHeadSizePx": {
+      "p1": [
+        10,
+        12
+      ],
+      "p2": [
+        15,
+        11
+      ]
+    },
+    "proportions": {
+      "idleShoulderY": 22,
+      "idleHipY": 31,
+      "groundY": 40
+    },
+    "colors": {
+      "p1": {
+        "shadow": "#713B29",
+        "primary": "#D58941",
+        "secondary": "#FFF0C3",
+        "highlight": "#FFF9E8"
+      },
+      "p2": {
+        "shadow": "#23544E",
+        "primary": "#4BB381",
+        "secondary": "#C6F9D8",
+        "highlight": "#ECFFF1"
+      },
+      "outline": "#10121B",
+      "neutralSteel": "#A9A9AC"
+    },
+    "fxColors": [
+      "#58B6FF",
+      "#E4F7FF",
+      "#FF4F62",
+      "#8592A4",
+      "#D9DFDE"
+    ]
   }
 }

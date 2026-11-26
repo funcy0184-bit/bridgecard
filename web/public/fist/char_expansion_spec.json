@@ -333,5 +333,60 @@
     "spinKick": "During frames 2–4 the single planted sole is centered on the foot pivot.",
     "dummyPivot": "Fixed center of the wooden base, including during KO separation.",
     "optionalVfx": "Effects named in events are provided separately in vfx_mega_pack.zip. Burst and overheat already include small local cues. End the optional looping overlays when the corresponding status ends."
+  },
+  "characterDesign": {
+    "referenceCommit": "bbfdcd5c692c0e019bb42c3fee4703083a9e1a20",
+    "references": [
+      {
+        "file": "fighter_p1.png",
+        "gitBlob": "7d6a56486256860f880cd339da3116e6ae62b38c"
+      },
+      {
+        "file": "fighter_p2.png",
+        "gitBlob": "ca34eb19be0e315c8b21d208db9de70c780a9579"
+      }
+    ],
+    "frameAnchorPx": [
+      24,
+      40
+    ],
+    "idleHeadSizePx": {
+      "p1": [
+        10,
+        12
+      ],
+      "p2": [
+        15,
+        11
+      ]
+    },
+    "proportions": {
+      "idleShoulderY": 22,
+      "idleHipY": 31,
+      "groundY": 40
+    },
+    "colors": {
+      "p1": {
+        "shadow": "#713B29",
+        "primary": "#D58941",
+        "secondary": "#FFF0C3",
+        "highlight": "#FFF9E8"
+      },
+      "p2": {
+        "shadow": "#23544E",
+        "primary": "#4BB381",
+        "secondary": "#C6F9D8",
+        "highlight": "#ECFFF1"
+      },
+      "outline": "#10121B",
+      "neutralSteel": "#A9A9AC"
+    },
+    "fxColors": [
+      "#58B6FF",
+      "#E4F7FF",
+      "#FF4F62",
+      "#8592A4",
+      "#D9DFDE"
+    ]
   }
 }
