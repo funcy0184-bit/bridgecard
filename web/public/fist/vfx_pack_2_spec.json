@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "1.0",
+  "project": "拳刃交鋒",
+  "canvasPx": [
+    480,
+    270
+  ],
+  "layout": "horizontal",
+  "indexBase": 0,
+  "padding": 0,
+  "sampling": "nearest",
+  "alpha": "straightRGBA8_binary",
+  "coordinateOrigin": "topLeft",
+  "layers": {
+    "behind": "after stage, before fighters",
+    "front": "after fighters, before HUD"
+  },
+  "sheets": {
+    "vfx_dust_dash": {
+      "file": "vfx_dust_dash.png",
+      "label": "衝刺揚塵",
+      "width": 240,
+      "height": 32,
+      "frameWidth": 48,
+      "frameHeight": 32,
+      "frames": 5,
+      "fps": 20,
+      "layer": "behind",
+      "loop": false,
+      "pivotPx": [
+        39,
+        28
+      ],
+      "suggestedActions": [
+        "clash_dash"
+      ],
+      "anchor": "footPivot",
+      "facing": "right"
+    },
+    "vfx_dust_land": {
+      "file": "vfx_dust_land.png",
+      "label": "落地氣浪",
+      "width": 240,
+      "height": 24,
+      "frameWidth": 48,
+      "frameHeight": 24,
+      "frames": 5,
+      "fps": 18,
+      "layer": "behind",
+      "loop": false,
+      "pivotPx": [
+        24,
+        20
+      ],
+      "suggestedActions": [
+        "land"
+      ],
+      "anchor": "footPivot",
+      "facing": "symmetric"
+    },
+    "vfx_smear_rock": {
+      "file": "vfx_smear_rock.png",
+      "label": "巨錘扇形殘影",
+      "width": 256,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": 4,
+      "fps": 24,
+      "layer": "front",
+      "loop": false,
+      "pivotPx": [
+        20,
+        43
+      ],
+      "suggestedActions": [
+        "clash_rock"
+      ],
+      "anchor": "weaponGrip",
+      "facing": "right"
+    },
+    "vfx_smear_scissors": {
+      "file": "vfx_smear_scissors.png",
+      "label": "雙刃交叉殘影",
+      "width": 256,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": 4,
+      "fps": 28,
+      "layer": "front",
+      "loop": false,
+      "pivotPx": [
+        32,
+        32
+      ],
+      "suggestedActions": [
+        "clash_scissors"
+      ],
+      "anchor": "bladeContact",
+      "facing": "right"
+    },
+    "vfx_smear_paper": {
+      "file": "vfx_smear_paper.png",
+      "label": "掌風螺旋氣環",
+      "width": 256,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": 4,
+      "fps": 24,
+      "layer": "front",
+      "loop": false,
+      "pivotPx": [
+        29,
+        32
+      ],
+      "suggestedActions": [
+        "clash_paper"
+      ],
+      "anchor": "palm",
+      "facing": "right"
+    }
+  }
+}

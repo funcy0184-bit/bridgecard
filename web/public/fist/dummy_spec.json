@@ -1,0 +1,89 @@
+{
+  "project": "拳刃交鋒",
+  "canvasPx": [
+    480,
+    270
+  ],
+  "coordinateOrigin": "topLeft",
+  "frameIndexBase": 0,
+  "layout": {
+    "columns": 10,
+    "cellWidth": 50,
+    "cellHeight": 50,
+    "stridePx": [
+      50,
+      50
+    ],
+    "drawableRectXYWH": [
+      1,
+      1,
+      48,
+      48
+    ],
+    "pivotInCellPx": [
+      24,
+      40
+    ],
+    "pivotInDrawablePx": [
+      23,
+      39
+    ],
+    "facing": "right",
+    "alpha": "straightRGBA8_binary",
+    "sampling": "nearest",
+    "unusedCells": "transparent"
+  },
+  "schemaVersion": "2.0",
+  "sheets": {
+    "dummy_sheet.png": {
+      "file": "dummy_sheet.png",
+      "width": 500,
+      "height": 200,
+      "columns": 10,
+      "rows": 4,
+      "frameWidth": 50,
+      "frameHeight": 50,
+      "activeFrames": 20,
+      "animationTable": "dummyAnimations"
+    }
+  },
+  "dummyAnimations": {
+    "dummy_idle": {
+      "row": 0,
+      "label": "木樁搖晃",
+      "firstColumn": 0,
+      "frames": 4,
+      "fps": 7,
+      "loop": true,
+      "onComplete": "repeat"
+    },
+    "dummy_hit": {
+      "row": 1,
+      "label": "彈簧回彈",
+      "firstColumn": 0,
+      "frames": 5,
+      "fps": 16,
+      "loop": false,
+      "onComplete": "returnToController"
+    },
+    "dummy_attack": {
+      "row": 2,
+      "label": "木棒出擊",
+      "firstColumn": 0,
+      "frames": 5,
+      "fps": 17,
+      "loop": false,
+      "onComplete": "returnToController",
+      "contactFrame": 2
+    },
+    "dummy_ko": {
+      "row": 3,
+      "label": "旋轉解體",
+      "firstColumn": 0,
+      "frames": 6,
+      "fps": 13,
+      "loop": false,
+      "onComplete": "holdLastUntilReset"
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "1.0",
+  "project": "拳刃交鋒",
+  "canvasPx": [
+    480,
+    270
+  ],
+  "layout": "horizontal",
+  "indexBase": 0,
+  "padding": 0,
+  "sampling": "nearest",
+  "alpha": "straightRGBA8_binary",
+  "coordinateOrigin": "topLeft",
+  "layers": {
+    "behind": "after stage, before fighters",
+    "front": "after fighters, before HUD"
+  },
+  "sheets": {
+    "vfx_hit_light": {
+      "file": "vfx_hit_light.png",
+      "label": "輕擊星芒",
+      "width": 240,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": 5,
+      "fps": 24,
+      "layer": "front",
+      "loop": false,
+      "pivotPx": [
+        24,
+        24
+      ],
+      "suggestedActions": [
+        "combo4_hit1",
+        "combo4_hit2"
+      ],
+      "anchor": "resolvedHitPoint"
+    },
+    "vfx_hit_heavy": {
+      "file": "vfx_hit_heavy.png",
+      "label": "重擊衝擊環",
+      "width": 384,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": 6,
+      "fps": 22,
+      "layer": "front",
+      "loop": false,
+      "pivotPx": [
+        32,
+        32
+      ],
+      "suggestedActions": [
+        "combo4_hit4_launch",
+        "streak_1_hit"
+      ],
+      "anchor": "resolvedHitPoint"
+    },
+    "vfx_counter_flash": {
+      "file": "vfx_counter_flash.png",
+      "label": "反擊十字閃",
+      "width": 480,
+      "height": 80,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "frames": 6,
+      "fps": 24,
+      "layer": "front",
+      "loop": false,
+      "pivotPx": [
+        40,
+        40
+      ],
+      "suggestedActions": [
+        "counter_break"
+      ],
+      "anchor": "resolvedParryPoint"
+    },
+    "vfx_streak_aura": {
+      "file": "vfx_streak_aura.png",
+      "label": "連勝燃燒氣場",
+      "width": 384,
+      "height": 64,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "frames": 6,
+      "fps": 14,
+      "layer": "behind",
+      "loop": true,
+      "pivotPx": [
+        32,
+        56
+      ],
+      "suggestedActions": [
+        "streak_burst"
+      ],
+      "anchor": "footPivot"
+    },
+    "vfx_overheat_smoke": {
+      "file": "vfx_overheat_smoke.png",
+      "label": "過熱蒸氣",
+      "width": 160,
+      "height": 32,
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "frames": 5,
+      "fps": 12,
+      "layer": "front",
+      "loop": true,
+      "pivotPx": [
+        16,
+        29
+      ],
+      "suggestedActions": [
+        "overheat_shake"
+      ],
+      "anchor": "weaponVent"
+    }
+  }
+}

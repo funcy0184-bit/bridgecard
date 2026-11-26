@@ -160,7 +160,7 @@ export const FALLBACK_POSE = {
   combo4_hit4_launch: { base: () => "finisher_red", xf: k => pose({ dx: Math.sin(Math.PI * k) * 14, dy: -Math.sin(Math.PI * k) * 11, sk: 0.3 * Math.sin(Math.PI * k), sx: 1.12 }) },   // 跨步躍起轟飛
   counter_break: { base: k => (k < 0.35 ? "parry_success" : "mash_hit"), xf: k => k < 0.35 ? pose({ dx: -5 * k / 0.35, sk: -0.18 }) : pose({ dx: -5 + 14 * easeOut((k - 0.35) / 0.65), sk: 0.24 }) },   // 架開再反打
   overheat_shake: { base: () => null, xf: (k, t) => pose({ dx: Math.sin(t * 80) * 1.6 * (1 - k), sk: Math.sin(t * 50) * 0.05 }) },         // 武器過熱發抖
-  taunt_ready: { base: () => "idle", xf: k => pose({ dy: -Math.abs(Math.sin(TAU * k)) * 2.5, sk: 0.06 * Math.sin(TAU * k) }) },            // 勾指挑釁
+  air_recover: { base: () => "roll", xf: k => pose({ sx: 1 - Math.sin(Math.PI * k) * 0.15, sy: 1 + Math.sin(Math.PI * k) * 0.15, sk: 0.2 * Math.sin(Math.PI * k) }) },   // 空中受身翻轉（缺圖時用翻滾＋拉長）
 };
 
 // ---------------- 訓練場木人樁（dummy_sheet.png 缺圖時） ----------------

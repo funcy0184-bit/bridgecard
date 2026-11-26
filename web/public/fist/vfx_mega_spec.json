@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "project": "拳刃交鋒",
   "canvasPx": [
     480,
@@ -136,7 +136,8 @@
       "suggestedActions": [
         "clash_dash"
       ],
-      "anchor": "footPivot"
+      "anchor": "footPivot",
+      "facing": "right"
     },
     "vfx_dust_land": {
       "file": "vfx_dust_land.png",
@@ -156,7 +157,8 @@
       "suggestedActions": [
         "land"
       ],
-      "anchor": "footPivot"
+      "anchor": "footPivot",
+      "facing": "symmetric"
     },
     "vfx_smear_rock": {
       "file": "vfx_smear_rock.png",
@@ -167,7 +169,7 @@
       "frameHeight": 64,
       "frames": 4,
       "fps": 24,
-      "layer": "behind",
+      "layer": "front",
       "loop": false,
       "pivotPx": [
         20,
@@ -176,7 +178,8 @@
       "suggestedActions": [
         "clash_rock"
       ],
-      "anchor": "weaponGrip"
+      "anchor": "weaponGrip",
+      "facing": "right"
     },
     "vfx_smear_scissors": {
       "file": "vfx_smear_scissors.png",
@@ -196,7 +199,8 @@
       "suggestedActions": [
         "clash_scissors"
       ],
-      "anchor": "bladeContact"
+      "anchor": "bladeContact",
+      "facing": "right"
     },
     "vfx_smear_paper": {
       "file": "vfx_smear_paper.png",
@@ -216,7 +220,8 @@
       "suggestedActions": [
         "clash_paper"
       ],
-      "anchor": "palm"
+      "anchor": "palm",
+      "facing": "right"
     }
   }
 }
