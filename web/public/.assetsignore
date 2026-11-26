@@ -5,6 +5,10 @@ fist/vfx_spec.json
 fist/clash_art_spec.json
 fist/vfx_mega_spec.json
 fist/char_expansion_spec.json
+fist/char_extra_spec.json
+fist/dummy_spec.json
+fist/vfx_pack_1_spec.json
+fist/vfx_pack_2_spec.json
 fist/.assetsignore
 .assetsignore
 fist/proto.html
