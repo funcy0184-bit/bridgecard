@@ -9,5 +9,6 @@
 - v2.0 新規則一律先做成 `CONFIG.V2_EXPERIMENTS` 開關，只在訓練場開啟；開關全關時正式模式（AI／同機／線上／教學）行為必須跟原本一致。
 - 不要跑 AI 模擬對戰（`test/fist-sim.mjs`），手感由製作人實測。
 - 開發分支 `feature/fist-duel-proto`；正式站 `feature/web-online-v1`，合併／部署前要製作人同意，先備份 `backup/web-online-v1-<sha>`、只快轉、不強推。
+- 美術 PNG 有任何更新：把 `config.js` 的 `ASSET_VERSION` 改成新值（預載網址帶 `?v=`，避免瀏覽器吃舊圖），並跑 `node web/scripts/fist-art-check.mjs`
 - 缺美術圖時不要寫死導致 404：選配圖靠 `CONFIG.ART_PACKS` 開關，缺圖走程式繪製。
 - 測試原則：不刪既有測試、不放寬斷言、沒跑的不能說通過、真機驗收不能用模擬取代。

@@ -1658,6 +1658,8 @@ export const CONFIG = {
     },
   },
   trainingDummySeat: -1,
+  // ---- 美術快取版本：每次 GPT 更新任何 PNG 就改這個（預載網址會加 ?v=…，瀏覽器一定重抓新圖）----
+  ASSET_VERSION: "20261127a",
   // ---- 角色身前招式印記（rps_aura_spec.json v1.0.0）：48×48 橫條、貼齊點 (24,24)；位置＝腳底 + (facing×32, −20)----
   //   肩後過熱紅叉：腳底 + (−facing×18, −34)，20×20（ui_rps_big 那一格去色＋ui_overheat_lock 疊上）
   rpsAura: {

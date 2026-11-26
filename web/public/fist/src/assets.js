@@ -31,7 +31,7 @@ const images = {};          // file → HTMLImageElement（載入成功且尺寸
 const status = {};          // file → "ok" | "missing" | "size"
 let pending = null;
 
-function urlOf(file) { return new URL(`../${file}`, import.meta.url).href; }
+function urlOf(file) { return new URL(`../${file}?v=${encodeURIComponent(CONFIG.ASSET_VERSION ?? "")}`, import.meta.url).href; }   // ?v＝美術快取版本（config.js 的 ASSET_VERSION）
 
 function loadOne(m) {
   return new Promise(resolve => {
