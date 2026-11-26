@@ -386,7 +386,7 @@ export class Renderer {
     this.names = CONFIG.names.slice();
     this.showHints = true;                                // 出招提示：頭頂拳種氣泡、藏招 ❓（main.js 依設定切換）
     this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null }));
-    this.act = [null, null]; this.wclock = 0; this.tauntAt = -9; this.heatAt = [-9, -9];
+    this.act = [null, null]; this.wclock = 0; this.heatAt = [-9, -9];
     this.sq = [null, null]; this.kickV = null; this.rgbUntil = -9;   // v2 打擊感：角色形變、方向鏡頭踹擊、RGB 錯位   // 擴充動作包：畫面層一次性動作（播完交回引擎動作）；wclock＝世界時鐘（頓幀時停）
     this.resize();
   }
@@ -395,7 +395,7 @@ export class Renderer {
   hasSheet(seat) { return !!Fighter.baseOf(seat); }
   setNames(n) { this.names = n; }
   keyPress(btn) { this.keyFlash[btn] = 0.12; }
-  reset() { this.callout = null; this.goFlash = -9; this.lb = 0; this.impactLeft = 0; this.finText = null; this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null })); this.act = [null, null]; this.tauntAt = -9; }
+  reset() { this.callout = null; this.goFlash = -9; this.lb = 0; this.impactLeft = 0; this.finText = null; this.fx = []; this.trails = [[], []]; this.combo = null; this.freezeUntil = 0; this.frozen = null; this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null })); this.act = [null, null]; }
   resize(availW = innerWidth, availH = innerHeight) {
     const dpr = globalThis.devicePixelRatio || 1, fit = Math.min(availW / CONFIG.W, availH / CONFIG.H);
     this.scale = fit >= 1 ? Math.floor(fit) : fit;          // 整數倍率；視窗剩下的空間留邊
@@ -475,13 +475,15 @@ export class Renderer {
         }
         case "combo_start": this.say("🔥 連勝爆發！", "四連擊開始！", PAL.fx.red.core, now, 1.1); this.kick(3, 0.2, now); this.trails = [[], []]; break;
         case "combo_cue": this.cueAt = now; break;
-        case "recover": { this.popup(e.x, e.y - 30, "回場！", PAL.hud.focusOutline, 9); this.spark(e.x, e.y, PAL.fx.impact.spark, 8, 2); this.squash(e.p, "attack"); break; }   // v2：受身翻轉二段跳
+        case "recover": {
+          this.play(e.p, "air_recover", null);
+          this.sprite("vfx_dust_dash", e.x, e.y, e.x < CONFIG.W / 2 ? 1 : -1);
+          this.popup(e.x, e.y - 30, "回場！", PAL.hud.focusOutline, 9); this.spark(e.x, e.y, PAL.fx.impact.spark, 8, 2); this.squash(e.p, "attack"); break; }   // v2：受身翻轉二段跳
         case "dust": if (!this.sprite("vfx_dust_dash", e.x, CONFIG.floorY, e.dir)) this.spark(e.x, CONFIG.floorY - 1, PAL.platform.topEdge, 2, 1); break;   // v2：滑行揚塵
         case "land": this.squash(e.p, "land"); if (!this.sprite("vfx_dust_land", e.x, CONFIG.floorY)) this.spark(e.x, CONFIG.floorY, PAL.platform.topEdge, 4, 1.2); break;
         case "ko": this.triggerImpactFrame(CONFIG.V2.impact.ko); this.rgb(now); if (!this.sprite("vfx_ko_pillar", e.x, CONFIG.H - 1, e.x > CONFIG.W / 2 ? -1 : 1)) this.fx.push({ k: "beam", x: e.x, at: now, max: ms(FX.koBlast.durationMs) });   // 光柱依出界的左右邊緣翻轉 this.kick(FX.cameraShakePx.ko, 0.2, now); this.popup(clamp(e.x, 60, CONFIG.W - 60), 96, "KO！", PAL.fx.ko.core, 22); this.trails = [[], []]; break;
         case "speed_up": this.banner(`⚡ 加速！速度 Lv.${e.lv + 1}`, PAL.fx.red.rim); this.kick(1, 0.1, now); break;
         case "phase":
-          if (e.phase === PH.RPS && view.fighters.every(f => !f.damage && !f.streak) && this.wclock - this.tauntAt > 3) { this.tauntAt = this.wclock; for (const i of [0, 1]) this.play(i, "taunt_ready", null); }   // 開局／重置：勾指挑釁
           if (e.phase === PH.RPS) this.combo = null; if (e.phase === PH.REVEAL) this.goFlash = now; break;   // 猜拳倒數 3、2、1 之後：「出招！」
         case "deny": if (e.why === "heat") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 60, "♨️ 過熱！", "#FF9A62", 9); this.play(e.p, "overheat_shake", null); this.heatAt[e.p] = this.wclock; } break;
         case "clash_start": this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
@@ -696,7 +698,7 @@ export class Renderer {
     const dummy = CONFIG.trainingDummySeat === f.i && Fighter.has("dummy_idle", f.i);
     const a = this.act[f.i], live = a && this.wclock < a.end;
     if (dummy) return f.anim.state === "knockback" ? "dummy_ko" : live ? a.state : "dummy_idle";   // 訓練場木樁：擊飛時旋轉解體（停最後一格）
-    if (live && (a.state !== "taunt_ready" || f.anim.state === "idle")) return a.state;           // 擴充動作：播完交回引擎
+    if (live) return a.state;           // 擴充動作：播完交回引擎
     {                                                          // 有加購圖：開牌壓制／受壓、五連斬蓄勢、比賽勝利
       const want = view.phase === PH.REVEAL && view.rps && view.rps.winner >= 0 ? (view.rps.winner === f.i ? "reveal_win" : "reveal_lose")
         : view.phase === PH.CLASH_INPUT && f.anim.state === "idle" ? "clash_charge"

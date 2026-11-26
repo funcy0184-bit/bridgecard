@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "project": "拳刃交鋒",
   "canvasPx": [
     480,
@@ -43,7 +43,7 @@
       "rows": 12,
       "frameWidth": 50,
       "frameHeight": 50,
-      "activeFrames": 61,
+      "activeFrames": 63,
       "animationTable": "fighterAnimations"
     },
     "fighter_p2_extra.png": {
@@ -54,7 +54,7 @@
       "rows": 12,
       "frameWidth": 50,
       "frameHeight": 50,
-      "activeFrames": 61,
+      "activeFrames": 63,
       "animationTable": "fighterAnimations"
     },
     "dummy_sheet.png": {
@@ -271,14 +271,21 @@
         ]
       ]
     },
-    "taunt_ready": {
+    "air_recover": {
       "row": 11,
-      "label": "勾指挑釁",
       "firstColumn": 0,
-      "frames": 4,
-      "fps": 9,
+      "label": "空中受身衝刺",
+      "frames": 6,
+      "fps": 18,
       "loop": false,
-      "onComplete": "returnToController"
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 4,
+          "event": "dashBurst"
+        }
+      ],
+      "anchorNote": "固定腳底虛擬錨點 (24,40)，空中收腿與前衝允許雙腳離開地面。"
     }
   },
   "dummyAnimations": {

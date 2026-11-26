@@ -1,0 +1,304 @@
+{
+  "project": "拳刃交鋒",
+  "canvasPx": [
+    480,
+    270
+  ],
+  "coordinateOrigin": "topLeft",
+  "frameIndexBase": 0,
+  "layout": {
+    "columns": 10,
+    "cellWidth": 50,
+    "cellHeight": 50,
+    "stridePx": [
+      50,
+      50
+    ],
+    "drawableRectXYWH": [
+      1,
+      1,
+      48,
+      48
+    ],
+    "pivotInCellPx": [
+      24,
+      40
+    ],
+    "pivotInDrawablePx": [
+      23,
+      39
+    ],
+    "facing": "right",
+    "alpha": "straightRGBA8_binary",
+    "sampling": "nearest",
+    "unusedCells": "transparent"
+  },
+  "schemaVersion": "2.0",
+  "sheets": {
+    "fighter_p1_extra.png": {
+      "file": "fighter_p1_extra.png",
+      "width": 500,
+      "height": 600,
+      "columns": 10,
+      "rows": 12,
+      "frameWidth": 50,
+      "frameHeight": 50,
+      "activeFrames": 63,
+      "animationTable": "fighterAnimations"
+    },
+    "fighter_p2_extra.png": {
+      "file": "fighter_p2_extra.png",
+      "width": 500,
+      "height": 600,
+      "columns": 10,
+      "rows": 12,
+      "frameWidth": 50,
+      "frameHeight": 50,
+      "activeFrames": 63,
+      "animationTable": "fighterAnimations"
+    }
+  },
+  "fighterAnimations": {
+    "idle_tired": {
+      "row": 0,
+      "label": "彎腰喘息",
+      "firstColumn": 0,
+      "frames": 4,
+      "fps": 7,
+      "loop": true,
+      "onComplete": "repeat",
+      "damageMinInclusive": 60,
+      "damageMaxExclusive": 110
+    },
+    "idle_critical": {
+      "row": 1,
+      "label": "單膝硬撐",
+      "firstColumn": 0,
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "onComplete": "repeat",
+      "damageMinInclusive": 110
+    },
+    "cliff_teeter": {
+      "row": 2,
+      "label": "崖邊失衡",
+      "firstColumn": 0,
+      "frames": 4,
+      "fps": 9,
+      "loop": true,
+      "onComplete": "repeat",
+      "edgeTilesOneBased": [
+        1,
+        7
+      ],
+      "edgeTilesZeroBased": [
+        0,
+        6
+      ]
+    },
+    "streak_1_hit": {
+      "row": 3,
+      "label": "連勝重擊",
+      "firstColumn": 0,
+      "frames": 5,
+      "fps": 18,
+      "loop": false,
+      "onComplete": "returnToController",
+      "winStreakInclusive": [
+        1,
+        2
+      ],
+      "events": [
+        {
+          "frame": 2,
+          "event": "contactPose",
+          "optionalVfx": "vfx_hit_heavy.png",
+          "anchor": "resolvedHitPoint"
+        }
+      ]
+    },
+    "streak_burst": {
+      "row": 4,
+      "label": "連勝爆氣",
+      "firstColumn": 0,
+      "frames": 6,
+      "fps": 14,
+      "loop": false,
+      "onComplete": "returnToController",
+      "onWinStreakReached": 3,
+      "events": [
+        {
+          "frame": 3,
+          "event": "burst",
+          "optionalVfx": "vfx_streak_aura.png",
+          "anchor": "footPivot"
+        }
+      ]
+    },
+    "combo4_hit1": {
+      "row": 5,
+      "label": "突進直拳",
+      "firstColumn": 0,
+      "frames": 5,
+      "fps": 24,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 2,
+          "event": "contactPose",
+          "optionalVfx": "vfx_hit_light.png",
+          "anchor": "resolvedHitPoint"
+        }
+      ]
+    },
+    "combo4_hit2": {
+      "row": 6,
+      "label": "低身上鉤",
+      "firstColumn": 0,
+      "frames": 5,
+      "fps": 20,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 3,
+          "event": "contactPose",
+          "optionalVfx": "vfx_hit_light.png",
+          "anchor": "resolvedHitPoint"
+        }
+      ]
+    },
+    "combo4_hit3": {
+      "row": 7,
+      "label": "轉身橫掃",
+      "firstColumn": 0,
+      "frames": 6,
+      "fps": 20,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 3,
+          "event": "contactPose"
+        }
+      ]
+    },
+    "combo4_hit4_launch": {
+      "row": 8,
+      "label": "跨步轟飛",
+      "firstColumn": 0,
+      "frames": 8,
+      "fps": 18,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 5,
+          "event": "contactPose",
+          "optionalVfx": "vfx_hit_heavy.png",
+          "anchor": "resolvedHitPoint"
+        }
+      ]
+    },
+    "counter_break": {
+      "row": 9,
+      "label": "架開反打",
+      "firstColumn": 0,
+      "frames": 6,
+      "fps": 22,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 4,
+          "event": "contactPose",
+          "optionalVfx": "vfx_hit_heavy.png",
+          "anchor": "resolvedHitPoint"
+        },
+        {
+          "frame": 1,
+          "event": "parryPose",
+          "optionalVfx": "vfx_counter_flash.png",
+          "anchor": "resolvedParryPoint"
+        }
+      ]
+    },
+    "overheat_shake": {
+      "row": 10,
+      "label": "武器過熱",
+      "firstColumn": 0,
+      "frames": 4,
+      "fps": 10,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 0,
+          "event": "overheat",
+          "optionalVfx": "vfx_overheat_smoke.png",
+          "anchor": "hammerHead"
+        }
+      ],
+      "hammerVentInCellPx": [
+        [
+          33,
+          7
+        ],
+        [
+          34,
+          6
+        ],
+        [
+          38,
+          11
+        ],
+        [
+          33,
+          7
+        ]
+      ]
+    },
+    "air_recover": {
+      "row": 11,
+      "firstColumn": 0,
+      "label": "空中受身衝刺",
+      "frames": 6,
+      "fps": 18,
+      "loop": false,
+      "onComplete": "returnToController",
+      "events": [
+        {
+          "frame": 4,
+          "event": "dashBurst"
+        }
+      ],
+      "anchorNote": "固定腳底虛擬錨點 (24,40)，空中收腿與前衝允許雙腳離開地面。"
+    }
+  },
+  "palette": {
+    "p1": {
+      "cloth": "#FFF0D7",
+      "shade": "#CD998B",
+      "shadow": "#78495A",
+      "trim": "#C73C49",
+      "lit": "#FF8965",
+      "skin": "#EEAA7D",
+      "skinlit": "#FFDCAB",
+      "hair": "#302431",
+      "hairlight": "#704154"
+    },
+    "p2": {
+      "cloth": "#323849",
+      "shade": "#252938",
+      "shadow": "#171C2B",
+      "trim": "#316DC0",
+      "lit": "#87D9F0",
+      "skin": "#C58368",
+      "skinlit": "#F5C6A0",
+      "hair": "#1D263A",
+      "hairlight": "#425878"
+    }
+  }
+}
