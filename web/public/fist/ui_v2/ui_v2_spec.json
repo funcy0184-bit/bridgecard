@@ -1,0 +1,248 @@
+{
+  "version": "2.0",
+  "canvasPx": [
+    480,
+    270
+  ],
+  "coordinateOrigin": "top-left",
+  "frameIndexBase": 0,
+  "filter": "nearest",
+  "alpha": "RGBA8 binary, clear pixels = [0,0,0,0]",
+  "assets": {
+    "ui_rps_big": {
+      "file": "ui_rps_big.png",
+      "width": 144,
+      "height": 36,
+      "frameWidth": 36,
+      "frameHeight": 36,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "frameByGesture": {
+        "rock": 0,
+        "scissors": 1,
+        "paper": 2,
+        "unknown": 3
+      }
+    },
+    "ui_overheat_lock": {
+      "file": "ui_overheat_lock.png",
+      "width": 36,
+      "height": 36,
+      "frameWidth": 36,
+      "frameHeight": 36,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1,
+      "composite": "source-over same 36x36 bounds as the locked gesture"
+    },
+    "ui_callout_burst": {
+      "file": "ui_callout_burst.png",
+      "width": 180,
+      "height": 48,
+      "frameWidth": 180,
+      "frameHeight": 48,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1
+    },
+    "ui_callout_counter": {
+      "file": "ui_callout_counter.png",
+      "width": 200,
+      "height": 52,
+      "frameWidth": 200,
+      "frameHeight": 52,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1
+    },
+    "ui_callout_clash": {
+      "file": "ui_callout_clash.png",
+      "width": 190,
+      "height": 50,
+      "frameWidth": 190,
+      "frameHeight": 50,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1
+    },
+    "ui_callout_ko": {
+      "file": "ui_callout_ko.png",
+      "width": 160,
+      "height": 64,
+      "frameWidth": 160,
+      "frameHeight": 64,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1
+    },
+    "ui_streak_flames": {
+      "file": "ui_streak_flames.png",
+      "width": 80,
+      "height": 24,
+      "frameWidth": 20,
+      "frameHeight": 24,
+      "frames": 4,
+      "columns": 4,
+      "rows": 1,
+      "fps": 9,
+      "loop": true,
+      "usage": "Four phases of one lit lamp. Draw one lit lamp per win, up to three; use optional empty slots at zero."
+    },
+    "ui_timer_frame": {
+      "file": "ui_timer_frame.png",
+      "width": 180,
+      "height": 22,
+      "frameWidth": 180,
+      "frameHeight": 22,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1
+    },
+    "ui_speedlines": {
+      "file": "ui_speedlines.png",
+      "width": 480,
+      "height": 270,
+      "frameWidth": 480,
+      "frameHeight": 270,
+      "frames": 1,
+      "columns": 1,
+      "rows": 1,
+      "clearRectXYWH": [
+        30,
+        34,
+        420,
+        202
+      ],
+      "clearRectAreaFraction": 0.6546296296296297,
+      "triggers": [
+        "combo4",
+        "clash_five"
+      ]
+    }
+  },
+  "recommended_layout": {
+    "timer": {
+      "space": "screen",
+      "anchor": "topLeft",
+      "x": 150,
+      "y": 46,
+      "fillLocalXYWH": [
+        11,
+        7,
+        158,
+        8
+      ],
+      "fillScreenXYWH": [
+        161,
+        53,
+        158,
+        8
+      ],
+      "fillWidthFormula": "round(158 * clamp(remaining / total, 0, 1))",
+      "order": [
+        "track",
+        "remainingFill",
+        "ui_timer_frame"
+      ]
+    },
+    "callout": {
+      "space": "screen",
+      "anchor": "center",
+      "x": 240,
+      "y": 90,
+      "centerByEvent": {
+        "burst": [
+          240,
+          90
+        ],
+        "counter": [
+          240,
+          95
+        ],
+        "clash": [
+          240,
+          90
+        ],
+        "ko": [
+          240,
+          84
+        ]
+      },
+      "priority": [
+        "ko",
+        "clash",
+        "burst",
+        "counter"
+      ],
+      "showOneAtATime": true,
+      "timerDuringCallout": "Temporarily hide the timer when the bounds intersect.",
+      "suggestedHoldMs": {
+        "burst": 650,
+        "counter": 480,
+        "clash": 650,
+        "ko": 950
+      }
+    },
+    "overheadGesture": {
+      "space": "screen projected from fighter foot",
+      "anchor": "bottomCenter",
+      "offsetX": 0,
+      "offsetY": -56,
+      "clampCenterX": [
+        18,
+        462
+      ],
+      "overheatOverlayOffset": [
+        0,
+        0
+      ],
+      "overlapRule": "While a callout is shown, move a conflicting icon horizontally to the nearest side of the callout with a 4px gap; keep the original player side when tied."
+    },
+    "streak": {
+      "space": "screen",
+      "anchor": "topLeft",
+      "p1First": [
+        54,
+        63
+      ],
+      "p2First": [
+        406,
+        63
+      ],
+      "stepXBySide": [
+        21,
+        -21
+      ],
+      "slots": 3
+    },
+    "speedlines": {
+      "anchor": "topLeft",
+      "x": 0,
+      "y": 0,
+      "drawOrder": [
+        "stage",
+        "fighters",
+        "worldVfx",
+        "ui_speedlines",
+        "timer",
+        "streak",
+        "gesture",
+        "callout"
+      ]
+    }
+  },
+  "preview": {
+    "file": "ui_v2_layout_2x.png",
+    "logicalPx": [
+      480,
+      270
+    ],
+    "scale": 2,
+    "outputPx": [
+      960,
+      540
+    ],
+    "scene": "晴空擂台／逐拳反擊：COUNTER!! 中心 (240,95)，與 y=46 倒數框留 1px 間隔。"
+  }
+}
