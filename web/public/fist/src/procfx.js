@@ -192,3 +192,25 @@ export function drawDummy(g, x, y, face, state, t, white = false) {
 
 // 一次性特效的長度
 export const procDur = key => PROC_VFX[key]?.dur ?? 0;
+
+// ---------------- 身前招式印記（rps_aura_*.png 缺圖時）：以貼齊點為中心、面右繪製；t＝播了幾秒 ----------------
+export function drawSigilProc(g, key, t, col) {
+  const [c, hi] = col, K = "#0A0A12";
+  const box = (x, y, w, h, fill) => { px(g, x - 1, y - 1, w + 2, h + 2, K); px(g, x, y, w, h, fill); };
+  if (key === "rock") {                                    // 烈焰拳罡：像素重拳＋「收縮→爆開」雙層氣環
+    const k = (t * 1.6) % 1, r = k < 0.5 ? 16 - k * 12 : 10 + (k - 0.5) * 24;
+    ring(g, 0, 0, r + 2, K, 2, 0.9); ring(g, 0, 0, r, c, 2, 1); ring(g, 0, 0, r * 0.6, hi, 1, 0.8);
+    box(-7, -6, 14, 11, c); px(g, -7, -6, 14, 3, hi); px(g, 5, -2, 3, 6, c); px(g, -4, -3, 1, 4, K); px(g, 0, -3, 1, 4, K);
+  } else if (key === "scissors") {                         // 交叉刀光：X 字雙刃＋交點十字星芒
+    const L = 13 + Math.sin(t * 18) * 2;
+    seg(g, -L, -L, L, L, K, 4); seg(g, -L, L, L, -L, K, 4);
+    seg(g, -L, -L, L, L, c, 2); seg(g, -L, L, L, -L, c, 2); seg(g, -L + 2, -L + 1, L - 2, L - 3, hi, 1);
+    const s = 4 + Math.abs(Math.sin(t * 12)) * 4; px(g, -s, -1, s * 2, 2, hi); px(g, -1, -s, 2, s * 2, hi);
+  } else if (key === "paper") {                            // 螺旋掌風：旋轉擴散氣環＋推掌波紋
+    for (let j = 0; j < 3; j++) { const a0 = t * 6 + j * 2.1, r = 6 + j * 5; for (let i = 0; i < 9; i++) { const q = a0 + i * 0.32; px(g, Math.cos(q) * r - 1, Math.sin(q) * r - 1, 3, 3, K); px(g, Math.cos(q) * r, Math.sin(q) * r, 2, 2, j === 1 ? hi : c); } }
+    const w = (t * 2) % 1; ring(g, 0, 0, 8 + w * 14, c, 1, 1 - w);
+  } else {                                                 // 鎖定／藏招：紫金光粒向內收攏（不透露拳種）
+    for (let i = 0; i < 14; i++) { const life = (t * 1.4 + hash(i, 3)) % 1, q = hash(i, 4) * TAU, r = 20 * (1 - life); px(g, Math.cos(q) * r - 1, Math.sin(q) * r - 1, 3, 3, K, 0.6); px(g, Math.cos(q) * r, Math.sin(q) * r, 2, 2, i % 2 ? c : hi, 0.4 + life * 0.6); }
+    ring(g, 0, 0, 5 + Math.sin(t * 10), hi, 1, 0.9);
+  }
+}

@@ -1626,7 +1626,7 @@ export const CONFIG = {
   },
   // ---- 選配美術包開關：檔案真的放進 public/fist/ 才改 true（false＝完全不發請求、不會 404，照舊程式繪製）----
   //   charExtra＝fighter_p1_extra.png／fighter_p2_extra.png；dummy＝dummy_sheet.png；vfxMega＝上面 pack: "vfxMega" 的 10 張
-  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: true, stageV2: false },
+  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: true, stageV2: false, rpsAura: true },
   // ---- 擴充角色動作包（char_expansion_spec.json v1.0）：500×600、12 列；格距、透明邊、腳底錨點 (24, 40) 同 spriteAtlas ----
   //   contactFrame＝命中那一格（事件發生那一刻對齊這格）；parryFrame＝架開格；ventCellPx＝每格槌頭排氣口（冒煙位置）
   charExtraAtlas: {
@@ -1658,6 +1658,22 @@ export const CONFIG = {
     },
   },
   trainingDummySeat: -1,
+  // ---- 角色身前招式印記（rps_aura_spec.json v1.0.0）：48×48 橫條、貼齊點 (24,24)；位置＝腳底 + (facing×32, −20)----
+  //   肩後過熱紅叉：腳底 + (−facing×18, −34)，20×20（ui_rps_big 那一格去色＋ui_overheat_lock 疊上）
+  rpsAura: {
+    pack: "rpsAura",
+    sheets: {
+      rock: { file: "rps_aura_rock.png", w: 288, frames: 6, fps: 14 },
+      scissors: { file: "rps_aura_scissors.png", w: 288, frames: 6, fps: 16 },
+      paper: { file: "rps_aura_paper.png", w: 288, frames: 6, fps: 15 },
+      lock: { file: "rps_aura_lock.png", w: 192, frames: 4, fps: 16 },
+    },
+    frame: 48, pivot: [24, 24], offset: [32, -20],
+    popFrom: 1.5, popSec: 0.12,                  // 進場彈簧砸出 1.5 → 1.0
+    cueScale: 1.25, cueFpsMul: 1.6,              // 四套拳反擊窗：攻方印記放大、脈動加快
+    colors: { rock: ["#FF5A1F", "#FFE14A"], scissors: ["#00E5FF", "#FFFFFF"], paper: ["#2EE86C", "#E8FFF0"], lock: ["#B45CFF", "#FFD45A"] },
+    shoulder: { dx: -18, dy: -34, size: 20, pressPop: 1.45, pressSec: 0.25, coolSec: 0.4 },
+  },
   // ---- 雙時段擂台（stage_v2_pack；圖與 JSON 還沒進 Git → ART_PACKS.stageV2 關著、程式繪製）----
   //   圖到了：照 stage_v2_spec.json 的實際尺寸、floor_y_offset 改這裡，再把 ART_PACKS.stageV2 改 true
   stageV2: {

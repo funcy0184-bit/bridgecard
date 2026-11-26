@@ -37,6 +37,7 @@ export const Sfx = {
   count(urgent) { tone(urgent ? 1320 : 990, 0.045, urgent ? 0.13 : 0.08, "square"); },
   hide() { noise(0.18, 0.12, 2400, "bandpass", 1, 0, 600); },
   deny() { tone(180, 0.08, 0.08, "square", 0.8); },
+  overheat() { tone(2300, 0.03, 0.09, "square", 0.7); tone(1150, 0.05, 0.07, "square", 0.6, 0.02); noise(0.38, 0.13, 5200, "highpass", 0.7, 0.04, 2600); },   // v2：金屬「喀嚓」＋蒸氣「嘶——」
   step() { noise(0.05, 0.12, 900, "lowpass"); tone(120, 0.06, 0.12, "sine", 0.6); },
   wobble() { tone(520, 0.08, 0.05, "triangle", 1.3); },
   bump() { tone(90, 0.12, 0.3, "sine", 0.5); noise(0.06, 0.2, 700, "lowpass"); },
@@ -82,7 +83,7 @@ function handle(events, view) {
   for (const e of events) {
     switch (e.type) {
       case "step": e.bump ? Sfx.bump() : Sfx.step(); break;
-      case "deny": e.why === "heat" ? Sfx.lock() : Sfx.deny(); break;
+      case "deny": e.why === "heat" ? (CONFIG.V2_EXPERIMENTS?.hudV2 ? Sfx.overheat() : Sfx.lock()) : Sfx.deny(); break;
       case "rps_result": Sfx.reveal(e.winner >= 0); break;
       case "heat": if (e.heat.some(Boolean)) Sfx.sizzle(); break;
       case "clash_start": Sfx.clash(); break;

@@ -20,6 +20,7 @@ function manifest() {
   const on = pack => !pack || CONFIG.ART_PACKS?.[pack];
   if (on(CONFIG.charExtraAtlas.pack)) atlas(CONFIG.charExtraAtlas, "擴充角色動作");
   if (on(CONFIG.dummyAtlas.pack)) list.push({ file: CONFIG.dummyAtlas.imageByPlayer.p1, w: CONFIG.dummyAtlas.imageWidth, h: CONFIG.dummyAtlas.imageHeight, exact: true, label: "訓練場木樁" });
+  if (on(CONFIG.rpsAura.pack)) for (const [k, s] of Object.entries(CONFIG.rpsAura.sheets)) list.push({ file: s.file, w: s.w, h: CONFIG.rpsAura.frame, exact: true, label: `招式印記 ${k}` });
   if (on(CONFIG.stageV2.pack)) for (const [k, f] of Object.entries(CONFIG.stageV2.files)) list.push({ file: f, w: 1, h: 1, exact: false, label: `擂台 ${k}` });   // 尺寸待 JSON
   if (on(CONFIG.uiV2.pack)) for (const [k, f] of Object.entries(CONFIG.uiV2.files)) { const [w, h] = CONFIG.uiV2.sizes[k]; list.push({ file: f, w, h, exact: true, label: `UI ${k}` }); }
   for (const [key, v] of Object.entries(CONFIG.vfx)) if (on(v.pack)) list.push({ file: v.file, w: v.frameW * v.frames, h: v.frameH, exact: false, label: `特效 ${key}` });

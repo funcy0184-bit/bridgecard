@@ -7,7 +7,7 @@
 //   · 拼刀另外 10 個狀態（CLASH_STATES）：fighter_p1_clash.png／fighter_p2_clash.png 照 CONFIG.clashAtlas（clash_art_spec.json v2）切格；
 //     開牌壓制／受壓、勝利收勢讀 fighter_p*_v3_addon.png（CONFIG.extraAtlas）；
 //     勝利大招特效有 vfx_win_*.png 就照 CONFIG.vfx 播放，沒有就用程式繪製（橘紅重砸、青色居合十字、綠色氣功光束）
-import { PROC_VFX, FALLBACK_POSE, drawDummy } from "./procfx.js";
+import { PROC_VFX, FALLBACK_POSE, drawDummy, drawSigilProc } from "./procfx.js";
 import { ART, CONFIG } from "./config.js";
 import { PH, PH_LABEL, GLABEL, GNAME, GICON, COUNTER, cellX } from "./engine.js";
 import { Assets } from "./assets.js";
@@ -116,12 +116,12 @@ const Fighter = (() => {
   const addonFrame = (an, t) => { const n = Math.floor(t * an.fps); return an.playback === "loop" ? n % an.frames : Math.min(n, an.frames - 1); };
   // 受擊閃白：把那一格 sprite 畫到小畫布、整塊染白（保留角色輪廓），再貼回去
   let tint = null;
-  function whiteCell(img, sx, sy) {
+  function whiteCell(img, sx, sy, col = PAL.fx.impact.core) {
     if (!tint) { if (typeof document === "undefined") return null; tint = document.createElement("canvas"); tint.width = A.frameWidth; tint.height = A.frameHeight; }
     const t = tint.getContext("2d");
     t.imageSmoothingEnabled = false; t.globalCompositeOperation = "source-over"; t.clearRect(0, 0, tint.width, tint.height);
     t.drawImage(img, sx, sy, A.frameWidth, A.frameHeight, 0, 0, A.frameWidth, A.frameHeight);
-    t.globalCompositeOperation = "source-in"; t.fillStyle = PAL.fx.impact.core; t.fillRect(0, 0, tint.width, tint.height);
+    t.globalCompositeOperation = "source-in"; t.fillStyle = col; t.fillRect(0, 0, tint.width, tint.height);
     return tint;
   }
   const ATTACK_STATES = new Set(["clash", "mash_hit", "finisher_blue", "finisher_red"]);
@@ -254,10 +254,10 @@ const Fighter = (() => {
     clash_draw(f, n) { const b = body(f.i, { spread: 3, dx: -3, eyes: "shut" }); attack(f.stance ?? "rock", "clash", b.dx - 2, b.dy, 4); },
     knockback(f) { const b = body(f.i, { spread: 5, dx: -3, eyes: "x", mouth: true }); P(14 + b.dx, 18 + b.dy, 6, 3, "P"); P(28 + b.dx, 16 + b.dy, 6, 3, "P"); },
   };
-  function colorsFor(f, mode) {
+  function colorsFor(f, mode, tint) {
     const p = F["p" + (f.i + 1)];
     if (mode === "hidden") return { P: F.hiddenFill, S: F.hiddenFill, W: p.secondary, H: F.hiddenFill, K: F.hiddenFill, M: F.hiddenFill, B: F.hiddenFill, C: F.hiddenFill, D: F.hiddenFill, T: F.hiddenFill, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
-    if (mode === "white") { const w = PAL.fx.impact.core; return { P: w, S: w, W: w, H: w, K: w, M: w, B: w, C: w, D: w, T: w, O: w, R: w, fx: w }; }
+    if (mode === "white") { const w = tint ?? PAL.fx.impact.core; return { P: w, S: w, W: w, H: w, K: w, M: w, B: w, C: w, D: w, T: w, O: w, R: w, fx: w }; }
     return { P: p.primary, S: p.shadow, W: p.secondary, H: p.highlight, K: CONFIG.skin, M: F.neutralSteel, B: PAL.platform.oxidizedBronze, C: CONFIG.cloth.fill, D: CONFIG.cloth.shade, T: CONFIG.cloth.tie, O: F.outline, R: PAL.fx.red.rim, fx: "#9CD8FF" };
   }
   return {
@@ -279,7 +279,7 @@ const Fighter = (() => {
       // 以腳底錨點 (pivot) 為原點水平翻轉：ctx.scale(facing, 1)，轉身、換位、落地時腳底不會左右瞬移
       const blit = (img, col, row) => {
         const sx = A.originX + A.strideX * col, sy = A.originY + A.strideY * row;
-        const src = opt.white ? whiteCell(img, sx, sy) : img;
+        const src = opt.white ? whiteCell(img, sx, sy, opt.tint) : img;
         if (!src) return false;
         g.translate(OX, OY); g.scale(FACE, 1);
         if (opt.white) g.drawImage(src, -A.pivot.x, -A.pivot.y);
@@ -308,7 +308,7 @@ const Fighter = (() => {
         parts = [];
         (STATES[state] ?? STATES.idle)(f, n);
         const mode = opt.white ? "white" : state === "stance_hidden" ? "hidden" : "normal";
-        flush(colorsFor(f, mode), opt.rim ? PAL.fx.impact.core : mode === "white" ? null : F.outline);
+        flush(colorsFor(f, mode, opt.tint), opt.rim ? PAL.fx.impact.core : mode === "white" ? null : F.outline);
       }
       g.restore();
     },
@@ -389,7 +389,7 @@ export class Renderer {
     this.showHints = true;                                // 出招提示：頭頂拳種氣泡、藏招 ❓（main.js 依設定切換）
     this.dmgFx = [0, 1].map(() => ({ prev: 0, hitAt: 0, smokeAt: 0, sparkAt: 0, parts: [], band: null }));
     this.act = [null, null]; this.wclock = 0; this.heatAt = [-9, -9];
-    this.sq = [null, null]; this.kickV = null; this.rgbUntil = -9;   // v2 打擊感：角色形變、方向鏡頭踹擊、RGB 錯位   // 擴充動作包：畫面層一次性動作（播完交回引擎動作）；wclock＝世界時鐘（頓幀時停）
+    this.sq = [null, null]; this.kickV = null; this.rgbUntil = -9; this.cool = [null, null]; this.sig = [null, null];   // v2 打擊感：角色形變、方向鏡頭踹擊、RGB 錯位   // 擴充動作包：畫面層一次性動作（播完交回引擎動作）；wclock＝世界時鐘（頓幀時停）
     this.resize();
   }
   static get ANIM_STATES() { return ANIM_STATES; }
@@ -500,7 +500,18 @@ export class Renderer {
         case "speed_up": this.banner(`⚡ 加速！速度 Lv.${e.lv + 1}`, PAL.fx.red.rim); this.kick(1, 0.1, now); break;
         case "phase":
           if (e.phase === PH.RPS) this.combo = null; if (e.phase === PH.REVEAL) this.goFlash = now; break;   // 猜拳倒數 3、2、1 之後：「出招！」
-        case "deny": if (e.why === "heat") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 60, "♨️ 過熱！", "#FF9A62", 9); this.play(e.p, "overheat_shake", null); this.heatAt[e.p] = this.wclock; } break;
+        case "heat": {                                                        // 過熱解除：紅叉縮小淡出＋冷卻白蒸氣
+          this.prevHeat ??= [null, null];
+          e.heat.forEach((g, i) => { if (this.prevHeat[i] && !g) this.cool[i] = { at: now, g: this.prevHeat[i] }; this.prevHeat[i] = g; });
+          break;
+        }
+        case "rps_result": if (this.hud2() && e.winner >= 0) this.sigBreak = { at: now, p: 1 - e.winner, g: e.stances[1 - e.winner], done: false }; break;
+        case "deny":
+          if (e.why === "heat" && this.hud2()) {                               // v2：燙手排斥 — 肩後噴一團濃白蒸氣
+            const f = view.fighters[e.p], S = CONFIG.rpsAura.shoulder;
+            for (let k = 0; k < 7; k++) this.fx.push({ k: "spark", x: f.x + f.face * S.dx + (Math.random() - 0.5) * 8, y: f.y + S.dy - 8, vx: (Math.random() - 0.5) * 50, vy: -60 - Math.random() * 60, life: 0.45, max: 0.45, color: "#F4F4F0" });
+          }
+        if (e.why === "heat") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 60, "♨️ 過熱！", "#FF9A62", 9); this.play(e.p, "overheat_shake", null); this.heatAt[e.p] = this.wclock; } break;
         case "clash_start": this.comic("clash", now); this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
         case "clash_first": {                                                     // ⚡ 先手：金色十字星芒＋徽章（畫在劍格上方）
           this.kick(1, 0.08, now); this.firstAt = now;
@@ -677,8 +688,8 @@ export class Renderer {
     this.drawFighters(world);                                 // 角色本體（含殘影、受擊閃白）
     this.drawFx(now, "front");                                // 角色前方：火花、刀光、先手金星、主招大招
     if (this.silLeft > 0) { this.silLeft--; this.drawSilhouette(); }   // 反擊剪影衝擊幀（世界層，HUD 照常）
-    this.drawStanceBubbles(view, now);
-    if (this.hud2()) this.drawHeatIcons(world, now);
+    if (this.hud2()) { this.drawShoulderHeat(world, now); this.drawSigils(world, now); }   // v2：身前招式印記＋肩後過熱（取代頭頂泡泡與角落文字）
+    else this.drawStanceBubbles(view, now);
     this.drawTelegraphs(view, now);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (now < this.rgbUntil && this.juice()) this.drawRgbSplit(CONFIG.V2.rgbPx);   // v2：反擊／第 4 拳／KO 微色散
@@ -887,6 +898,7 @@ export class Renderer {
       if (AURA_PH.has(view.phase) && view.round?.att === f.i && !VFX.draw(ctx, "vfx_streak_aura", this.wclock, x, y, f.face) && this.juice()) { ctx.save(); PROC_VFX.vfx_streak_aura.draw(ctx, x, y, f.face, 0, this.wclock); ctx.restore(); }   // 擴充包：連勝氣場（爆發＋四套拳，貼攻方腳底、角色後方）
       if (pose?.y !== undefined) y = pose.y;
       // 擴充動作缺圖：換成基礎動作＋位移／形變（FALLBACK_POSE）；PNG 放進來後 Fighter.has 為真就直接畫美術圖
+      if (this.hud2() && !REDUCED && this.wclock - this.heatAt[f.i] < 0.2) { const k = (this.wclock - this.heatAt[f.i]) / 0.2; x += Math.sin(this.wclock * 120) * 2 * (1 - k) - f.face * 2 * Math.sin(Math.PI * k); }   // 燙手：±2px 抖動＋微幅後縮
       const fp = !dummy && !pose && FALLBACK_POSE[state] && !Fighter.has(state, f.i) ? FALLBACK_POSE[state] : null;
       let drawState = state, xf = this.squashXf(f);
       if (fp) {
@@ -900,6 +912,7 @@ export class Renderer {
       if (proc) drawDummy(ctx, x, y, f.face, state, t);
       else Fighter.draw(ctx, f, drawState, t, x, y, f.face, { rim: this.rimT[f.i] > 0 && !REDUCED, view, frame });
       if (this.flashF[f.i] > 0) { this.flashF[f.i]--; if (!REDUCED) { if (proc) drawDummy(ctx, x, y, f.face, state, t, true); else Fighter.draw(ctx, f, drawState, t, x, y, f.face, { white: true, alpha: FX.impactFrameFlash.maxOpacity, view, frame }); } }   // 受擊閃白：只亮 1 幀
+      if (this.hud2() && !REDUCED && !proc && this.wclock - this.heatAt[f.i] < 0.12) Fighter.draw(ctx, f, drawState, t, x, y, f.face, { white: true, tint: "#FF2A2A", alpha: 0.55, view, frame });   // v2：燙手——角色閃一下暗紅
       if (xf) ctx.restore();
       (this.lastDraw ??= [])[f.i] = { f, state: proc ? state : drawState, t, x, y, frame, view, dummy: proc };
       if (this.wclock - this.heatAt[f.i] < 0.6) {                          // 擴充包：過熱蒸氣貼槌頭排氣口（有過熱動作就逐格跟著槌頭）
@@ -1211,6 +1224,66 @@ export class Renderer {
       if (shake) { const age = this.wclock - this.heatAt[f.i]; if (!VFX.draw(ctx, "vfx_overheat_smoke", age, x + Sz / 2, y + 4, f.face)) { ctx.save(); PROC_VFX.vfx_overheat_smoke.draw(ctx, x + Sz / 2, y + 4, f.face, 0, age); ctx.restore(); } }
     }
   }
+  // ---- 身前招式印記（rps_aura_*.png；缺圖程式繪製）----
+  //   猜拳：看得到的招 → 該招印記；鎖定但藏著 → 紫金聚氣；開牌：贏方印記放大衝向對手、輸方碎成像素消散；四套拳反擊窗：攻方印記 ×1.25、脈動加快
+  sigilAt(f) { const O = CONFIG.rpsAura.offset; return [f.x + f.face * O[0], f.y + O[1]]; }
+  drawAura(key, t, x, y, face, scale = 1, alpha = 1) {
+    const A = CONFIG.rpsAura, S = A.sheets[key], img = CONFIG.ART_PACKS?.rpsAura ? Assets.get(S.file) : null, ctx = this.ctx;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(x), Math.round(y)); ctx.scale(face * scale, scale);
+    if (img) { const n = Math.floor(t * S.fps) % S.frames; ctx.drawImage(img, n * A.frame, 0, A.frame, A.frame, -A.pivot[0], -A.pivot[1], A.frame, A.frame); }
+    else drawSigilProc(ctx, key, t, A.colors[key]);
+    ctx.restore();
+  }
+  drawSigils(view, now) {
+    const A = CONFIG.rpsAura, ph = view.phase, r = view.round, G = ["rock", "scissors", "paper"];
+    for (const f of view.fighters) {
+      if (f.out) { this.sig[f.i] = null; continue; }
+      let key = null, scale = 1, fpsMul = 1, [x, y] = this.sigilAt(f), alpha = 1;
+      if (ph === PH.RPS) key = G.includes(f.stance) ? f.stance : f.picked ? "lock" : null;
+      else if (ph === PH.REVEAL && view.rps) {
+        key = view.rps.stances[f.i];
+        const w = view.rps.winner, k = clamp(view.t / view.dur, 0, 1);
+        if (w === f.i) { const o = view.fighters[1 - f.i]; x += (o.x - f.x) * 0.55 * k * k; scale = 1 + 0.7 * k; }   // 贏方：放大衝向對手
+        else if (w >= 0) { if (this.sigBreak && !this.sigBreak.done && this.sigBreak.p === f.i) { this.sigBreak.done = true; const c = A.colors[key]; for (let i = 0; i < 16; i++) this.fx.push({ k: "spark", x: x + (Math.random() - 0.5) * 20, y: y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 160, vy: -40 - Math.random() * 120, life: 0.5, max: 0.5, color: i % 2 ? c[0] : c[1] }); } key = null; }   // 輸方：碎成像素粒子
+      } else if (ph === PH.COMBO_CUE && r?.att === f.i && r.gesture) { key = r.gesture; scale = A.cueScale; fpsMul = A.cueFpsMul; }
+      const cur = this.sig[f.i];
+      if (!key) { this.sig[f.i] = null; continue; }
+      if (!cur || cur.key !== key) this.sig[f.i] = { key, at: now };
+      const age = now - this.sig[f.i].at, pop = REDUCED ? 1 : age < A.popSec ? A.popFrom - (A.popFrom - 1) * (age / A.popSec) : 1;
+      const pulse = REDUCED || ph !== PH.COMBO_CUE ? 1 : 1 + Math.sin(now * 16) * 0.06;
+      this.drawAura(key, age * fpsMul, x, y, f.face, scale * pop * pulse, alpha);
+    }
+  }
+  // ---- 肩後過熱：暗灰底招式圖示＋粗黑邊紅叉、持續冒煙＋暗紅呼吸光；按到過熱鍵 → 紅叉 1.45× 爆跳晃動；解除 → 縮小淡出＋冷卻白蒸氣 ----
+  drawShoulderHeat(view, now) {
+    const ctx = this.ctx, S = CONFIG.rpsAura.shoulder, Z = S.size, rimg = this.uiImg("rpsBig"), limg = this.uiImg("overheatLock");
+    const icon = (f, g, cx, cy, sc, a) => {
+      ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(cx), Math.round(cy)); ctx.scale(sc, sc);
+      this.roundRect(-Z / 2 - 1, -Z / 2 - 1, Z + 2, Z + 2, "#0A0A12"); this.roundRect(-Z / 2, -Z / 2, Z, Z, "#3A3D46");
+      if (rimg) { ctx.filter = "grayscale(1) brightness(1.15)"; ctx.drawImage(rimg, ...this.rpsFrame(rimg, g), -Z / 2 + 2, -Z / 2 + 2, Z - 4, Z - 4); ctx.filter = "none"; }
+      else { ctx.save(); ctx.translate(-Z / 2 + 2, -Z / 2 + 2); ctx.scale((Z - 4) / 24, (Z - 4) / 24); drawGestureGlyph(ctx, GESTURE_GLYPH[g], 5, 5, "#D8DAE0", "#9AA0AA"); ctx.restore(); }
+      if (limg) ctx.drawImage(limg, -Z / 2, -Z / 2, Z, Z);
+      else for (const [c, w] of [["#0A0A12", 5], ["#FF2A2A", 2.5]]) { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(-Z / 2 + 3, -Z / 2 + 3); ctx.lineTo(Z / 2 - 3, Z / 2 - 3); ctx.moveTo(Z / 2 - 3, -Z / 2 + 3); ctx.lineTo(-Z / 2 + 3, Z / 2 - 3); ctx.stroke(); }
+      ctx.restore();
+    };
+    for (const f of view.fighters) {
+      if (f.out) continue;
+      const cx = clamp(f.x + f.face * S.dx, Z / 2 + 2, CONFIG.W - Z / 2 - 2), cy = f.y + S.dy;
+      const c = this.cool[f.i];
+      if (c && !f.heat) {                                                   // 解除：縮小淡出＋冷卻白蒸氣圈
+        const k = (now - c.at) / S.coolSec;
+        if (k < 1) { icon(f, c.g, cx, cy, 1 - k * 0.7, 1 - k); ctx.save(); for (let i = 0; i < 10; i++) { const q = i / 10 * Math.PI * 2, rr = 6 + k * 16; ctx.globalAlpha = (1 - k) * 0.8; ctx.fillStyle = "#EAF6FF"; ctx.fillRect(Math.round(cx + Math.cos(q) * rr), Math.round(cy - 6 + Math.sin(q) * rr * 0.6), 2, 2); } ctx.restore(); }
+        else this.cool[f.i] = null;
+        continue;
+      }
+      if (!f.heat || !CONFIG.overheat.enabled) continue;
+      const age = this.wclock - this.heatAt[f.i], press = age < S.pressSec;
+      if (!REDUCED) { ctx.save(); ctx.globalAlpha = 0.18 + 0.1 * Math.sin(now * 4); ctx.fillStyle = "#FF2A2A"; ctx.fillRect(Math.round(cx - Z / 2 - 3), Math.round(cy - Z / 2 - 3), Z + 6, Z + 6); ctx.restore(); }   // 暗紅呼吸光
+      if (!VFX.draw(ctx, "vfx_overheat_smoke", this.wclock * (REDUCED ? 0.5 : 1), cx, cy - Z / 2 + 2, f.face)) { ctx.save(); PROC_VFX.vfx_overheat_smoke.draw(ctx, cx, cy - Z / 2 + 2, f.face, 0, this.wclock); ctx.restore(); }   // 持續冒煙
+      const sc = press && !REDUCED ? 1 + (S.pressPop - 1) * (1 - age / S.pressSec) : 1, dx = press && !REDUCED ? Math.sin(now * 90) * 2 : 0;
+      icon(f, f.heat, cx + dx, cy, sc, 1);
+    }
+  }
   // 動漫集中線：四套拳與五連斬期間；每 3 幀翻轉／抖動；減少動態＝靜態半透明
   drawSpeedlines(view, now) {
     const on = [PH.BURST, PH.COMBO_PREP, PH.COMBO_CUE, PH.COMBO_HIT, PH.CLASH_ANIM].includes(view.phase);
@@ -1324,7 +1397,7 @@ export class Renderer {
       const right = f.i === 1, team = PAL.fighters["p" + (f.i + 1)];
       g.textAlign = right ? "right" : "left"; g.fillStyle = team.secondary;
       g.fillText(this.names[f.i] + (view.seat === f.i ? "（你）" : ""), right ? 464 : 16, 81);
-      if (f.heat) {                                                     // 過熱公開：對手禁用哪招（2 選 1 讀心）
+      if (f.heat && !this.hud2()) {                                     // 過熱公開：對手禁用哪招（v2 改成肩後紅叉印記）
         const who = view.seat < 0 ? `P${f.i + 1} 禁用` : f.i === view.seat ? "你禁用" : "對手禁用";
         g.font = "bold 8px sans-serif"; g.fillStyle = "#FF9A62"; g.fillText(`♨️ ${who}：${GICON[f.heat]}`, right ? 464 : 16, 92); g.font = "bold 7px sans-serif";
       }
