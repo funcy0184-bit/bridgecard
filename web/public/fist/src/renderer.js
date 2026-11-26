@@ -462,7 +462,7 @@ export class Renderer {
         case "counter": {                                                         // 反擊成功：沿用彈反的白框閃光＋鈴聲
           if (this.sprite("vfx_counter_flash", e.x, CONFIG.floorY - 24)) { if (!REDUCED && VFX.has("vfx_counter_flash") && !this.juice()) this.impactLeft = Math.max(this.impactLeft, 2); }   // 打擊感開著時改用剪影衝擊幀（不疊反色）   // 擴充包：反擊十字閃＋黑白衝擊幀
           else this.sprite("vfx_sparks", e.x, CONFIG.floorY - 24);
-          this.play(e.p, "counter_break", "parryFrame");
+          this.play(e.p, "counter_break", "parryFrame"); this.comic("counter", now);
           this.triggerImpactFrame(CONFIG.V2.impact.counter, "silhouette", { x: e.x, y: CONFIG.floorY - 24 }); this.rgb(now);   // 黑底＋白剪影＋青金十字
           this.rimT = [ms(FX.parryFlash.durationMs), ms(FX.parryFlash.durationMs)]; this.ring(e.x, CONFIG.floorY - 24, PAL.fx.impact.core);
           const me = view.seat;
@@ -480,7 +480,7 @@ export class Renderer {
           if (e.why === "win") this.say(n >= T ? `🔥 ${who}連勝 ${n}/${T}！` : `🔥 ${who}連勝 ${n}/${T}`, (n >= T ? "連勝爆發！進入四套拳" : `再贏 ${T - n} 次進四套拳`) + cut, n >= T ? PAL.fx.red.core : "#FFB15A", now);
           break;
         }
-        case "combo_start": this.say("🔥 連勝爆發！", "四連擊開始！", PAL.fx.red.core, now, 1.1); this.kick(3, 0.2, now); this.trails = [[], []]; break;
+        case "combo_start": this.comic("burst", now); this.say("🔥 連勝爆發！", "四連擊開始！", PAL.fx.red.core, now, 1.1); this.kick(3, 0.2, now); this.trails = [[], []]; break;
         case "combo_cue": this.cueAt = now; break;
         case "recover": {                                                     // v2：受身翻轉二段跳（air_recover 動作＋往擂台方向的衝刺揚塵）
           this.play(e.p, "air_recover", null);
@@ -489,7 +489,8 @@ export class Renderer {
         case "engage": if (this.juice()) for (const f of view.fighters) if (!f.out) this.sprite("vfx_dust_dash", f.x, CONFIG.floorY, Math.sign(e.x - f.x) || f.face); break;   // 回合前貼近：小衝刺揚塵
         case "dust": if (!this.sprite("vfx_dust_dash", e.x, CONFIG.floorY, e.dir)) this.spark(e.x, CONFIG.floorY - 1, PAL.platform.topEdge, 2, 1); break;   // v2：滑行揚塵
         case "land": this.squash(e.p, "land"); if (!this.sprite("vfx_dust_land", e.x, CONFIG.floorY)) this.spark(e.x, CONFIG.floorY, PAL.platform.topEdge, 4, 1.2); break;
-        case "ko": {                                                          // v2：先定格 3 幀黑白衝擊，光柱再炸出來
+        case "ko": {
+          this.comic("ko", now);                                                          // v2：先定格 3 幀黑白衝擊，光柱再炸出來
           const hold = this.juice() ? CONFIG.V2.impact.ko / 60 : 0;
           if (hold) { this.triggerImpactFrame(CONFIG.V2.impact.ko); this.rgb(now + hold); this.freezeUntil = Math.max(this.freezeUntil, now + hold); this.frozen = null; }
           if (!this.sprite("vfx_ko_pillar", e.x, CONFIG.H - 1, e.x > CONFIG.W / 2 ? -1 : 1, null, hold)) this.fx.push({ k: "beam", x: e.x, at: now + hold, max: ms(FX.koBlast.durationMs) });   // 光柱依出界的左右邊緣翻轉
@@ -500,7 +501,7 @@ export class Renderer {
         case "phase":
           if (e.phase === PH.RPS) this.combo = null; if (e.phase === PH.REVEAL) this.goFlash = now; break;   // 猜拳倒數 3、2、1 之後：「出招！」
         case "deny": if (e.why === "heat") { const f = view.fighters[e.p]; this.popup(f.x, CONFIG.floorY - 60, "♨️ 過熱！", "#FF9A62", 9); this.play(e.p, "overheat_shake", null); this.heatAt[e.p] = this.wclock; } break;
-        case "clash_start": this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
+        case "clash_start": this.comic("clash", now); this.cutText = { text: `⚔️ 五連斬！${CONFIG.clashMode.inputDur} 秒內輸入 ${e.n ?? CONFIG.CLASH_SEQUENCE_LENGTH} 招`, at: now, color: PAL.fx.impact.spark, life: 1.1 }; this.kick(2, 0.12, now); this.finText = null; break;
         case "clash_first": {                                                     // ⚡ 先手：金色十字星芒＋徽章（畫在劍格上方）
           this.kick(1, 0.08, now); this.firstAt = now;
           const f = view.fighters[e.p], FD = CONFIG.clashAtlas.animations.clash_first_draw, A = ART.spriteAtlas;
@@ -575,6 +576,17 @@ export class Renderer {
   }
   // ---- v2 打擊感（CONFIG.V2_EXPERIMENTS.juice；減少動態時全部不做）----
   juice() { return !!CONFIG.V2_EXPERIMENTS?.juice && !REDUCED; }
+  // ---- 視線中心 UI v2（CONFIG.V2_EXPERIMENTS.hudV2）：有 ui_v2 的 PNG 就畫圖，沒有就程式繪製 ----
+  hud2() { return !!CONFIG.V2_EXPERIMENTS?.hudV2; }
+  uiImg(k) { return CONFIG.ART_PACKS?.uiV2 ? Assets.get(CONFIG.uiV2.files[k]) : null; }
+  // 漫畫爆發大字：KO ＞ 爆發 ＞ 五連斬 ＞ 反擊（低優先不蓋掉正在播的高優先）
+  comic(kind, now) {
+    if (!this.hud2()) return;
+    const P = CONFIG.uiV2.calloutPriority, c = this.comicFx;
+    if (c && this.comicLive(now) && P[c.kind] > P[kind]) return;
+    this.comicFx = { kind, at: now };
+  }
+  comicLive(now) { const c = this.comicFx, L = CONFIG.uiV2.layout.callout; return !!c && now - c.at < L.hold + L.out; }
   // 統一的黑白衝擊幀：invert＝全畫面高對比黑白反色；silhouette＝黑底＋角色純白剪影＋青金十字閃（at＝閃光中心）
   triggerImpactFrame(frames, mode = "invert", at = null) {
     if (!this.juice()) return;
@@ -648,10 +660,12 @@ export class Renderer {
     this.drawFx(now, "front");                                // 角色前方：火花、刀光、先手金星、主招大招
     if (this.silLeft > 0) { this.silLeft--; this.drawSilhouette(); }   // 反擊剪影衝擊幀（世界層，HUD 照常）
     this.drawStanceBubbles(view, now);
+    if (this.hud2()) this.drawHeatIcons(world, now);
     this.drawTelegraphs(view, now);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (now < this.rgbUntil && this.juice()) this.drawRgbSplit(CONFIG.V2.rgbPx);   // v2：反擊／第 4 拳／KO 微色散
     this.drawLetterbox(view, dt, now);
+    if (this.hud2()) this.drawSpeedlines(view, now);
     this.drawHudPixels(view, now, dt);
     if (this.impactLeft > 0) {                                           // 黑白反色衝擊幀（每畫一幀扣一格）
       this.impactLeft--;
@@ -891,8 +905,19 @@ export class Renderer {
     if (!r) return;
     const ctx = this.ctx, left = clamp((view.dur - view.t) / view.dur, 0, 1), urgent = view.dur - view.t <= CONFIG.countdown.urgentSec, blink = urgent && Math.floor(now * 20) % 2 === 0;
     const att = view.fighters[r.att], T = ART.telegraphs.blueParry, S = T.frameSizePx[0], C = PAL.fx.blue;
-    const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.cueAt) * 6), sc = 1 + pop * 0.6;
-    const cx = Math.round(att.x), cy = CONFIG.floorY + T.offsetPx[1];
+    const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.cueAt) * 6);
+    let sc = 1 + pop * 0.6, cx = Math.round(att.x), cy = CONFIG.floorY + T.offsetPx[1];
+    if (this.hud2()) {                                                     // v2：36×36 盾牌浮在攻方頭頂正上方、跟著角色、微幅脈動
+      const L = CONFIG.uiV2.layout.shield;
+      sc = (L.size / S) * (1 + pop * 0.4 + (REDUCED ? 0 : Math.sin(now * 14) * 0.05)); cx = Math.round(att.x); cy = Math.round(att.y + L.dy);
+      const img = this.uiImg("rpsBig");
+      if (img) {
+        const n = CONFIG.uiV2.rpsFrames.length, fw = img.naturalWidth / n, fi = Math.max(0, CONFIG.uiV2.rpsFrames.indexOf(r.gesture)), k = L.size * (sc * S / L.size);
+        ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, fi * fw, 0, fw, img.naturalHeight, Math.round(cx - k / 2), Math.round(cy - k / 2), Math.round(k), Math.round(k));
+        ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-S / 2, -S / 2); this.perimeter(0, 0, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2); ctx.restore();
+        return;
+      }
+    }
     ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-S / 2, -S / 2);
     this.roundRect(-1, -1, S + 2, S + 2, C.outline); this.roundRect(0, 0, S, S, "#0E2747");
     this.perimeter(0, 0, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2);
@@ -1004,7 +1029,7 @@ export class Renderer {
       }
       // 連勝燈 0/3：亮燈＝已連贏幾次；剛亮的那顆彈一下；集滿（四套拳中）整排閃
       const T = view.streakTarget ?? CONFIG.STREAK_TARGET, lw = 10, lh = 7, pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.streakAt[f.i]) * 4);
-      for (let i = 0; i < T; i++) {
+      if (!this.hud2()) for (let i = 0; i < T; i++) {                      // hudV2：改成倒數條兩側的連勝火焰
         const lx = right ? ax - lw - i * (lw + 3) : ax + i * (lw + 3), ly = ay + 40, lit = i < f.streak, fresh = lit && i === f.streak - 1 && pop > 0;
         const grow = fresh ? Math.round(pop * 2) : 0;
         ctx.fillStyle = PAL.fighters.outline; ctx.fillRect(lx - 1 - grow, ly - 1 - grow, lw + 2 + grow * 2, lh + 2 + grow * 2);
@@ -1040,6 +1065,116 @@ export class Renderer {
       case PH.COMBO_HIT: return { text: r ? `👊 第 ${r.n} 拳命中` : "", color: orange };
       default: return null;
     }
+  }
+  // ---- 視線中心 UI v2 ----
+  //   g＝高解析度 HUD 畫布（邏輯座標 480×270）；倒數條 y≈46、連勝火焰在兩側、大號倒數 y≈76、漫畫大字 y≈84
+  drawHudV2(g, view, now) {
+    const U = CONFIG.uiV2.layout, P = this.promptFor(view), ph = view.phase, timed = this.timed(view), left = Math.max(0, view.dur - view.t);
+    const comic = this.comicLive(now), T = U.timer, x0 = T.cx - T.w / 2, y0 = T.cy - T.h / 2;
+    g.save(); g.imageSmoothingEnabled = false; g.textAlign = "center"; g.lineJoin = "round";
+    if (P?.text && !comic) {                                               // 階段標題：倒數條正上方
+      g.font = "900 11px sans-serif"; g.lineWidth = 3; g.strokeStyle = PAL.fighters.outline; g.strokeText(P.text, T.cx, U.prompt.cy); g.fillStyle = P.color; g.fillText(P.text, T.cx, U.prompt.cy);
+    }
+    if (timed && !comic) {                                                 // 中央大型倒數條：最後 0.5 秒轉紅閃爍
+      const k = clamp(left / view.dur, 0, 1), urgent = left <= T.urgentSec, blink = urgent && Math.floor(now * 16) % 2 === 0, img = this.uiImg("timerFrame");
+      let c = ph === PH.COMBO_CUE ? "#4FC3FF" : ph === PH.CLASH_INPUT ? "#5FE6FF" : ph === PH.COMBO_PREP ? "#FFB15A" : "#FFD23A";
+      if (urgent) c = blink ? "#FFFFFF" : "#FF3A3A";
+      if (img) g.drawImage(img, Math.round(T.cx - img.naturalWidth / 2), Math.round(T.cy - img.naturalHeight / 2));
+      else { g.fillStyle = "rgba(8,10,18,.88)"; g.fillRect(x0 - 2, y0 - 2, T.w + 4, T.h + 4); g.strokeStyle = urgent ? "#FF3A3A" : "#F2C14E"; g.lineWidth = 1.5; g.strokeRect(x0 - 1.5, y0 - 1.5, T.w + 3, T.h + 3); }
+      g.fillStyle = "#1B2132"; g.fillRect(x0 + 2, y0 + 2, T.w - 4, T.h - 4);
+      g.fillStyle = c; g.fillRect(T.cx - (T.w - 4) * k / 2, y0 + 2, (T.w - 4) * k, T.h - 4);   // 從兩側往中間縮
+      g.fillStyle = "rgba(255,255,255,.35)"; g.fillRect(T.cx - (T.w - 4) * k / 2, y0 + 2, (T.w - 4) * k, 2);
+    }
+    // 連勝火焰：倒數條兩側，1/3、2/3、3/3 依序點燃
+    const Tn = view.streakTarget ?? CONFIG.STREAK_TARGET, S = U.streak, fimg = this.uiImg("streakFlames");
+    for (const f of view.fighters) for (let i = 0; i < Tn; i++) {
+      const x = f.i === 0 ? x0 - 10 - i * S.gap : x0 + T.w + 10 + i * S.gap, y = T.cy, lit = i < f.streak;
+      if (!lit) { g.fillStyle = "#2A2F3D"; g.beginPath(); g.arc(x, y + 2, 3, 0, Math.PI * 2); g.fill(); continue; }
+      const fr = Math.floor(now * CONFIG.uiV2.flameFps + i) % CONFIG.uiV2.flameFrames;
+      if (fimg) { const fw = fimg.naturalWidth / CONFIG.uiV2.flameFrames; g.drawImage(fimg, fr * fw, 0, fw, fimg.naturalHeight, Math.round(x - S.size / 2), Math.round(y - S.size / 2 - 2), S.size, S.size); continue; }
+      const h = 9 + (REDUCED ? 0 : Math.sin(now * 14 + i * 2) * 2), full = f.streak >= Tn;
+      g.fillStyle = full ? "#FFF1A8" : "#FF6A2A"; g.beginPath(); g.moveTo(x - 4, y + 5); g.quadraticCurveTo(x - 5, y - h / 2, x, y - h + 2); g.quadraticCurveTo(x + 5, y - h / 2, x + 4, y + 5); g.fill();
+      g.fillStyle = "#FFD45A"; g.beginPath(); g.moveTo(x - 2, y + 5); g.quadraticCurveTo(x - 2, y - h / 4, x, y - h / 2 + 2); g.quadraticCurveTo(x + 2, y - h / 4, x + 2, y + 5); g.fill();
+    }
+    // 大號倒數（3、2、1／反擊窗小數／出招！）：漫畫大字出現時讓位
+    let big = null, bigColor = PAL.hud.focusOutline;
+    if (ph === PH.RPS || ph === PH.CLASH_INPUT) big = String(Math.max(1, Math.ceil(left - 1e-6)));
+    else if (ph === PH.COMBO_CUE) { big = left.toFixed(1); bigColor = PAL.fx.blue.rim; }
+    if (ph === PH.REVEAL && now - this.goFlash < 0.55) { big = "出招！"; bigColor = PAL.hud.powerFill; }
+    if (big !== null && !comic) {
+      if (big !== this.bigNum.v) this.bigNum = { v: big, at: now };
+      const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.bigNum.at) * 5), sc = 1 + pop * 0.5;
+      g.save(); g.translate(T.cx, U.bigNum.y); g.scale(sc, sc); g.font = `900 ${big.length > 3 ? 20 : 24}px sans-serif`;
+      g.lineWidth = 4; g.strokeStyle = PAL.fighters.outline; g.strokeText(big, 0, 0); g.fillStyle = timed && left <= T.urgentSec && Math.floor(now * 16) % 2 === 0 ? PAL.fx.red.rim : bigColor; g.fillText(big, 0, 0); g.restore();
+    }
+    if (comic) this.drawComic(g, now);
+    else {                                                                 // 一般回饋字（吃拳、重擊…）：大字沒出現時才顯示
+      const C = this.callout;
+      if (C && now - C.at < C.life) {
+        const age = now - C.at, pop = REDUCED ? 0 : Math.max(0, 1 - age * 7), a = Math.min(1, (C.life - age) * 4);
+        g.save(); g.globalAlpha = a; g.translate(T.cx, 108); g.scale(1 + pop * 0.5, 1 + pop * 0.5); g.font = "900 16px sans-serif";
+        g.fillStyle = "rgba(10,14,24,.72)"; g.fillRect(-120, -18, 240, C.sub ? 32 : 24);
+        g.lineWidth = 3; g.strokeStyle = PAL.fighters.outline; g.strokeText(C.text, 0, 0); g.fillStyle = C.color; g.fillText(C.text, 0, 0);
+        if (C.sub) { g.font = "bold 9px sans-serif"; g.fillStyle = PAL.hud.label; g.fillText(C.sub, 0, 11); }
+        g.restore();
+      }
+    }
+    g.restore();
+  }
+  // 漫畫爆發大字：1.6 → 0.95 → 1.0 砸入，停一下後淡出往上滑
+  drawComic(g, now) {
+    const c = this.comicFx, L = CONFIG.uiV2.layout.callout, age = now - c.at;
+    const sc = REDUCED ? 1 : age < 0.07 ? 1.6 - 0.65 * (age / 0.07) : age < 0.14 ? 0.95 + 0.05 * ((age - 0.07) / 0.07) : 1;
+    const out = clamp((age - L.hold) / L.out, 0, 1), key = { burst: "calloutBurst", counter: "calloutCounter", clash: "calloutClash", ko: "calloutKo" }[c.kind];
+    const img = this.uiImg(key);
+    g.save(); g.globalAlpha = 1 - out; g.translate(240, L.cy - out * 14); g.scale(sc, sc);
+    if (img) g.drawImage(img, -Math.round(img.naturalWidth / 2), -Math.round(img.naturalHeight / 2));
+    else {
+      const V = { burst: ["連勝爆發！", "#FF6A3D"], counter: ["反擊！", "#2EC8F0"], clash: ["五連斬！", "#F2B632"], ko: ["K.O.！", "#FF2A4A"] }[c.kind];
+      g.beginPath();
+      for (let i = 0; i < 20; i++) { const q = i / 20 * Math.PI * 2, r = i % 2 ? 0.72 : 1; g.lineTo(Math.cos(q) * 96 * r, Math.sin(q) * 24 * r); }
+      g.closePath(); g.fillStyle = V[1]; g.fill(); g.lineWidth = 3; g.strokeStyle = "#0A0A12"; g.stroke();
+      g.font = "900 22px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.lineWidth = 5; g.strokeStyle = "#0A0A12"; g.strokeText(V[0], 0, 1); g.fillStyle = "#FFFFFF"; g.fillText(V[0], 0, 1);
+    }
+    g.restore();
+  }
+  // 過熱鎖招：角色背側上方 22×22（拳種＋紅叉），按到過熱招時抖動冒煙；只在猜拳／開牌時顯示
+  drawHeatIcons(view, now) {
+    if (view.phase !== PH.RPS && view.phase !== PH.REVEAL) return;
+    const ctx = this.ctx, L = CONFIG.uiV2.layout.heatIcon, Sz = L.size, rimg = this.uiImg("rpsBig"), limg = this.uiImg("overheatLock");
+    for (const f of view.fighters) {
+      if (!f.heat || f.out || !CONFIG.overheat.enabled) continue;
+      const shake = this.wclock - this.heatAt[f.i] < 0.4 && !REDUCED, dx = shake ? Math.round(Math.sin(now * 90) * 2) : 0;
+      const x = Math.round(f.x - f.face * L.dx - Sz / 2) + dx, y = Math.round(f.y + L.dy - Sz / 2);
+      ctx.save(); ctx.imageSmoothingEnabled = false;
+      if (rimg) { const n = CONFIG.uiV2.rpsFrames.length, fw = rimg.naturalWidth / n, fi = Math.max(0, CONFIG.uiV2.rpsFrames.indexOf(f.heat)); ctx.drawImage(rimg, fi * fw, 0, fw, rimg.naturalHeight, x, y, Sz, Sz); }
+      else { this.roundRect(x - 1, y - 1, Sz + 2, Sz + 2, "#2A0E10"); this.roundRect(x, y, Sz, Sz, "#4A1A1C"); ctx.translate(x + 2, y + 2); ctx.scale((Sz - 4) / 24, (Sz - 4) / 24); drawGestureGlyph(ctx, GESTURE_GLYPH[f.heat], 5, 5, "#FFD6C8", "#FF9A62"); ctx.setTransform(1, 0, 0, 1, 0, 0); }
+      ctx.restore(); ctx.save();
+      if (limg) ctx.drawImage(limg, x, y, Sz, Sz);
+      else { ctx.strokeStyle = "#FF2A2A"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + Sz - 3, y + Sz - 3); ctx.moveTo(x + Sz - 3, y + 3); ctx.lineTo(x + 3, y + Sz - 3); ctx.stroke(); }
+      ctx.restore();
+      if (shake) { const age = this.wclock - this.heatAt[f.i]; if (!VFX.draw(ctx, "vfx_overheat_smoke", age, x + Sz / 2, y + 4, f.face)) { ctx.save(); PROC_VFX.vfx_overheat_smoke.draw(ctx, x + Sz / 2, y + 4, f.face, 0, age); ctx.restore(); } }
+    }
+  }
+  // 動漫集中線：四套拳與五連斬期間；每 3 幀翻轉／抖動；減少動態＝靜態半透明
+  drawSpeedlines(view, now) {
+    const on = [PH.BURST, PH.COMBO_PREP, PH.COMBO_CUE, PH.COMBO_HIT, PH.CLASH_ANIM].includes(view.phase);
+    if (!on) return;
+    const ctx = this.ctx, W = CONFIG.W, H = CONFIG.H, step = REDUCED ? 0 : Math.floor((this.slFrame = (this.slFrame ?? 0) + 1) / 3), img = this.uiImg("speedlines");
+    ctx.save(); ctx.globalAlpha = REDUCED ? 0.25 : 0.85;
+    if (img) {
+      const fx = step % 2 ? -1 : 1, fy = (step >> 1) % 2 ? -1 : 1, j = REDUCED ? 0 : (step % 3) - 1;
+      ctx.translate(W / 2 + j, H / 2); ctx.scale(fx, fy); ctx.drawImage(img, -W / 2, -H / 2, W, H);
+    } else {
+      ctx.fillStyle = "#FFFFFF";
+      for (let i = 0; i < 64; i++) {                                     // 中央留空（橢圓半徑約 130×78）給角色與大字
+        const h = Math.sin(i * 91.7 + step * 13.1) * 43758.5, r = h - Math.floor(h), q = (i / 64 + r * 0.012) * Math.PI * 2;
+        const inner = 0.5 + r * 0.22, cx = W / 2, cy = H / 2 + 6, ex = Math.cos(q), ey = Math.sin(q), w = 0.012 + r * 0.02;
+        ctx.beginPath(); ctx.moveTo(cx + ex * 260 * inner, cy + ey * 150 * inner);
+        ctx.lineTo(cx + Math.cos(q - w) * 420, cy + Math.sin(q - w) * 260); ctx.lineTo(cx + Math.cos(q + w) * 420, cy + Math.sin(q + w) * 260); ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
   drawTopPrompt(g, view, now) {
     const P = this.promptFor(view), ph = view.phase, timed = this.timed(view), left = Math.max(0, view.dur - view.t);
@@ -1144,7 +1279,8 @@ export class Renderer {
       g.textAlign = right ? "right" : "left"; g.font = "bold 8px sans-serif"; g.fillStyle = f.streak >= T ? "#FFF1B8" : f.streak ? "#FFB15A" : PAL.hud.muted;
       g.fillText(`🔥 連勝 ${f.streak}/${T}`, x, 59);
     }
-    if (this.juice()) { const k = CONFIG.V2.hudScale; g.save(); g.translate(CONFIG.W / 2, 0); g.scale(k, k); g.translate(-CONFIG.W / 2, 0); this.drawTopPrompt(g, view, now); g.restore(); }   // v2：放大頂部提示
+    if (this.hud2()) this.drawHudV2(g, view, now);
+    else if (this.juice()) { const k = CONFIG.V2.hudScale; g.save(); g.translate(CONFIG.W / 2, 0); g.scale(k, k); g.translate(-CONFIG.W / 2, 0); this.drawTopPrompt(g, view, now); g.restore(); }   // v2：放大頂部提示
     else this.drawTopPrompt(g, view, now);
     // 開牌停頓：中央放大結果（🖐️ 布 壓制 ✊ 石頭！）
     if (ph === PH.REVEAL && view.rps) {
@@ -1198,7 +1334,7 @@ export class Renderer {
       g.textAlign = "center"; g.font = "900 22px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(T.text, 2, 2); g.fillStyle = T.color; g.fillText(T.text, 0, 0);
       if (T.sub) { g.font = "bold 10px sans-serif"; g.fillStyle = PAL.hud.label; g.fillText(T.sub, 0, 15); }
       g.restore();
-    } else if (this.cutText && now - this.cutText.at < this.cutText.life) {     // 第1刀 勝／敗／平（大字，放在劍格上方）
+    } else if (this.cutText && now - this.cutText.at < this.cutText.life && !(this.hud2() && this.comicLive(now))) {     // 第1刀 勝／敗／平（大字，放在劍格上方）；漫畫大字出現時讓位
       const a = 1 - (now - this.cutText.at) / this.cutText.life, pop = Math.max(0, 1 - (now - this.cutText.at) * 8);
       g.save(); g.globalAlpha = Math.min(1, a * 2); g.translate(CONFIG.W / 2, 64); g.scale(1 + pop * 0.5, 1 + pop * 0.5);
       g.textAlign = "center"; g.font = "900 20px sans-serif"; g.fillStyle = PAL.fighters.outline; g.fillText(this.cutText.text, 2, 2); g.fillStyle = this.cutText.color; g.fillText(this.cutText.text, 0, 0);

@@ -6,7 +6,7 @@
 ## 📌 版本資訊
 <!-- AUTO:version -->
 - 分支：`feature/fist-duel-proto`
-- 最新 commit：`11836a7`（2026-11-26）拳刃交鋒：打擊感完善＋10 組程式特效＋擴充動作替身＋程式木人樁；STATUS.md 進度總覽與自動更新流程
+- 最新 commit：`5595262`（2026-11-26）拳刃交鋒：新美術規格 JSON 不公開到正式站（.assetsignore）
 - 本表產生：2026-11-26（`node web/scripts/fist-status.mjs`；commit 碼是產生當下的 HEAD，本次改動的 commit 會在它之後）
 - 正式站：`feature/web-online-v1` → https://bridgecard.funcy0184.workers.dev/fist/（部署需製作人同意）
 <!-- /AUTO:version -->
@@ -33,11 +33,13 @@
 - [🧪 訓練場實驗中] 四套拳 v2：反擊窗 0.75s、前 3 拳原地
 - [🧪 訓練場實驗中] 極致打擊感：黑白衝擊幀（反擊剪影 2 幀、第 4 拳／拼刀 2 幀、KO 定格 3 幀）、腳底錨點形變、方向鏡頭踹擊、RGB 錯位、頂部提示放大
 - [已完成] 10 組新 VFX、P1／P2 各 12 組擴充動作（含空中回場 `air_recover`）的 PNG 已接上，所有模式生效
+- [🧪 訓練場實驗中] 視線中心 UI（`hudV2`）：倒數條下移到 y≈46、連勝火焰在倒數條兩側、過熱鎖 22×22 掛在角色身側（按到抖動冒煙）、反擊盾牌 36×36 浮在攻方頭頂、漫畫大字 4 種（KO＞爆發＞五連斬＞反擊，1.6→0.95→1.0 砸入）、四套拳／五連斬集中線；目前全程式繪製，`ui_v2_pack` 到了自動換圖
 - [🧪 訓練場實驗中] 程式特效／動作替身（任何 PNG 缺檔時、且開「極致打擊感」才出現的備援）
 - [⏳ 待實作] 手感定案後一鍵套用到正式模式
 
-**場景／UI**
-- [⏳ 待實作] 七格擂台圖、parallax、血月／裂紋擂台切換、動態 UI 大字、集中線（等 `stage_ui_spec.json`、`ui_motion_spec.json` 與圖進 Git）
+**場景／UI 美術包**
+- [⏳ 待補圖] `ui_v2_pack`（9 張 UI PNG＋`ui_v2_spec.json`）：程式已接好；圖進 Git 後照 JSON 校正 `config.js` 的 `uiV2`（尤其 `ui_rps_big` 格式、火焰格數），再把 `ART_PACKS.uiV2` 改 true
+- [⏳ 待補圖] `stage_v2_pack`（擂台、日景／血月背景、`floor_y_offset`）：規格與圖都還沒進 Git，尚未接
 
 ## 🎨 美術與特效掛載表
 <!-- AUTO:art -->
@@ -73,9 +75,18 @@
 | 特效 前層 | `vfx_smear_rock.png` | 256×64（4 格 24fps） | ✅ 已接 PNG |
 | 特效 前層 | `vfx_smear_scissors.png` | 256×64（4 格 28fps） | ✅ 已接 PNG |
 | 特效 前層 | `vfx_smear_paper.png` | 256×64（4 格 24fps） | ✅ 已接 PNG |
-| 場景／UI | stage_platform_*、bg_sky_*、parallax/、ui_* | — | ⏳ 規格與圖都還沒進 Git |
+| UI v2 | `ui_timer_frame.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_rps_big.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_overheat_lock.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_streak_flames.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_callout_burst.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_callout_counter.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_callout_clash.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_callout_ko.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_speedlines.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| 場景 | stage_platform_*、bg_sky_*、parallax/（stage_v2_pack） | — | ⏳ 規格與圖都還沒進 Git |
 
-**要請 GPT 補的圖（直接複製）：** （全部到齊）
+**要請 GPT 補的圖（直接複製）：** `ui_timer_frame.png`、`ui_rps_big.png`、`ui_overheat_lock.png`、`ui_streak_flames.png`、`ui_callout_burst.png`、`ui_callout_counter.png`、`ui_callout_clash.png`、`ui_callout_ko.png`、`ui_speedlines.png`
 
 > 🎨 的程式特效／替身只在訓練場打開「極致打擊感」開關時出現；PNG 放進 `web/public/fist/` 並把 `config.js` 的 `ART_PACKS` 對應開關改 true，就會自動換成美術圖（所有模式）。
 <!-- /AUTO:art -->
@@ -98,7 +109,8 @@
 
 ## 📝 待我實測清單與已知小問題
 
-**請進訓練場 → 按「⚡ 一鍵全開 v2.0」實測：**
+**請進訓練場 → 按「⚡ 一鍵全開 v2.0」實測（含新的視線中心 UI）：**
+0. **視線中心 UI**：倒數條在角色頭頂上方（y≈46）夠不夠醒目？漫畫大字會不會擋到角色？集中線會不會太吵？
 1. **反擊剪影幀**：木樁打我四套拳時在任一拳反擊成功 → 應看到 2 幀「黑底＋白剪影＋青金十字」。會不會太刺眼？
 2. **四套拳美術動作**：我打四套拳（木樁不反擊）→ 4 拳的 GPT 動作、命中星芒／衝擊環、殘影位置有沒有對齊？
 3. **KO 定格**：把木樁設 135%、站第 7 格，直接測我打四套拳 → 先定格 3 幀黑白，光柱才炸出來。節奏對嗎？

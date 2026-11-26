@@ -1626,7 +1626,7 @@ export const CONFIG = {
   },
   // ---- 選配美術包開關：檔案真的放進 public/fist/ 才改 true（false＝完全不發請求、不會 404，照舊程式繪製）----
   //   charExtra＝fighter_p1_extra.png／fighter_p2_extra.png；dummy＝dummy_sheet.png；vfxMega＝上面 pack: "vfxMega" 的 10 張
-  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true },
+  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: false },
   // ---- 擴充角色動作包（char_expansion_spec.json v1.0）：500×600、12 列；格距、透明邊、腳底錨點 (24, 40) 同 spriteAtlas ----
   //   contactFrame＝命中那一格（事件發生那一刻對齊這格）；parryFrame＝架開格；ventCellPx＝每格槌頭排氣口（冒煙位置）
   charExtraAtlas: {
@@ -1658,6 +1658,28 @@ export const CONFIG = {
     },
   },
   trainingDummySeat: -1,
+  // ---- 視線中心 UI v2（ui_v2_pack；圖還沒進 Git → ART_PACKS.uiV2 關著、全部程式繪製）----
+  //   圖到了：照 ui_v2_spec.json 的 recommended_layout／實際尺寸改這裡，再把 ART_PACKS.uiV2 改 true
+  //   ⚠️ rpsFrames／flameFrames 是暫定格式（橫條、石剪布順序、火焰 4 格），要以 JSON 為準
+  uiV2: {
+    pack: "uiV2",
+    files: {
+      timerFrame: "ui_timer_frame.png", rpsBig: "ui_rps_big.png", overheatLock: "ui_overheat_lock.png", streakFlames: "ui_streak_flames.png",
+      calloutBurst: "ui_callout_burst.png", calloutCounter: "ui_callout_counter.png", calloutClash: "ui_callout_clash.png", calloutKo: "ui_callout_ko.png",
+      speedlines: "ui_speedlines.png",
+    },
+    rpsFrames: ["rock", "scissors", "paper"], flameFrames: 4, flameFps: 10,
+    layout: {
+      prompt: { cy: 32 },                         // 階段標題（倒數條正上方）
+      timer: { cx: 240, cy: 46, w: 200, h: 12, urgentSec: 0.5 },   // 中央倒數條：y≈46，最後 0.5 秒轉紅閃
+      bigNum: { y: 82 },                          // 大號倒數數字（倒數條下方；漫畫大字出現時隱藏）
+      streak: { gap: 14, size: 12 },              // 連勝火焰：倒數條兩側，每側 3 格
+      callout: { cy: 84, hold: 0.62, out: 0.2 },  // 漫畫大字：y 72～95 黃金區；1.6 → 0.95 → 1.0 砸入
+      heatIcon: { size: 22, dx: 22, dy: -54 },    // 過熱鎖：角色背側上方（相對腳底錨點）
+      shield: { size: 36, dy: -56 },              // 四套拳反擊預告盾牌：攻方頭頂正上方
+    },
+    calloutPriority: { ko: 3, burst: 2, clash: 1.5, counter: 1 },   // KO ＞ 爆發 ＞ 五連斬 ＞ 反擊
+  },
   // ================= v2.0 實驗開關（只在 🛠️ 訓練場可以打開；離開訓練場自動全部關回 false）=================
   //   全部 false＝跟現在 100% 一樣（AI／同機／線上／教學都不會讀到 true）
   V2_EXPERIMENTS: {
@@ -1666,6 +1688,7 @@ export const CONFIG = {
     heavyHits: false,    // 痛感提升：連勝重擊 +V2.strikeDamage%（向後滑行）
     comboV2: false,      // 四套拳 v2：反擊窗 V2.comboReact 秒；開 freeStage 時前 3 拳原地重擊
     juice: false,        // 極致打擊感：黑白衝擊幀、角色形變、方向鏡頭踹擊、RGB 錯位、放大頂部提示
+    hudV2: false,        // 視線中心 UI：倒數條下移到 y≈46、頭頂過熱鎖／反擊盾牌、連勝火焰、漫畫大字、集中線
   },
   V2: {
     // 快節奏讀心

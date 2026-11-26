@@ -48,10 +48,14 @@ for (const [key, v] of Object.entries(CONFIG.vfx)) {
   const st = sz && (sz[0] < w || sz[1] < v.frameH) ? `❌ 尺寸不符（${sz[0]}×${sz[1]}，至少 ${w}×${v.frameH}）` : sz && on ? "✅ 已接 PNG" : sz ? `⚠️ 有 PNG，但 \`ART_PACKS.${v.pack}\` 還沒開` : fb;
   rows.push(`| 特效 ${v.layer === "back" ? "後層" : "前層"} | \`${v.file}\` | ${w}×${v.frameH}（${v.frames} 格 ${v.fps}fps） | ${st} |`);
 }
+for (const [k, f] of Object.entries(CONFIG.uiV2.files)) {               // 視線中心 UI（尺寸以 ui_v2_spec.json 為準）
+  const sz = pngSize(path.join(PUB, f)), on = CONFIG.ART_PACKS?.uiV2;
+  rows.push(`| UI v2 | \`${f}\` | ${sz ? `${sz[0]}×${sz[1]}` : "待 ui_v2_spec.json"} | ${sz && on ? "✅ 已接 PNG" : sz ? "⚠️ 有 PNG，但 \`ART_PACKS.uiV2\` 還沒開" : "🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG）"} |`);
+}
 const missing = rows.filter(r => !r.includes("✅")).map(r => r.split("|")[2].trim()).join("、");
 const art = [
   "| 類別 | 檔名 | 尺寸 | 狀態 |", "|---|---|---|---|", ...rows,
-  "| 場景／UI | stage_platform_*、bg_sky_*、parallax/、ui_* | — | ⏳ 規格與圖都還沒進 Git |",
+  "| 場景 | stage_platform_*、bg_sky_*、parallax/（stage_v2_pack） | — | ⏳ 規格與圖都還沒進 Git |",
   "",
   `**要請 GPT 補的圖（直接複製）：** ${missing || "（全部到齊）"}`,
   "",
