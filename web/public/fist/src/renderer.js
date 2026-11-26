@@ -578,6 +578,14 @@ export class Renderer {
   juice() { return !!CONFIG.V2_EXPERIMENTS?.juice && !REDUCED; }
   // ---- 視線中心 UI v2（CONFIG.V2_EXPERIMENTS.hudV2）：有 ui_v2 的 PNG 就畫圖，沒有就程式繪製 ----
   hud2() { return !!CONFIG.V2_EXPERIMENTS?.hudV2; }
+  // ---- 雙時段擂台（CONFIG.V2_EXPERIMENTS.stageV2）：每幀依局面決定，重開對局自然回日景 ----
+  stage2() { return !!CONFIG.V2_EXPERIMENTS?.stageV2; }
+  stageImg(k) { return CONFIG.ART_PACKS?.stageV2 ? Assets.get(CONFIG.stageV2.files[k]) : null; }
+  stageMood(view) {
+    const alive = view.fighters.filter(f => !f.out || f.stocks > 0);
+    const blood = view.phase !== PH.GAMEOVER ? view.fighters.some(f => f.stocks === 1) : view.fighters.some(f => f.stocks <= 1);
+    return { blood, cracked: blood || alive.some(f => f.damage >= CONFIG.stageV2.crackedAt) };
+  }
   uiImg(k) { return CONFIG.ART_PACKS?.uiV2 ? Assets.get(CONFIG.uiV2.files[k]) : null; }
   // 漫畫爆發大字：KO ＞ 爆發 ＞ 五連斬 ＞ 反擊（低優先不蓋掉正在播的高優先）
   comic(kind, now) {
@@ -655,6 +663,8 @@ export class Renderer {
     const ctx = this.ctx, cam = this.cam;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false; this.sctx.imageSmoothingEnabled = false;   // 每幀鎖定銳利像素（縮放、換分頁後瀏覽器可能重設）
+    if (this.stage2()) { const m = this.stageMood(view), k = Math.min(1, dt / CONFIG.stageV2.fadeSec); this.bloodK = (this.bloodK ?? 0) + ((m.blood ? 1 : 0) - (this.bloodK ?? 0)) * (REDUCED ? 1 : k * 3); this.cracked = m.cracked; }
+    else { this.bloodK = 0; this.cracked = false; }
     this.drawBackground(now);
     const amp = now < this.shake.until ? this.shake.amp : 0;
     const vert = amp && this.shake.vertical, sx = amp && !vert ? Math.round((Math.random() * 2 - 1) * amp) : 0, sy = amp ? Math.round((Math.random() * 2 - 1) * amp * (vert ? 1.6 : 1)) : 0;
@@ -733,9 +743,31 @@ export class Renderer {
     for (let i = 0; i < 3; i++) { const y = 150 + i * 14, off = Math.round((time * (4 + i * 2)) % 64); for (let x = -64 + off; x < CONFIG.W; x += 64) ctx.fillRect(x, y, 40 - i * 6, 2); }
     for (let i = 0; i < 4; i++) { ctx.fillStyle = mix(B.mist, B.abyss, (i + 1) / 4); ctx.fillRect(0, 214 + i * 8, CONFIG.W, 8); }
     ctx.fillStyle = B.abyss; ctx.fillRect(0, 246, CONFIG.W, CONFIG.H - 246);
+    if (this.stage2()) this.drawSkyV2(time);
+  }
+  // 日景／血月天空：有 PNG 就整張鋪（日景打底、血月依 bloodK 淡入）；沒有就在原本夜空上程式疊色
+  drawSkyV2(time) {
+    const ctx = this.ctx, k = this.bloodK ?? 0, day = this.stageImg("skyDay"), blood = this.stageImg("skyBlood");
+    if (day) ctx.drawImage(day, 0, 0, CONFIG.W, CONFIG.H);
+    if (blood && k > 0) { ctx.globalAlpha = k; ctx.drawImage(blood, 0, 0, CONFIG.W, CONFIG.H); ctx.globalAlpha = 1; return; }
+    if (k <= 0.01 || blood) return;
+    ctx.save();
+    ctx.globalAlpha = 0.55 * k; ctx.fillStyle = "#5A0712"; ctx.fillRect(0, 0, CONFIG.W, 200);                 // 整片天空染紅
+    ctx.globalAlpha = 0.35 * k; ctx.fillStyle = "#B0182A"; ctx.fillRect(0, 120, CONFIG.W, 80);
+    const mx = 362, my = 118, pulse = REDUCED ? 0 : Math.sin(time * 1.6) * 1.5;                                 // 血月＋光暈
+    for (let r = 34; r > 0; r -= 6) { ctx.globalAlpha = k * 0.08; ctx.fillStyle = "#FF3A3A"; ctx.beginPath(); ctx.arc(mx, my, 20 + r + pulse, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = k; ctx.fillStyle = "#E8283A"; ctx.beginPath(); ctx.arc(mx, my, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#FF8A7A"; ctx.beginPath(); ctx.arc(mx - 5, my - 5, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#9A1020"; ctx.fillRect(mx + 4, my + 3, 5, 3); ctx.fillRect(mx - 9, my + 8, 4, 2);
+    ctx.globalAlpha = 0.5 * k; ctx.fillStyle = "#2A0408"; for (let x = 0; x < CONFIG.W; x += 2) { const h = 34 + Math.round(Math.sin(x * 0.021) * 12 + Math.sin(x * 0.067) * 5); ctx.fillRect(x, 200 - h, 2, h); }   // 遠山壓暗
+    ctx.restore();
   }
   drawStage(view) {
     const ctx = this.ctx, PF = PAL.platform, L = CONFIG.stageX, R = ART.stage.rightXExclusive, Y = CONFIG.floorY, W = CONFIG.cellW;
+    if (this.stage2()) {                                                    // v2 擂台圖：頂邊對齊踩踏面（floorY＋floorYOffset），水平置中在擂台範圍
+      const img = this.stageImg(this.cracked ? "platCracked" : "platNormal");
+      if (img) { ctx.drawImage(img, Math.round((L + R) / 2 - img.naturalWidth / 2), Y + CONFIG.stageV2.floorYOffset); return; }
+    }
     for (let i = 0; i < 6; i++) { const inset = 4 + i * 6, y = Y + 16 + i * 4; ctx.fillStyle = PF.outline; ctx.fillRect(L + inset - 1, y, R - L - inset * 2 + 2, 5); ctx.fillStyle = i % 2 ? PF.stoneShadow : mix(PF.stoneShadow, PF.outline, 0.3); ctx.fillRect(L + inset, y, R - L - inset * 2, 4); }
     ctx.fillStyle = PF.outline; ctx.fillRect(L - 1, Y - 1, R - L + 2, 18);
     for (let i = 0; i < CONFIG.cells; i++) {
@@ -744,6 +776,19 @@ export class Renderer {
       ctx.fillStyle = PF.topEdge; ctx.fillRect(x, Y, W, 2);
       ctx.fillStyle = PF.oxidizedBronze; ctx.fillRect(x + W / 2 - 3, Y + 7, 2, 2); ctx.fillRect(x + W / 2 + 1, Y + 7, 2, 2);
       if (i > 0) { ctx.fillStyle = PF.tileSeam; ctx.fillRect(x, Y, 1, 16); }
+    }
+    if (this.stage2() && this.cracked) {                                    // 裂紋擂台（程式繪製）：鋸齒裂縫＋血月時裂縫透紅光
+      const glow = (this.bloodK ?? 0) > 0.3;
+      for (let c = 0; c < 9; c++) {
+        let x = L + 14 + c * ((R - L - 28) / 8) + ((c * 37) % 11) - 5, y = Y;
+        for (let s = 0; s < 6; s++) {
+          const nx = x + ((c * 13 + s * 7) % 5) - 2, ny = y + 2 + ((c + s) % 3);
+          ctx.fillStyle = "#0C0608"; ctx.fillRect(Math.min(x, nx), y, Math.abs(nx - x) + 2, ny - y + 1);
+          ctx.fillStyle = glow ? "#FF3A3A" : "#C9CDD8"; ctx.fillRect(Math.max(x, nx) + 2, y, 1, ny - y + 1);   // 裂縫一側的亮邊（血月時透紅光）
+          x = nx; y = ny; if (y > Y + 14) break;
+        }
+      }
+      ctx.fillStyle = "rgba(10,6,8,.25)"; ctx.fillRect(L, Y + 2, R - L, 14);
     }
     for (const f of view.fighters) if (!f.out && !f.air) { const c = clamp(Math.floor((f.x - L) / W), 0, CONFIG.cells - 1); ctx.globalAlpha = 0.35; ctx.fillStyle = PAL.fighters["p" + (f.i + 1)].highlight; ctx.fillRect(L + c * W + 1, Y, W - 2, 1); ctx.globalAlpha = 1; }
   }

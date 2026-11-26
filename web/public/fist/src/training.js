@@ -16,6 +16,7 @@ const V2_FLAGS = [
   ["heavyHits", "痛感提升（單發重擊加傷）"],
   ["comboV2", "3 連勝四套拳 v2（反擊窗）"],
   ["juice", "極致打擊感（衝擊幀／形變／踹鏡頭）"],
+  ["stageV2", "雙時段擂台（裂紋／血月）"],
   ["hudV2", "視線中心 UI（倒數下移／頭頂提示／漫畫大字）"],
 ];
 //   [滑桿 key, CONFIG.V2 欄位, 標籤, 最小, 最大, 間距, 單位]
@@ -57,7 +58,7 @@ class Dummy {
     this.timers = this.timers.filter(t => t.at > this.now);
     const e = this.ctl.engine;
     if (!e) return;
-    for (const f of e.f) if (f.stocks < LIVES) f.stocks = LIVES;              // 無限命
+    for (const f of e.f) { if (f.i === 1 && this.ctl.s.lastStock) { if (f.stocks > 1) f.stocks = 1; } else if (f.stocks < LIVES) f.stocks = LIVES; }   // 無限命（勾「木樁最後 1 命」時木樁固定 1 命，測血月）
     const v = this.port.view(), S = this.ctl.s, r = e.round;
     const key = `${v.phase}:${(v.rt - v.t).toFixed(3)}`;
     if (key !== this.key) { this.key = key; this.plan = {}; }
@@ -223,6 +224,7 @@ export class Training {
       <label>我站第幾格<select data-k="pos0">${[1, 2, 3, 4, 5, 6, 7].map(n => opt(n, n)).join("")}</select></label>
       <label>木樁站第幾格<select data-k="pos1">${[1, 2, 3, 4, 5, 6, 7].map(n => opt(n, n)).join("")}</select></label>
       <label>暫時關閉過熱<input type="checkbox" data-k="noHeat"></label>
+      <label>木樁只剩最後 1 命（測血月擂台）<input type="checkbox" data-k="lastStock"></label>
       <label>顯示 50×50 對齊框＋腳底紅點<input type="checkbox" data-k="debugBox"></label>
       <h4>⏩ 一鍵跳轉</h4>
       ${btns("go", [["myCombo", "▶ 直接測我打四套拳"], ["dummyCombo", "▶ 直接測木樁打我四套拳"], ["clash", "▶ 直接進五連斬拼刀"], ["reset", "↺ 重置位置與損傷"]])}
@@ -278,7 +280,7 @@ export class Training {
     const set = (sel, v) => { const el = P.querySelector(sel); if (el) el.value = v; };
     set('[data-k="rps"]', this.s.rps); set('[data-k="defend"]', this.s.defend); set('[data-k="clash"]', this.s.clash);
     this.s.combo.forEach((g, i) => set(`[data-k="combo"][data-i="${i}"]`, g));
-    for (const k of ["clashFirst", "noHeat", "debugBox"]) { const el = P.querySelector(`[data-k="${k}"]`); if (el) el.checked = !!this.s[k]; }
+    for (const k of ["clashFirst", "noHeat", "debugBox", "lastStock"]) { const el = P.querySelector(`[data-k="${k}"]`); if (el) el.checked = !!this.s[k]; }
     if (this.engine) { set('[data-k="pos0"]', this.engine.f[0].pos); set('[data-k="pos1"]', this.engine.f[1].pos); }
     const vals = { rpsDur: CONFIG.rps.dur, reactDur: CONFIG.combo.reactDur, inputDur: CONFIG.clashMode.inputDur };
     for (const [k, v] of Object.entries(vals)) { set(`[data-k="${k}"]`, v); const o = P.querySelector(`[data-v="${k}"]`); if (o) o.textContent = `${(+v).toFixed(2)}s`; }

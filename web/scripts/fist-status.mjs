@@ -55,7 +55,7 @@ for (const [k, f] of Object.entries(CONFIG.uiV2.files)) {               // 視�
 const missing = rows.filter(r => !r.includes("✅")).map(r => r.split("|")[2].trim()).join("、");
 const art = [
   "| 類別 | 檔名 | 尺寸 | 狀態 |", "|---|---|---|---|", ...rows,
-  "| 場景 | stage_platform_*、bg_sky_*、parallax/（stage_v2_pack） | — | ⏳ 規格與圖都還沒進 Git |",
+  ...Object.values(CONFIG.stageV2.files).map(f => `| 擂台 v2 | \`${f}\` | 待 stage_v2_spec.json | ${pngSize(path.join(PUB, f)) ? (CONFIG.ART_PACKS?.stageV2 ? "✅ 已接 PNG" : "⚠️ 有 PNG，但 \`ART_PACKS.stageV2\` 還沒開") : "🎨 程式繪製已運作（訓練場「雙時段擂台」開關；待補 PNG）"} |`),
   "",
   `**要請 GPT 補的圖（直接複製）：** ${missing || "（全部到齊）"}`,
   "",

@@ -6,7 +6,7 @@
 ## 📌 版本資訊
 <!-- AUTO:version -->
 - 分支：`feature/fist-duel-proto`
-- 最新 commit：`4806470`（2026-11-26）Merge branch 'feature/fist-duel-proto' of https://github.com
+- 最新 commit：`f90f5e3`（2026-11-26）拳刃交鋒：接上 ui_v2_pack（9 張 UI PNG）— 照 ui_v2_spec.json 座標與格式；檔案平鋪
 - 本表產生：2026-11-26（`node web/scripts/fist-status.mjs`；commit 碼是產生當下的 HEAD，本次改動的 commit 會在它之後）
 - 正式站：`feature/web-online-v1` → https://bridgecard.funcy0184.workers.dev/fist/（部署需製作人同意）
 <!-- /AUTO:version -->
@@ -39,7 +39,8 @@
 
 **場景／UI 美術包**
 - [已完成] `ui_v2_pack`：9 張 UI PNG 從 `ui_v2/` 子資料夾平鋪到 `web/public/fist/`，`ui_v2_spec.json` 一起搬出（不公開），預覽圖留在 `art/fist/packs/ui_v2_pack.zip`
-- [⏳ 待補圖] `stage_v2_pack`（擂台、日景／血月背景、`floor_y_offset`）：規格與圖都還沒進 Git，尚未接
+- [🧪 訓練場實驗中] 雙時段擂台（`stageV2`）：任一方損傷 ≥110% → 裂紋擂台；任一方剩最後 1 命 → 血月天空＋裂紋擂台（0.6 秒淡入）；重開對局自動回日景。目前程式繪製；訓練場勾「木樁只剩最後 1 命」可測血月
+- [⏳ 待補圖] `stage_v2_pack`（`bg_sky_day`／`bg_sky_bloodmoon`／`stage_platform_normal`／`stage_platform_cracked`＋JSON）：**還沒推上 GitHub**（26 個遠端分支都查過）。讀圖接口已寫好，到了照 JSON 填 `config.js` 的 `stageV2.floorYOffset`、開 `ART_PACKS.stageV2`
 
 ## 🎨 美術與特效掛載表
 <!-- AUTO:art -->
@@ -84,7 +85,10 @@
 | UI v2 | `ui_callout_clash.png` | 190×50 | ✅ 已接 PNG |
 | UI v2 | `ui_callout_ko.png` | 160×64 | ✅ 已接 PNG |
 | UI v2 | `ui_speedlines.png` | 480×270 | ✅ 已接 PNG |
-| 場景 | stage_platform_*、bg_sky_*、parallax/（stage_v2_pack） | — | ⏳ 規格與圖都還沒進 Git |
+| 擂台 v2 | `bg_sky_day.png` | 待 stage_v2_spec.json | 🎨 程式繪製已運作（訓練場「雙時段擂台」開關；待補 PNG） |
+| 擂台 v2 | `bg_sky_bloodmoon.png` | 待 stage_v2_spec.json | 🎨 程式繪製已運作（訓練場「雙時段擂台」開關；待補 PNG） |
+| 擂台 v2 | `stage_platform_normal.png` | 待 stage_v2_spec.json | 🎨 程式繪製已運作（訓練場「雙時段擂台」開關；待補 PNG） |
+| 擂台 v2 | `stage_platform_cracked.png` | 待 stage_v2_spec.json | 🎨 程式繪製已運作（訓練場「雙時段擂台」開關；待補 PNG） |
 
 **要請 GPT 補的圖（直接複製）：** （全部到齊）
 
@@ -110,6 +114,7 @@
 ## 📝 待我實測清單與已知小問題
 
 **請進訓練場 → 按「⚡ 一鍵全開 v2.0」實測（含新的視線中心 UI）：**
+0a. **血月擂台**：木樁設 135% 看裂紋、再勾「木樁只剩最後 1 命」看血月；血月會不會太紅、太搶戲？
 0. **視線中心 UI**：倒數條在角色頭頂上方（y≈46）夠不夠醒目？漫畫大字會不會擋到角色？集中線會不會太吵？
 1. **反擊剪影幀**：木樁打我四套拳時在任一拳反擊成功 → 應看到 2 幀「黑底＋白剪影＋青金十字」。會不會太刺眼？
 2. **四套拳美術動作**：我打四套拳（木樁不反擊）→ 4 拳的 GPT 動作、命中星芒／衝擊環、殘影位置有沒有對齊？

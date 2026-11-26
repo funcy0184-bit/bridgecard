@@ -1626,7 +1626,7 @@ export const CONFIG = {
   },
   // ---- 選配美術包開關：檔案真的放進 public/fist/ 才改 true（false＝完全不發請求、不會 404，照舊程式繪製）----
   //   charExtra＝fighter_p1_extra.png／fighter_p2_extra.png；dummy＝dummy_sheet.png；vfxMega＝上面 pack: "vfxMega" 的 10 張
-  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: true },
+  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: true, stageV2: false },
   // ---- 擴充角色動作包（char_expansion_spec.json v1.0）：500×600、12 列；格距、透明邊、腳底錨點 (24, 40) 同 spriteAtlas ----
   //   contactFrame＝命中那一格（事件發生那一刻對齊這格）；parryFrame＝架開格；ventCellPx＝每格槌頭排氣口（冒煙位置）
   charExtraAtlas: {
@@ -1658,6 +1658,15 @@ export const CONFIG = {
     },
   },
   trainingDummySeat: -1,
+  // ---- 雙時段擂台（stage_v2_pack；圖與 JSON 還沒進 Git → ART_PACKS.stageV2 關著、程式繪製）----
+  //   圖到了：照 stage_v2_spec.json 的實際尺寸、floor_y_offset 改這裡，再把 ART_PACKS.stageV2 改 true
+  stageV2: {
+    pack: "stageV2",
+    files: { skyDay: "bg_sky_day.png", skyBlood: "bg_sky_bloodmoon.png", platNormal: "stage_platform_normal.png", platCracked: "stage_platform_cracked.png" },
+    floorYOffset: 0,             // ⚠️ 暫定：擂台圖頂邊（踩踏面）相對 CONFIG.floorY 的位移，以 JSON 為準
+    crackedAt: 110,              // 任一方損傷 ≥ 這個 → 裂紋擂台
+    fadeSec: 0.6,                // 日景 ↔ 血月淡入淡出
+  },
   // ---- 視線中心 UI v2（ui_v2_spec.json v2.0；座標全是 480×270 畫面座標）----
   uiV2: {
     pack: "uiV2",
@@ -1692,6 +1701,7 @@ export const CONFIG = {
     heavyHits: false,    // 痛感提升：連勝重擊 +V2.strikeDamage%（向後滑行）
     comboV2: false,      // 四套拳 v2：反擊窗 V2.comboReact 秒；開 freeStage 時前 3 拳原地重擊
     juice: false,        // 極致打擊感：黑白衝擊幀、角色形變、方向鏡頭踹擊、RGB 錯位、放大頂部提示
+    stageV2: false,      // 雙時段擂台：任一方損傷 ≥110% 換裂紋擂台；任一方剩最後 1 命換血月天空＋裂紋擂台（重開對局自動回日景）
     hudV2: false,        // 視線中心 UI：倒數條下移到 y≈46、頭頂過熱鎖／反擊盾牌、連勝火焰、漫畫大字、集中線
   },
   V2: {
