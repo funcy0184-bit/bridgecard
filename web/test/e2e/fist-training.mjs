@@ -80,8 +80,8 @@ await P.uncheck('#trainPanel [data-k="clashFirst"]');
 
 console.log("一鍵狀態、無限命");
 await btn("reset");
-await P.click('#trainPanel button[data-v="1:140"]'); await P.click('#trainPanel button[data-v="0:60"]'); await sleep(80);   // 畫面下一幀才更新
-ok(await ev(() => __fist.view.fighters[1].damage === 140 && __fist.view.fighters[0].damage === 60), "損傷按鈕：我 60%、木樁 140%");
+await P.click('#trainPanel button[data-v="1:135"]'); await P.click('#trainPanel button[data-v="0:50"]'); await sleep(80);   // 畫面下一幀才更新
+ok(await ev(() => __fist.view.fighters[1].damage === 135 && __fist.view.fighters[0].damage === 50), "損傷按鈕：我 50%、木樁 135%");
 await sel("pos1", "7"); await sel("pos0", "6"); await sleep(80);
 ok(await ev(() => __fist.view.fighters[1].pos === 7 && __fist.view.fighters[0].pos === 6), "站位：我第 6 格、木樁第 7 格（崖邊）");
 await sel("defend", "none"); await btn("myCombo");
@@ -108,9 +108,34 @@ const clip = await ev(() => navigator.clipboard.readText());
 ok(clip.includes("rps: { dur: 2, reveal: 1.4 }") && clip.includes("combo.reactDur: 0.5") && clip.includes("clashMode.inputDur: 2.5"), "📋 複製目前參數：可直接貼回 config.js");
 ok((await P.textContent("#trainPanel [data-msg]")).includes("已複製"), "面板顯示「已複製」");
 
+console.log("⚡ v2.0 實驗開關");
+ok(await ev(() => Object.values(__fist.CONFIG.V2_EXPERIMENTS).every(v => v === false)), "進訓練場時 v2 開關預設全關");
+await P.click("#trainPanel [data-v2all]"); await sleep(50);
+ok(await ev(() => Object.values(__fist.CONFIG.V2_EXPERIMENTS).every(v => v === true)) && (await P.textContent("#trainPanel [data-v2all]")).includes("全開中"), "⚡ 一鍵全開 v2.0：5 個開關全部打開");
+await P.uncheck('#trainPanel [data-k="noHeat"]').catch(() => {}); await P.check('#trainPanel [data-k="noHeat"]');
+await btn("reset"); await sel("rps", "letwin"); await sleep(80);
+await tw(() => __fist.view?.phase === "PHASE_RPS");
+ok(await ev(() => Math.abs(__fist.view.dur - __fist.CONFIG.V2.rpsDur) < 1e-6), "v2 猜拳限時 1.5 秒");
+const t0 = await ev(() => __fist.view.rt);
+await key("a"); await key("s");
+await tw(() => __fist.view?.phase !== "PHASE_RPS", 3000);
+const lock = await ev(() => ({ st: __fist.transport.engine.lastRps.stances[0], dt: __fist.view.rt - 0 }));
+ok(lock.st === "rock", "按下即鎖定：先按石頭、再按剪刀無效");
+ok(lock.dt - t0 < 1.0, `雙方鎖定就開牌，不等倒數（${(lock.dt - t0).toFixed(2)}s）`);
+await tw(() => __fist.view?.phase === "PHASE_RPS", 4000); await sleep(300);
+ok(await ev(() => __fist.transport.engine.f[1].damage === __fist.CONFIG.V2.strikeDamage), `單發重擊 +${await ev(() => __fist.CONFIG.V2.strikeDamage)}%`);
+ok(await ev(() => Math.abs(Math.abs(__fist.view.fighters[1].x - __fist.view.fighters[0].x) - __fist.CONFIG.V2.engageGap) < 1.5), "滑行後下一輪自動貼近");
+await slide("v2dmg", 15); await slide("v2kb", 120);
+ok(await ev(() => __fist.CONFIG.V2.strikeDamage === 15 && __fist.CONFIG.V2.BASE_KNOCKBACK === 120), "v2 滑桿：單拳傷害 15%、BASE_KNOCKBACK 120");
+await P.click("#trainPanel [data-copy]"); await sleep(150);
+const clip2 = await ev(() => navigator.clipboard.readText());
+ok(clip2.includes('"BASE_KNOCKBACK": 120') && clip2.includes('"fastRps": true'), "📋 複製參數含 v2 JSON");
+await P.click("#trainPanel [data-v2all]"); await P.click("#trainPanel [data-v2all]"); await sleep(50);   // 先全關再全開：離開時要能還原
+
 console.log("離開：不汙染其他模式");
 await P.keyboard.press("Escape"); await sleep(150);
-const after = await ev(() => ({ react: __fist.CONFIG.combo.reactDur, rps: __fist.CONFIG.rps.dur, reveal: __fist.CONFIG.rps.reveal, input: __fist.CONFIG.clashMode.inputDur, heat: __fist.CONFIG.overheat.enabled, box: __fist.CONFIG.DEBUG_SPRITE_BOX }));
+const after = await ev(() => ({ react: __fist.CONFIG.combo.reactDur, rps: __fist.CONFIG.rps.dur, reveal: __fist.CONFIG.rps.reveal, input: __fist.CONFIG.clashMode.inputDur, heat: __fist.CONFIG.overheat.enabled, box: __fist.CONFIG.DEBUG_SPRITE_BOX, v2: Object.values(__fist.CONFIG.V2_EXPERIMENTS).some(Boolean), kb: __fist.CONFIG.V2.BASE_KNOCKBACK }));
+ok(!after.v2 && after.kb === 95, "離開訓練場：v2 開關全部關回、BASE_KNOCKBACK 還原 95");
 ok(after.react === base.react && after.rps === base.rps && after.reveal === base.reveal && after.input === base.input && after.heat && !after.box, `Esc 回大廳：秒數、過熱、對齊框全部還原（反擊 ${after.react}s、猜拳 ${after.rps}s）`);
 await P.click('[data-go="local2p"]'); await waitPh("PHASE_RPS");
 ok(await ev(() => Math.abs(__fist.view.dur - 2.8) < 1e-6) && await P.isHidden("#trainPanel") && await P.isHidden("#trainBtn"), "同機雙人：照正式秒數、沒有訓練面板");

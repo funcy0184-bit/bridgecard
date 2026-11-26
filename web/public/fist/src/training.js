@@ -9,6 +9,21 @@ import { PH, BEATS, COUNTER, KEY_OF, GESTURES, GNAME, duel, cellX } from "./engi
 import { LocalTransport } from "./transport.js";
 
 const LIVES = 99;
+// v2.0 實驗開關（CONFIG.V2_EXPERIMENTS）與手感滑桿（CONFIG.V2）
+const V2_FLAGS = [
+  ["fastRps", "快節奏讀心（按下即鎖、雙按即開）"],
+  ["freeStage", "無格線擂台＋飛出畫面才 KO＋回場"],
+  ["heavyHits", "痛感提升（單發重擊加傷）"],
+  ["comboV2", "3 連勝四套拳 v2（反擊窗）"],
+  ["juice", "極致打擊感（衝擊幀／形變／踹鏡頭）"],
+];
+//   [滑桿 key, CONFIG.V2 欄位, 標籤, 最小, 最大, 間距, 單位]
+const V2_SLIDERS = [
+  ["v2rps", "rpsDur", "v2 猜拳秒數", 0.8, 3, 0.1, "s"],
+  ["v2react", "comboReact", "v2 四套拳反擊窗", 0.35, 1.2, 0.05, "s"],
+  ["v2dmg", "strikeDamage", "v2 單拳傷害", 8, 20, 1, "%"],
+  ["v2kb", "BASE_KNOCKBACK", "BASE_KNOCKBACK", 60, 160, 5, ""],
+];
 const pick = list => list[Math.floor(Math.random() * list.length)];
 
 // 面板預設值
@@ -91,6 +106,7 @@ export class Training {
     this.saved = {                                                            // 進場拍快照：離開時把被面板改過的 CONFIG 還原
       rps: { ...CONFIG.rps }, reactDur: CONFIG.combo.reactDur, inputDur: CONFIG.clashMode.inputDur,
       overheat: CONFIG.overheat.enabled, debug: CONFIG.DEBUG_SPRITE_BOX,
+      v2x: { ...CONFIG.V2_EXPERIMENTS }, v2: Object.fromEntries(V2_SLIDERS.map(([k, key]) => [key, CONFIG.V2[key]])),
     };
     this.applyConfig();
     this.transport = new LocalTransport({ setup: this.home(), viewer: 0, speedUp: false, bots: [new Dummy(this)], flow: (f, t, e) => this.flow(f, t, e) });
@@ -102,7 +118,9 @@ export class Training {
     if (this.saved) {
       Object.assign(CONFIG.rps, this.saved.rps); CONFIG.combo.reactDur = this.saved.reactDur; CONFIG.clashMode.inputDur = this.saved.inputDur;
       CONFIG.overheat.enabled = this.saved.overheat; CONFIG.DEBUG_SPRITE_BOX = this.saved.debug;
-      CONFIG.trainingDummySeat = -1; this.saved = null;
+      CONFIG.trainingDummySeat = -1;
+      Object.assign(CONFIG.V2_EXPERIMENTS, this.saved.v2x); Object.assign(CONFIG.V2, this.saved.v2);   // v2 實驗開關、數值全部還原（預設全關）
+      this.saved = null;
     }
     this.engine = null; this.transport = null;
   }
@@ -114,11 +132,21 @@ export class Training {
   }
 
   // ---------------- 一鍵操作 ----------------
+  // v2 實驗開關：切換時把「站定位置」對齊目前畫面位置（無格線 ↔ 格子模式不會瞬移）
+  setExp(k, on) {
+    const before = CONFIG.V2_EXPERIMENTS.freeStage;
+    if (k === "all") for (const x of V2_FLAGS) CONFIG.V2_EXPERIMENTS[x[0]] = on; else CONFIG.V2_EXPERIMENTS[k] = on;
+    const e = this.engine;
+    if (e && before !== CONFIG.V2_EXPERIMENTS.freeStage) for (const f of e.f) {
+      f.vx = 0; f.hx = f.x;
+      if (!CONFIG.V2_EXPERIMENTS.freeStage && !f.air && !f.out) { f.x = f.hx = cellX(f.pos); f.gl = null; }
+    }
+  }
   setDamage(i, v) { const f = this.engine?.f[i]; if (f && !f.out) f.damage = v; }
   setPos(i, pos) {
     const e = this.engine, f = e?.f[i];
     if (!f || f.air || f.out || e.f[1 - i].pos === pos) return false;           // 不能跟對手站同一格
-    f.pos = pos; f.x = cellX(pos); f.gl = null; f.y = CONFIG.floorY;
+    f.pos = pos; f.x = f.hx = cellX(pos); f.vx = 0; f.gl = null; f.y = CONFIG.floorY;
     return true;
   }
   jump(what) {
@@ -141,6 +169,9 @@ export class Training {
       `rps: { dur: ${r.dur}, reveal: ${r.reveal} },          // 猜拳總秒數（最後 ${+(r.dur - r.reveal).toFixed(2)} 秒藏招）`,
       `combo.reactDur: ${CONFIG.combo.reactDur},             // 四套拳每拳反擊秒數`,
       `clashMode.inputDur: ${CONFIG.clashMode.inputDur},      // 五連斬輸入秒數`,
+      "",
+      "// v2.0 實驗開關與手感參數（JSON）",
+      JSON.stringify({ V2_EXPERIMENTS: { ...CONFIG.V2_EXPERIMENTS }, V2: Object.fromEntries(V2_SLIDERS.map(([, key]) => [key, CONFIG.V2[key]])) }, null, 2),
     ].join("\n");
   }
 
@@ -168,7 +199,14 @@ export class Training {
         #trainPanel .who { min-width: 34px; color: #AAB4C8; }
         #trainPanel .msg { color: #7CF29A; min-height: 1.2em; font-size: 11px; }
         #trainPanel .hint { color: #8592A4; font-size: 11px; margin: 2px 0 0; }
+        #trainPanel .tb.v2 { background: #2A1440; border-color: #B06CFF; color: #EBD7FF; width: 100%; font-weight: 700; margin: 2px 0 4px; }
+        #trainPanel .tb.v2.on { background: #B06CFF; color: #14051F; }
       </style>
+      <h4>⚡ v2.0 實驗開關（只在訓練場）</h4>
+      <button type="button" class="tb v2" data-v2all>⚡ 一鍵全開 v2.0 體驗</button>
+      ${V2_FLAGS.map(([k, t]) => `<label>${t}<input type="checkbox" data-x="${k}"></label>`).join("")}
+      ${V2_SLIDERS.map(([k, key, t, a, b, st, unit]) => `<label>${t}<input type="range" data-k="${k}" min="${a}" max="${b}" step="${st}"><span class="val" data-v="${k}"></span></label>`).join("")}
+      <p class="hint">開關即時生效（猜拳／秒數下一輪生效）；離開訓練場全部關回 v4</p>
       <h4>🎯 木樁猜拳</h4>
       <label>出招<select data-k="rps">${opt("rock", "固定 ✊ 石頭") + opt("scissors", "固定 ✌️ 剪刀") + opt("paper", "固定 🖐️ 布") + opt("letwin", "固定讓我贏") + opt("win", "固定贏我") + opt("tie", "固定平手") + opt("random", "隨機出招")}</select></label>
       <h4>👊 木樁打我四套拳</h4>
@@ -179,8 +217,8 @@ export class Training {
       <label>木樁出<select data-k="clash">${opt("random", "隨機 5 招") + opt("rock", "全石頭") + opt("scissors", "全剪刀") + opt("paper", "全布")}</select></label>
       <label>木樁搶先手<input type="checkbox" data-k="clashFirst"></label>
       <h4>🧪 一鍵狀態</h4>
-      <div class="row"><span class="who">我</span>${btns("dmg", [["0:0", "0%"], ["0:60", "60%"], ["0:110", "110%"], ["0:140", "140%"]])}</div>
-      <div class="row"><span class="who">木樁</span>${btns("dmg", [["1:0", "0%"], ["1:60", "60%"], ["1:110", "110%"], ["1:140", "140%"]])}</div>
+      <div class="row"><span class="who">我</span>${btns("dmg", [["0:0", "0%"], ["0:50", "50%"], ["0:100", "100%"], ["0:135", "135%"]])}</div>
+      <div class="row"><span class="who">木樁</span>${btns("dmg", [["1:0", "0%"], ["1:50", "50%"], ["1:100", "100%"], ["1:135", "135%"]])}</div>
       <label>我站第幾格<select data-k="pos0">${[1, 2, 3, 4, 5, 6, 7].map(n => opt(n, n)).join("")}</select></label>
       <label>木樁站第幾格<select data-k="pos1">${[1, 2, 3, 4, 5, 6, 7].map(n => opt(n, n)).join("")}</select></label>
       <label>暫時關閉過熱<input type="checkbox" data-k="noHeat"></label>
@@ -199,6 +237,7 @@ export class Training {
     const done = el => el.blur?.();                                           // 改完就把焦點還給遊戲（不然 A／S／D 會被選單吃掉）
     P.addEventListener("change", ev => {
       const el = ev.target, k = el.dataset.k;
+      if (el.dataset.x) { this.setExp(el.dataset.x, el.checked); this.refresh(); msg(`${el.checked ? "開啟" : "關閉"}：${V2_FLAGS.find(f => f[0] === el.dataset.x)[1]}`); done(el); return; }
       if (!k) return;
       if (k === "combo") this.s.combo[Number(el.dataset.i)] = el.value;
       else if (k === "pos0" || k === "pos1") { if (!this.setPos(k === "pos0" ? 0 : 1, Number(el.value))) msg("那格有人或正在空中，換一格"); this.refresh(); }
@@ -214,6 +253,7 @@ export class Training {
       if (!b) return;
       if (b.classList.contains("dmg")) { const [i, v] = b.dataset.v.split(":").map(Number); this.setDamage(i, v); msg(`${i ? "木樁" : "我"}損傷設為 ${v}%`); }
       else if (b.dataset.copy !== undefined) this.copy(msg);
+      else if (b.dataset.v2all !== undefined) { const all = V2_FLAGS.every(([k]) => CONFIG.V2_EXPERIMENTS[k]); this.setExp("all", !all); this.refresh(); msg(all ? "v2.0 全部關閉（回到 v4）" : "⚡ v2.0 全開！"); }
       else if (b.classList.contains("go")) { this.jump(b.dataset.v); this.refresh(); msg({ myCombo: "連勝 3/3：你打四套拳", dummyCombo: "木樁連勝 3/3：練反擊", clash: "蓄力 2/2：五連斬", reset: "已重置" }[b.dataset.v] ?? ""); }
       done(b);
     });
@@ -222,6 +262,7 @@ export class Training {
     if (k === "rpsDur") { const hidden = CONFIG.rps.dur - CONFIG.rps.reveal; CONFIG.rps.dur = v; CONFIG.rps.reveal = +Math.max(0.4, v - hidden).toFixed(2); }
     else if (k === "reactDur") CONFIG.combo.reactDur = v;
     else if (k === "inputDur") CONFIG.clashMode.inputDur = v;
+    else { const sl = V2_SLIDERS.find(x => x[0] === k); if (sl) CONFIG.V2[sl[1]] = v; }
     this.refresh();
   }
   async copy(msg) {
@@ -240,5 +281,9 @@ export class Training {
     if (this.engine) { set('[data-k="pos0"]', this.engine.f[0].pos); set('[data-k="pos1"]', this.engine.f[1].pos); }
     const vals = { rpsDur: CONFIG.rps.dur, reactDur: CONFIG.combo.reactDur, inputDur: CONFIG.clashMode.inputDur };
     for (const [k, v] of Object.entries(vals)) { set(`[data-k="${k}"]`, v); const o = P.querySelector(`[data-v="${k}"]`); if (o) o.textContent = `${(+v).toFixed(2)}s`; }
+    for (const [k, key, , , , , unit] of V2_SLIDERS) { const v = CONFIG.V2[key]; set(`[data-k="${k}"]`, v); const o = P.querySelector(`[data-v="${k}"]`); if (o) o.textContent = unit === "s" ? `${(+v).toFixed(2)}s` : `${v}${unit}`; }
+    for (const [k] of V2_FLAGS) { const el = P.querySelector(`[data-x="${k}"]`); if (el) el.checked = !!CONFIG.V2_EXPERIMENTS[k]; }
+    const all = P.querySelector("[data-v2all]");
+    if (all) { const on = V2_FLAGS.every(([k]) => CONFIG.V2_EXPERIMENTS[k]); all.classList.toggle("on", on); all.textContent = on ? "⚡ v2.0 全開中（再按一次全關）" : "⚡ 一鍵全開 v2.0 體驗"; }
   }
 }

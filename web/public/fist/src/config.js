@@ -1657,7 +1657,45 @@ export const CONFIG = {
       dummy_ko: { row: 3, frames: 6, fps: 13, playback: "hold_last" },            // 停在最後一格直到重生
     },
   },
-  trainingDummySeat: -1,                                                          // 訓練場進場時設 1（P2 畫成木樁），離場還原
+  trainingDummySeat: -1,
+  // ================= v2.0 實驗開關（只在 🛠️ 訓練場可以打開；離開訓練場自動全部關回 false）=================
+  //   全部 false＝跟現在 100% 一樣（AI／同機／線上／教學都不會讀到 true）
+  V2_EXPERIMENTS: {
+    fastRps: false,      // 快節奏讀心：按下即鎖定、雙方都鎖就開牌、限時 V2.rpsDur
+    freeStage: false,    // 無格線連續擂台：受擊滑行、只有飛出畫面才 KO、場外回場、新擊飛曲線、回合間自動貼近
+    heavyHits: false,    // 痛感提升：連勝重擊 +V2.strikeDamage%（向後滑行）
+    comboV2: false,      // 四套拳 v2：反擊窗 V2.comboReact 秒；開 freeStage 時前 3 拳原地重擊
+    juice: false,        // 極致打擊感：黑白衝擊幀、角色形變、方向鏡頭踹擊、RGB 錯位、放大頂部提示
+  },
+  V2: {
+    // 快節奏讀心
+    rpsDur: 1.5,                // 猜拳總限時（逾時從沒過熱的招隨機補）
+    lockRevealDelay: 0.08,      // 雙方都鎖定後隔多久開牌
+    revealDur: 0.22,            // 開牌停頓（v4 是 0.55）
+    strikeDur: 0.5, strikeHitAt: 0.12,   // 單發重擊整段長度／命中時刻
+    // 痛感
+    strikeDamage: 13,           // 連勝 1、2 單發重擊（建議 12～15）
+    // 擊飛曲線：V = BASE_KNOCKBACK × (1 + (損傷/100)^kbExp × kbMul)
+    BASE_KNOCKBACK: 95, kbExp: 1.35, kbMul: 1.45,
+    strikeSlide: 1.0,           // 單發重擊：地面滑行初速 = V × 這個
+    friction: 520,              // 地面摩擦（px/s²）
+    airDrag: 0.3,               // 空中水平阻力（每秒衰減係數）
+    gravity: 520,               // 比 v4 輕（900）：飛得飄、才有回場空間；實算：台邊 ~100%、中段 ~125% 第 4 拳會轟出畫面
+    // KO 死亡線（畫面外多少 px）
+    koMarginX: 26, koMarginTop: 70, koMarginBottom: 40,
+    // 場外回場：離開地板、開始下墜且水平速度 < recoverVx（或掉到地板以下）→ 受身翻轉＋二段跳回擂台邊
+    recoverVx: 60, recoverJump: 300, recoverInset: 16,
+    // 回合間自動貼近
+    engageGap: 48, engageDur: 0.22, minGap: 22,
+    // 四套拳
+    comboReact: 0.75,
+    // 打擊感（減少動態時自動停用）
+    impact: { counter: 2, comboFinal: 2, clash: 2, ko: 3 },
+    squash: { attack: [1.28, 0.80, 0.18], hurt: [0.72, 1.30, 0], land: [1.32, 0.70, 0], k: 16, w: 28 },
+    kickPx: [5, 8], kickDecay: 22,
+    rgbPx: 2, rgbDur: 0.12,
+    hudScale: 1.22,
+  },                                                          // 訓練場進場時設 1（P2 畫成木樁），離場還原
   // ---- 線上：暱稱、表情（固定 8 個，不開放自由打字）、新手引導（房主預設） ----
   profile: { nameMax: 8, storageKey: "fist.name" },
   emotes: ["😂", "😡", "👍", "🔥", "😱", "🙏", "🤡", "GG"], emoteGapMs: 1500, emoteShowMs: 2000,
