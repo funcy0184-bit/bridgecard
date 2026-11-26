@@ -6,7 +6,7 @@
 ## 📌 版本資訊
 <!-- AUTO:version -->
 - 分支：`feature/fist-duel-proto`
-- 最新 commit：`5595262`（2026-11-26）拳刃交鋒：新美術規格 JSON 不公開到正式站（.assetsignore）
+- 最新 commit：`4806470`（2026-11-26）Merge branch 'feature/fist-duel-proto' of https://github.com
 - 本表產生：2026-11-26（`node web/scripts/fist-status.mjs`；commit 碼是產生當下的 HEAD，本次改動的 commit 會在它之後）
 - 正式站：`feature/web-online-v1` → https://bridgecard.funcy0184.workers.dev/fist/（部署需製作人同意）
 <!-- /AUTO:version -->
@@ -33,12 +33,12 @@
 - [🧪 訓練場實驗中] 四套拳 v2：反擊窗 0.75s、前 3 拳原地
 - [🧪 訓練場實驗中] 極致打擊感：黑白衝擊幀（反擊剪影 2 幀、第 4 拳／拼刀 2 幀、KO 定格 3 幀）、腳底錨點形變、方向鏡頭踹擊、RGB 錯位、頂部提示放大
 - [已完成] 10 組新 VFX、P1／P2 各 12 組擴充動作（含空中回場 `air_recover`）的 PNG 已接上，所有模式生效
-- [🧪 訓練場實驗中] 視線中心 UI（`hudV2`）：倒數條下移到 y≈46、連勝火焰在倒數條兩側、過熱鎖 22×22 掛在角色身側（按到抖動冒煙）、反擊盾牌 36×36 浮在攻方頭頂、漫畫大字 4 種（KO＞爆發＞五連斬＞反擊，1.6→0.95→1.0 砸入）、四套拳／五連斬集中線；目前全程式繪製，`ui_v2_pack` 到了自動換圖
+- [🧪 訓練場實驗中] 視線中心 UI（`hudV2`，9 張 `ui_v2_pack` PNG 已接上）：倒數框 (150,46)、連勝火焰 (54,63)／(406,63)、過熱鎖 22×22 掛在角色背側（按到抖動冒煙）、反擊盾牌 36×36 浮在攻方頭頂（被大字擋到會讓位）、漫畫大字 4 種（KO＞五連斬＞爆發＞反擊，1.6→0.95→1.0 砸入）、四套拳／五連斬集中線
 - [🧪 訓練場實驗中] 程式特效／動作替身（任何 PNG 缺檔時、且開「極致打擊感」才出現的備援）
 - [⏳ 待實作] 手感定案後一鍵套用到正式模式
 
 **場景／UI 美術包**
-- [⏳ 待補圖] `ui_v2_pack`（9 張 UI PNG＋`ui_v2_spec.json`）：程式已接好；圖進 Git 後照 JSON 校正 `config.js` 的 `uiV2`（尤其 `ui_rps_big` 格式、火焰格數），再把 `ART_PACKS.uiV2` 改 true
+- [已完成] `ui_v2_pack`：9 張 UI PNG 從 `ui_v2/` 子資料夾平鋪到 `web/public/fist/`，`ui_v2_spec.json` 一起搬出（不公開），預覽圖留在 `art/fist/packs/ui_v2_pack.zip`
 - [⏳ 待補圖] `stage_v2_pack`（擂台、日景／血月背景、`floor_y_offset`）：規格與圖都還沒進 Git，尚未接
 
 ## 🎨 美術與特效掛載表
@@ -75,18 +75,18 @@
 | 特效 前層 | `vfx_smear_rock.png` | 256×64（4 格 24fps） | ✅ 已接 PNG |
 | 特效 前層 | `vfx_smear_scissors.png` | 256×64（4 格 28fps） | ✅ 已接 PNG |
 | 特效 前層 | `vfx_smear_paper.png` | 256×64（4 格 24fps） | ✅ 已接 PNG |
-| UI v2 | `ui_timer_frame.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_rps_big.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_overheat_lock.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_streak_flames.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_callout_burst.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_callout_counter.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_callout_clash.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_callout_ko.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
-| UI v2 | `ui_speedlines.png` | 待 ui_v2_spec.json | 🎨 程式繪製已運作（訓練場「視線中心 UI」開關；待補 PNG） |
+| UI v2 | `ui_timer_frame.png` | 180×22 | ✅ 已接 PNG |
+| UI v2 | `ui_rps_big.png` | 144×36 | ✅ 已接 PNG |
+| UI v2 | `ui_overheat_lock.png` | 36×36 | ✅ 已接 PNG |
+| UI v2 | `ui_streak_flames.png` | 80×24 | ✅ 已接 PNG |
+| UI v2 | `ui_callout_burst.png` | 180×48 | ✅ 已接 PNG |
+| UI v2 | `ui_callout_counter.png` | 200×52 | ✅ 已接 PNG |
+| UI v2 | `ui_callout_clash.png` | 190×50 | ✅ 已接 PNG |
+| UI v2 | `ui_callout_ko.png` | 160×64 | ✅ 已接 PNG |
+| UI v2 | `ui_speedlines.png` | 480×270 | ✅ 已接 PNG |
 | 場景 | stage_platform_*、bg_sky_*、parallax/（stage_v2_pack） | — | ⏳ 規格與圖都還沒進 Git |
 
-**要請 GPT 補的圖（直接複製）：** `ui_timer_frame.png`、`ui_rps_big.png`、`ui_overheat_lock.png`、`ui_streak_flames.png`、`ui_callout_burst.png`、`ui_callout_counter.png`、`ui_callout_clash.png`、`ui_callout_ko.png`、`ui_speedlines.png`
+**要請 GPT 補的圖（直接複製）：** （全部到齊）
 
 > 🎨 的程式特效／替身只在訓練場打開「極致打擊感」開關時出現；PNG 放進 `web/public/fist/` 並把 `config.js` 的 `ART_PACKS` 對應開關改 true，就會自動換成美術圖（所有模式）。
 <!-- /AUTO:art -->
@@ -122,4 +122,6 @@
 - v2 單發重擊的大字副標還寫「往崖邊推 1 格」（無格線模式其實是滑行），手感定案後一起改文案
 - 過熱蒸氣：瀏覽器截圖只確認到「♨️ 禁用」標示，蒸氣本身要你肉眼看一下
 - `taunt_ready`（開局挑釁）已被你的美術提交換成 `air_recover`，開局目前沒有挑釁動作
+- 訓練場 e2e「完全不反擊：吃滿 4 拳」等待上限 8 秒、四套拳本身約 8.3 秒，機器忙時偶爾會差一點超時（重跑即過；依規則不放寬測試）
+- 反擊窗不再顯示大號小數倒數（避免壓到頭頂盾牌），改看盾牌外圈＋倒數框
 - 真機（手機）手感與效能尚未驗收

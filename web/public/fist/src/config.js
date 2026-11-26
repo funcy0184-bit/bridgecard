@@ -1626,7 +1626,7 @@ export const CONFIG = {
   },
   // ---- 選配美術包開關：檔案真的放進 public/fist/ 才改 true（false＝完全不發請求、不會 404，照舊程式繪製）----
   //   charExtra＝fighter_p1_extra.png／fighter_p2_extra.png；dummy＝dummy_sheet.png；vfxMega＝上面 pack: "vfxMega" 的 10 張
-  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: false },
+  ART_PACKS: { charExtra: true, dummy: true, vfxMega: true, uiV2: true },
   // ---- 擴充角色動作包（char_expansion_spec.json v1.0）：500×600、12 列；格距、透明邊、腳底錨點 (24, 40) 同 spriteAtlas ----
   //   contactFrame＝命中那一格（事件發生那一刻對齊這格）；parryFrame＝架開格；ventCellPx＝每格槌頭排氣口（冒煙位置）
   charExtraAtlas: {
@@ -1658,9 +1658,7 @@ export const CONFIG = {
     },
   },
   trainingDummySeat: -1,
-  // ---- 視線中心 UI v2（ui_v2_pack；圖還沒進 Git → ART_PACKS.uiV2 關著、全部程式繪製）----
-  //   圖到了：照 ui_v2_spec.json 的 recommended_layout／實際尺寸改這裡，再把 ART_PACKS.uiV2 改 true
-  //   ⚠️ rpsFrames／flameFrames 是暫定格式（橫條、石剪布順序、火焰 4 格），要以 JSON 為準
+  // ---- 視線中心 UI v2（ui_v2_spec.json v2.0；座標全是 480×270 畫面座標）----
   uiV2: {
     pack: "uiV2",
     files: {
@@ -1668,17 +1666,23 @@ export const CONFIG = {
       calloutBurst: "ui_callout_burst.png", calloutCounter: "ui_callout_counter.png", calloutClash: "ui_callout_clash.png", calloutKo: "ui_callout_ko.png",
       speedlines: "ui_speedlines.png",
     },
-    rpsFrames: ["rock", "scissors", "paper"], flameFrames: 4, flameFps: 10,
-    layout: {
-      prompt: { cy: 32 },                         // 階段標題（倒數條正上方）
-      timer: { cx: 240, cy: 46, w: 200, h: 12, urgentSec: 0.5 },   // 中央倒數條：y≈46，最後 0.5 秒轉紅閃
-      bigNum: { y: 82 },                          // 大號倒數數字（倒數條下方；漫畫大字出現時隱藏）
-      streak: { gap: 14, size: 12 },              // 連勝火焰：倒數條兩側，每側 3 格
-      callout: { cy: 84, hold: 0.62, out: 0.2 },  // 漫畫大字：y 72～95 黃金區；1.6 → 0.95 → 1.0 砸入
-      heatIcon: { size: 22, dx: 22, dy: -54 },    // 過熱鎖：角色背側上方（相對腳底錨點）
-      shield: { size: 36, dy: -56 },              // 四套拳反擊預告盾牌：攻方頭頂正上方
+    sizes: {                                       // 實際圖檔尺寸（預載時核對）
+      timerFrame: [180, 22], rpsBig: [144, 36], overheatLock: [36, 36], streakFlames: [80, 24],
+      calloutBurst: [180, 48], calloutCounter: [200, 52], calloutClash: [190, 50], calloutKo: [160, 64], speedlines: [480, 270],
     },
-    calloutPriority: { ko: 3, burst: 2, clash: 1.5, counter: 1 },   // KO ＞ 爆發 ＞ 五連斬 ＞ 反擊
+    rps: { frameW: 36, frameH: 36, frameByGesture: { rock: 0, scissors: 1, paper: 2, unknown: 3 } },
+    flames: { frameW: 20, frameH: 24, frames: 4, fps: 9 },
+    layout: {
+      prompt: { cy: 40 },                                              // 階段標題（倒數框正上方）
+      timer: { x: 150, y: 46, w: 180, h: 22, fill: [161, 53, 158, 8], urgentSec: 0.5 },   // 倒數框左上 (150,46)；進度條 (161,53,158,8) 從右往左縮；最後 0.5 秒紅閃
+      bigNum: { y: 94 },                                               // 大號倒數（倒數框下方；漫畫大字出現時隱藏）
+      feedbackY: 114,                                                  // 一般回饋字（吃拳、重擊）
+      streak: { p1First: [54, 63], p2First: [406, 63], stepX: [21, -21], slots: 3 },     // 連勝火焰（左上角座標）
+      callout: { center: { burst: [240, 90], counter: [240, 95], clash: [240, 90], ko: [240, 84] }, holdMs: { burst: 650, counter: 480, clash: 650, ko: 950 }, out: 0.18 },
+      shield: { size: 36, dy: -56, clampX: [18, 462], gap: 4 },       // 反擊預告：底邊中心＝攻方腳底往上 56；被大字擋到就往旁邊讓 4px
+      heatIcon: { size: 22, dx: 22, dy: -54 },                         // 過熱鎖：角色背側上方 22×22（ui_rps_big 那一格＋ui_overheat_lock 疊上）
+    },
+    calloutPriority: { ko: 4, clash: 3, burst: 2, counter: 1 },        // KO ＞ 五連斬 ＞ 爆發 ＞ 反擊（依 JSON priority）
   },
   // ================= v2.0 實驗開關（只在 🛠️ 訓練場可以打開；離開訓練場自動全部關回 false）=================
   //   全部 false＝跟現在 100% 一樣（AI／同機／線上／教學都不會讀到 true）

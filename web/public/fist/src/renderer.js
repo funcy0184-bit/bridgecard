@@ -586,7 +586,15 @@ export class Renderer {
     if (c && this.comicLive(now) && P[c.kind] > P[kind]) return;
     this.comicFx = { kind, at: now };
   }
-  comicLive(now) { const c = this.comicFx, L = CONFIG.uiV2.layout.callout; return !!c && now - c.at < L.hold + L.out; }
+  comicLife(kind) { const L = CONFIG.uiV2.layout.callout; return L.holdMs[kind] / 1000 + L.out; }
+  comicLive(now) { const c = this.comicFx; return !!c && now - c.at < this.comicLife(c.kind); }
+  // 漫畫大字目前佔的範圍（給倒數框、頭頂盾牌閃避用）；沒有就 null
+  comicRect(now) {
+    if (!this.comicLive(now)) return null;
+    const k = this.comicFx.kind, [cx, cy] = CONFIG.uiV2.layout.callout.center[k], [w, h] = CONFIG.uiV2.sizes["callout" + k[0].toUpperCase() + k.slice(1)];
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
+  }
+  rpsFrame(img, g) { const R = CONFIG.uiV2.rps; return [(R.frameByGesture[g] ?? R.frameByGesture.unknown) * R.frameW, 0, R.frameW, R.frameH]; }
   // 統一的黑白衝擊幀：invert＝全畫面高對比黑白反色；silhouette＝黑底＋角色純白剪影＋青金十字閃（at＝閃光中心）
   triggerImpactFrame(frames, mode = "invert", at = null) {
     if (!this.juice()) return;
@@ -907,13 +915,17 @@ export class Renderer {
     const att = view.fighters[r.att], T = ART.telegraphs.blueParry, S = T.frameSizePx[0], C = PAL.fx.blue;
     const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.cueAt) * 6);
     let sc = 1 + pop * 0.6, cx = Math.round(att.x), cy = CONFIG.floorY + T.offsetPx[1];
-    if (this.hud2()) {                                                     // v2：36×36 盾牌浮在攻方頭頂正上方、跟著角色、微幅脈動
-      const L = CONFIG.uiV2.layout.shield;
-      sc = (L.size / S) * (1 + pop * 0.4 + (REDUCED ? 0 : Math.sin(now * 14) * 0.05)); cx = Math.round(att.x); cy = Math.round(att.y + L.dy);
+    if (this.hud2()) {                                                     // v2：36×36 盾牌，底邊中心＝攻方腳底往上 56、跟著角色、微幅脈動；被漫畫大字擋到就往旁邊讓
+      const L = CONFIG.uiV2.layout.shield, Z = L.size;
+      sc = (Z / S) * (1 + pop * 0.4 + (REDUCED ? 0 : Math.sin(now * 14) * 0.05));
+      cx = Math.round(clamp(att.x, L.clampX[0], L.clampX[1])); cy = Math.round(att.y + L.dy - Z / 2);
+      const R = this.comicRect(now);
+      if (R && cx + Z / 2 > R.x && cx - Z / 2 < R.x + R.w && cy + Z / 2 > R.y && cy - Z / 2 < R.y + R.h)
+        cx = cx < R.x + R.w / 2 ? Math.round(R.x - L.gap - Z / 2) : Math.round(R.x + R.w + L.gap + Z / 2);
       const img = this.uiImg("rpsBig");
       if (img) {
-        const n = CONFIG.uiV2.rpsFrames.length, fw = img.naturalWidth / n, fi = Math.max(0, CONFIG.uiV2.rpsFrames.indexOf(r.gesture)), k = L.size * (sc * S / L.size);
-        ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, fi * fw, 0, fw, img.naturalHeight, Math.round(cx - k / 2), Math.round(cy - k / 2), Math.round(k), Math.round(k));
+        const k = Math.round(Z * sc * S / Z);
+        ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, ...this.rpsFrame(img, r.gesture), Math.round(cx - k / 2), Math.round(cy - k / 2), k, k);
         ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-S / 2, -S / 2); this.perimeter(0, 0, S, left, blink ? PAL.fx.red.rim : urgent ? C.core : C.rim, 2); ctx.restore();
         return;
       }
@@ -1066,54 +1078,53 @@ export class Renderer {
       default: return null;
     }
   }
-  // ---- 視線中心 UI v2 ----
-  //   g＝高解析度 HUD 畫布（邏輯座標 480×270）；倒數條 y≈46、連勝火焰在兩側、大號倒數 y≈76、漫畫大字 y≈84
+  // ---- 視線中心 UI v2（座標照 ui_v2_spec.json 的 recommended_layout）----
+  //   g＝高解析度 HUD 畫布（邏輯座標 480×270）：倒數框 (150,46)、連勝火焰 (54,63)／(406,63)、大號倒數 y≈94、漫畫大字 y 84～95
   drawHudV2(g, view, now) {
     const U = CONFIG.uiV2.layout, P = this.promptFor(view), ph = view.phase, timed = this.timed(view), left = Math.max(0, view.dur - view.t);
-    const comic = this.comicLive(now), T = U.timer, x0 = T.cx - T.w / 2, y0 = T.cy - T.h / 2;
+    const comic = this.comicLive(now), T = U.timer, cx = T.x + T.w / 2;
     g.save(); g.imageSmoothingEnabled = false; g.textAlign = "center"; g.lineJoin = "round";
-    if (P?.text && !comic) {                                               // 階段標題：倒數條正上方
-      g.font = "900 11px sans-serif"; g.lineWidth = 3; g.strokeStyle = PAL.fighters.outline; g.strokeText(P.text, T.cx, U.prompt.cy); g.fillStyle = P.color; g.fillText(P.text, T.cx, U.prompt.cy);
+    if (P?.text && !comic) {                                               // 階段標題：倒數框正上方
+      g.font = "900 11px sans-serif"; g.lineWidth = 3; g.strokeStyle = PAL.fighters.outline; g.strokeText(P.text, cx, U.prompt.cy); g.fillStyle = P.color; g.fillText(P.text, cx, U.prompt.cy);
     }
-    if (timed && !comic) {                                                 // 中央大型倒數條：最後 0.5 秒轉紅閃爍
-      const k = clamp(left / view.dur, 0, 1), urgent = left <= T.urgentSec, blink = urgent && Math.floor(now * 16) % 2 === 0, img = this.uiImg("timerFrame");
+    if (timed && !comic) {                                                 // 倒數框：底軌 → 剩餘條（從右往左縮）→ 框圖；最後 0.5 秒轉紅閃爍
+      const k = clamp(left / view.dur, 0, 1), urgent = left <= T.urgentSec, blink = urgent && Math.floor(now * 16) % 2 === 0, img = this.uiImg("timerFrame"), [fx, fy, fw, fh] = T.fill;
       let c = ph === PH.COMBO_CUE ? "#4FC3FF" : ph === PH.CLASH_INPUT ? "#5FE6FF" : ph === PH.COMBO_PREP ? "#FFB15A" : "#FFD23A";
       if (urgent) c = blink ? "#FFFFFF" : "#FF3A3A";
-      if (img) g.drawImage(img, Math.round(T.cx - img.naturalWidth / 2), Math.round(T.cy - img.naturalHeight / 2));
-      else { g.fillStyle = "rgba(8,10,18,.88)"; g.fillRect(x0 - 2, y0 - 2, T.w + 4, T.h + 4); g.strokeStyle = urgent ? "#FF3A3A" : "#F2C14E"; g.lineWidth = 1.5; g.strokeRect(x0 - 1.5, y0 - 1.5, T.w + 3, T.h + 3); }
-      g.fillStyle = "#1B2132"; g.fillRect(x0 + 2, y0 + 2, T.w - 4, T.h - 4);
-      g.fillStyle = c; g.fillRect(T.cx - (T.w - 4) * k / 2, y0 + 2, (T.w - 4) * k, T.h - 4);   // 從兩側往中間縮
-      g.fillStyle = "rgba(255,255,255,.35)"; g.fillRect(T.cx - (T.w - 4) * k / 2, y0 + 2, (T.w - 4) * k, 2);
+      g.fillStyle = "#141826"; g.fillRect(fx, fy, fw, fh);
+      g.fillStyle = c; g.fillRect(fx, fy, Math.round(fw * k), fh); g.fillStyle = "rgba(255,255,255,.35)"; g.fillRect(fx, fy, Math.round(fw * k), 2);
+      if (img) g.drawImage(img, T.x, T.y);
+      else { g.strokeStyle = urgent ? "#FF3A3A" : "#F2C14E"; g.lineWidth = 2; g.strokeRect(T.x + 1, T.y + 1, T.w - 2, T.h - 2); }
     }
-    // 連勝火焰：倒數條兩側，1/3、2/3、3/3 依序點燃
-    const Tn = view.streakTarget ?? CONFIG.STREAK_TARGET, S = U.streak, fimg = this.uiImg("streakFlames");
-    for (const f of view.fighters) for (let i = 0; i < Tn; i++) {
-      const x = f.i === 0 ? x0 - 10 - i * S.gap : x0 + T.w + 10 + i * S.gap, y = T.cy, lit = i < f.streak;
-      if (!lit) { g.fillStyle = "#2A2F3D"; g.beginPath(); g.arc(x, y + 2, 3, 0, Math.PI * 2); g.fill(); continue; }
-      const fr = Math.floor(now * CONFIG.uiV2.flameFps + i) % CONFIG.uiV2.flameFrames;
-      if (fimg) { const fw = fimg.naturalWidth / CONFIG.uiV2.flameFrames; g.drawImage(fimg, fr * fw, 0, fw, fimg.naturalHeight, Math.round(x - S.size / 2), Math.round(y - S.size / 2 - 2), S.size, S.size); continue; }
-      const h = 9 + (REDUCED ? 0 : Math.sin(now * 14 + i * 2) * 2), full = f.streak >= Tn;
-      g.fillStyle = full ? "#FFF1A8" : "#FF6A2A"; g.beginPath(); g.moveTo(x - 4, y + 5); g.quadraticCurveTo(x - 5, y - h / 2, x, y - h + 2); g.quadraticCurveTo(x + 5, y - h / 2, x + 4, y + 5); g.fill();
-      g.fillStyle = "#FFD45A"; g.beginPath(); g.moveTo(x - 2, y + 5); g.quadraticCurveTo(x - 2, y - h / 4, x, y - h / 2 + 2); g.quadraticCurveTo(x + 2, y - h / 4, x + 2, y + 5); g.fill();
+    // 連勝火焰：一勝點一盞，最多 3 盞；沒點的畫空槽
+    const S = U.streak, F = CONFIG.uiV2.flames, fimg = this.uiImg("streakFlames");
+    for (const f of view.fighters) for (let i = 0; i < S.slots; i++) {
+      const [bx, by] = f.i === 0 ? S.p1First : S.p2First, x = bx + i * S.stepX[f.i], y = by, lit = i < f.streak;
+      if (!lit) { g.strokeStyle = "rgba(255,255,255,.28)"; g.lineWidth = 1; g.strokeRect(x + 4.5, y + 8.5, F.frameW - 9, F.frameH - 10); continue; }
+      const fr = REDUCED ? 0 : Math.floor(now * F.fps + i) % F.frames;
+      if (fimg) { g.drawImage(fimg, fr * F.frameW, 0, F.frameW, F.frameH, x, y, F.frameW, F.frameH); continue; }
+      const mx = x + F.frameW / 2, my = y + F.frameH - 3, h = 14 + (REDUCED ? 0 : Math.sin(now * 14 + i * 2) * 3);
+      g.fillStyle = "#FF6A2A"; g.beginPath(); g.moveTo(mx - 6, my); g.quadraticCurveTo(mx - 7, my - h / 2, mx, my - h); g.quadraticCurveTo(mx + 7, my - h / 2, mx + 6, my); g.fill();
+      g.fillStyle = "#FFD45A"; g.beginPath(); g.moveTo(mx - 3, my); g.quadraticCurveTo(mx - 3, my - h / 3, mx, my - h / 2); g.quadraticCurveTo(mx + 3, my - h / 3, mx + 3, my); g.fill();
     }
     // 大號倒數（3、2、1／反擊窗小數／出招！）：漫畫大字出現時讓位
     let big = null, bigColor = PAL.hud.focusOutline;
     if (ph === PH.RPS || ph === PH.CLASH_INPUT) big = String(Math.max(1, Math.ceil(left - 1e-6)));
-    else if (ph === PH.COMBO_CUE) { big = left.toFixed(1); bigColor = PAL.fx.blue.rim; }
+    // （反擊窗不顯示大號小數：頭頂盾牌外圈＋倒數框已在跑秒，避免壓到盾牌）
     if (ph === PH.REVEAL && now - this.goFlash < 0.55) { big = "出招！"; bigColor = PAL.hud.powerFill; }
     if (big !== null && !comic) {
       if (big !== this.bigNum.v) this.bigNum = { v: big, at: now };
       const pop = REDUCED ? 0 : Math.max(0, 1 - (now - this.bigNum.at) * 5), sc = 1 + pop * 0.5;
-      g.save(); g.translate(T.cx, U.bigNum.y); g.scale(sc, sc); g.font = `900 ${big.length > 3 ? 20 : 24}px sans-serif`;
+      g.save(); g.translate(cx, U.bigNum.y); g.scale(sc, sc); g.font = `900 ${big.length > 3 ? 18 : 22}px sans-serif`;
       g.lineWidth = 4; g.strokeStyle = PAL.fighters.outline; g.strokeText(big, 0, 0); g.fillStyle = timed && left <= T.urgentSec && Math.floor(now * 16) % 2 === 0 ? PAL.fx.red.rim : bigColor; g.fillText(big, 0, 0); g.restore();
     }
     if (comic) this.drawComic(g, now);
-    else {                                                                 // 一般回饋字（吃拳、重擊…）：大字沒出現時才顯示
+    else {                                                                 // 一般回饋字（吃拳、重擊…）：漫畫大字沒出現時才顯示
       const C = this.callout;
       if (C && now - C.at < C.life) {
         const age = now - C.at, pop = REDUCED ? 0 : Math.max(0, 1 - age * 7), a = Math.min(1, (C.life - age) * 4);
-        g.save(); g.globalAlpha = a; g.translate(T.cx, 108); g.scale(1 + pop * 0.5, 1 + pop * 0.5); g.font = "900 16px sans-serif";
-        g.fillStyle = "rgba(10,14,24,.72)"; g.fillRect(-120, -18, 240, C.sub ? 32 : 24);
+        g.save(); g.globalAlpha = a; g.translate(cx, U.feedbackY); g.scale(1 + pop * 0.5, 1 + pop * 0.5); g.font = "900 15px sans-serif";
+        g.fillStyle = "rgba(10,14,24,.72)"; g.fillRect(-118, -16, 236, C.sub ? 30 : 22);
         g.lineWidth = 3; g.strokeStyle = PAL.fighters.outline; g.strokeText(C.text, 0, 0); g.fillStyle = C.color; g.fillText(C.text, 0, 0);
         if (C.sub) { g.font = "bold 9px sans-serif"; g.fillStyle = PAL.hud.label; g.fillText(C.sub, 0, 11); }
         g.restore();
@@ -1121,13 +1132,12 @@ export class Renderer {
     }
     g.restore();
   }
-  // 漫畫爆發大字：1.6 → 0.95 → 1.0 砸入，停一下後淡出往上滑
+  // 漫畫爆發大字：1.6 → 0.95 → 1.0 砸入（約 0.14s），停留 holdMs 後淡出往上滑；中心照 JSON（反擊 y=95、KO y=84）
   drawComic(g, now) {
-    const c = this.comicFx, L = CONFIG.uiV2.layout.callout, age = now - c.at;
+    const c = this.comicFx, L = CONFIG.uiV2.layout.callout, age = now - c.at, hold = L.holdMs[c.kind] / 1000;
     const sc = REDUCED ? 1 : age < 0.07 ? 1.6 - 0.65 * (age / 0.07) : age < 0.14 ? 0.95 + 0.05 * ((age - 0.07) / 0.07) : 1;
-    const out = clamp((age - L.hold) / L.out, 0, 1), key = { burst: "calloutBurst", counter: "calloutCounter", clash: "calloutClash", ko: "calloutKo" }[c.kind];
-    const img = this.uiImg(key);
-    g.save(); g.globalAlpha = 1 - out; g.translate(240, L.cy - out * 14); g.scale(sc, sc);
+    const out = clamp((age - hold) / L.out, 0, 1), key = "callout" + c.kind[0].toUpperCase() + c.kind.slice(1), img = this.uiImg(key), [x, y] = L.center[c.kind];
+    g.save(); g.imageSmoothingEnabled = false; g.globalAlpha = 1 - out; g.translate(x, y - out * 14); g.scale(sc, sc);
     if (img) g.drawImage(img, -Math.round(img.naturalWidth / 2), -Math.round(img.naturalHeight / 2));
     else {
       const V = { burst: ["連勝爆發！", "#FF6A3D"], counter: ["反擊！", "#2EC8F0"], clash: ["五連斬！", "#F2B632"], ko: ["K.O.！", "#FF2A4A"] }[c.kind];
@@ -1138,18 +1148,18 @@ export class Renderer {
     }
     g.restore();
   }
-  // 過熱鎖招：角色背側上方 22×22（拳種＋紅叉），按到過熱招時抖動冒煙；只在猜拳／開牌時顯示
+  // 過熱鎖招：角色背側上方 22×22（ui_rps_big 那一格＋ui_overheat_lock 疊在同一範圍），按到過熱招時抖動冒煙；只在猜拳／開牌時顯示
   drawHeatIcons(view, now) {
     if (view.phase !== PH.RPS && view.phase !== PH.REVEAL) return;
     const ctx = this.ctx, L = CONFIG.uiV2.layout.heatIcon, Sz = L.size, rimg = this.uiImg("rpsBig"), limg = this.uiImg("overheatLock");
     for (const f of view.fighters) {
       if (!f.heat || f.out || !CONFIG.overheat.enabled) continue;
       const shake = this.wclock - this.heatAt[f.i] < 0.4 && !REDUCED, dx = shake ? Math.round(Math.sin(now * 90) * 2) : 0;
-      const x = Math.round(f.x - f.face * L.dx - Sz / 2) + dx, y = Math.round(f.y + L.dy - Sz / 2);
+      const x = Math.round(clamp(f.x - f.face * L.dx, Sz / 2 + 2, CONFIG.W - Sz / 2 - 2) - Sz / 2) + dx, y = Math.round(f.y + L.dy - Sz / 2);
       ctx.save(); ctx.imageSmoothingEnabled = false;
-      if (rimg) { const n = CONFIG.uiV2.rpsFrames.length, fw = rimg.naturalWidth / n, fi = Math.max(0, CONFIG.uiV2.rpsFrames.indexOf(f.heat)); ctx.drawImage(rimg, fi * fw, 0, fw, rimg.naturalHeight, x, y, Sz, Sz); }
+      if (rimg) ctx.drawImage(rimg, ...this.rpsFrame(rimg, f.heat), x, y, Sz, Sz);
       else { this.roundRect(x - 1, y - 1, Sz + 2, Sz + 2, "#2A0E10"); this.roundRect(x, y, Sz, Sz, "#4A1A1C"); ctx.translate(x + 2, y + 2); ctx.scale((Sz - 4) / 24, (Sz - 4) / 24); drawGestureGlyph(ctx, GESTURE_GLYPH[f.heat], 5, 5, "#FFD6C8", "#FF9A62"); ctx.setTransform(1, 0, 0, 1, 0, 0); }
-      ctx.restore(); ctx.save();
+      ctx.restore(); ctx.save(); ctx.imageSmoothingEnabled = false;
       if (limg) ctx.drawImage(limg, x, y, Sz, Sz);
       else { ctx.strokeStyle = "#FF2A2A"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + Sz - 3, y + Sz - 3); ctx.moveTo(x + Sz - 3, y + 3); ctx.lineTo(x + 3, y + Sz - 3); ctx.stroke(); }
       ctx.restore();

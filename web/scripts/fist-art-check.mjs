@@ -19,7 +19,7 @@ function entries(node, out = []) {
     }
     if (node.imageByPlayer) for (const f of Object.values(node.imageByPlayer)) out.push({ file: f, w: node.imageWidth ?? null, h: node.imageHeight ?? null });
     for (const [k, v] of Object.entries(node)) if (k !== "file" && typeof v === "string" && v.endsWith(".png") && !node.imageByPlayer) out.push({ file: v, w: null, h: null });   // 只寫檔名的引用：至少檢查存在
-    Object.values(node).forEach(n => entries(n, out));
+    for (const [k, n] of Object.entries(node)) if (k !== "preview") entries(n, out);   // 預覽圖（preview）不算遊戲素材
   }
   return out;
 }
