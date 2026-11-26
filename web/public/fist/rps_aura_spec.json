@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": "拳刃交鋒",
+  "gameVersion": "2.0",
+  "canvasPx": [
+    480,
+    270
+  ],
+  "frameIndexBase": 0,
+  "coordinateOrigin": "topLeft",
+  "alpha": "RGBA8_binary",
+  "clearPixelRGBA": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "sampling": "nearest",
+  "layout": "horizontal",
+  "facing": 1,
+  "fighterFootPivotInCellPx": [
+    24,
+    40
+  ],
+  "integration": {
+    "anchor": "fighterWorldFoot",
+    "renderLayer": "front",
+    "facing": "Mirror the local X offset and the selected 48×48 frame around its pivot when facing == -1.",
+    "placement": "worldPivotX = fighterFootX + facing * offsetX; worldPivotY = fighterFootY + offsetY.",
+    "frameIndex": "floor(elapsedSeconds * fps) % frames",
+    "hiddenGesture": "While locked and concealed, use the lock asset alone."
+  },
+  "effects": {
+    "rock": {
+      "file": "rps_aura_rock.png",
+      "label": "烈焰重壓拳罡",
+      "width": 288,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": 6,
+      "fps": 14,
+      "loop": true,
+      "pivotPx": [
+        24,
+        24
+      ],
+      "offsetX": 32,
+      "offsetY": -20
+    },
+    "scissors": {
+      "file": "rps_aura_scissors.png",
+      "label": "電光雙刃交叉斬",
+      "width": 288,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": 6,
+      "fps": 16,
+      "loop": true,
+      "pivotPx": [
+        24,
+        24
+      ],
+      "offsetX": 32,
+      "offsetY": -20
+    },
+    "paper": {
+      "file": "rps_aura_paper.png",
+      "label": "翡翠螺旋掌風環",
+      "width": 288,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": 6,
+      "fps": 15,
+      "loop": true,
+      "pivotPx": [
+        24,
+        24
+      ],
+      "offsetX": 32,
+      "offsetY": -20
+    },
+    "lock": {
+      "file": "rps_aura_lock.png",
+      "label": "紫金聚氣環",
+      "width": 192,
+      "height": 48,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "frames": 4,
+      "fps": 16,
+      "loop": true,
+      "pivotPx": [
+        24,
+        24
+      ],
+      "offsetX": 32,
+      "offsetY": -20
+    }
+  },
+  "preview": {
+    "file": "rps_aura_preview_3x.png",
+    "scale": 3,
+    "backgrounds": [
+      "clearSky",
+      "bloodMoon"
+    ]
+  }
+}
