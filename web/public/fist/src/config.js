@@ -1741,7 +1741,7 @@ export const CONFIG = {
     // 場外回場：離開地板、開始下墜且水平速度 < recoverVx（或掉到地板以下）→ 受身翻轉＋二段跳回擂台邊
     recoverVx: 60, recoverJump: 300, recoverInset: 16,
     // 回合間自動貼近
-    engageGap: 48, engageDur: 0.22, minGap: 22,
+    engageGap: 72, engageDur: 0.22, minGap: 22,
     // 四套拳
     comboReact: 0.75,
     // 打擊感（減少動態時自動停用）
